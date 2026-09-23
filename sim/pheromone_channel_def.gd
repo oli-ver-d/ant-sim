@@ -18,3 +18,5 @@ extends Resource
 @export var reinforce: float = 0.1
 ## Colour used by the pheromone overlay.
 @export var color: Color = Color.WHITE
+## Brightness multiplier in the overlay (e.g. dim a channel that covers everything).
+@export var render_intensity: float = 1.0

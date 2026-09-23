@@ -1,10 +1,8 @@
 class_name ObstacleRenderer
 extends Sprite2D
-## Draws the obstacle grid (walls, water) as a texture, rebuilt when the
+## Draws the obstacle grid (walls, water) with obstacle.gdshader. The grid is
+## uploaded as a two-channel mask texture (R wall, G water), rebuilt when the
 ## world's version changes.
-
-const WALL_COLOR := Color(0.36, 0.3, 0.24)
-const WATER_COLOR := Color(0.13, 0.28, 0.42)
 
 var sim: Simulation
 var _version: int = -1
@@ -14,16 +12,22 @@ func bind(simulation: Simulation) -> void:
 	centered = false
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	scale = Vector2(sim.world.cell_size, sim.world.cell_size)
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://render/obstacle.gdshader")
+	mat.set_shader_parameter("world_size", Vector2(sim.world.size))
+	material = mat
 
 func _process(_delta: float) -> void:
 	if sim == null or sim.world.version == _version:
 		return
 	_version = sim.world.version
 	var world := sim.world
-	var img := Image.create_empty(world.width, world.height, false, Image.FORMAT_RGBA8)
+	var bytes := PackedByteArray()
+	bytes.resize(world.obstacles.size() * 2)
 	for i in world.obstacles.size():
 		var kind := world.obstacles[i]
-		if kind != World.Cell.FREE:
-			@warning_ignore("integer_division")
-			img.set_pixel(i % world.width, i / world.width, WATER_COLOR if kind == World.Cell.WATER else WALL_COLOR)
-	texture = ImageTexture.create_from_image(img)
+		if kind == World.Cell.WALL:
+			bytes[i * 2] = 255
+		elif kind == World.Cell.WATER:
+			bytes[i * 2 + 1] = 255
+	texture = ImageTexture.create_from_image(Image.create_from_data(world.width, world.height, false, Image.FORMAT_RG8, bytes))

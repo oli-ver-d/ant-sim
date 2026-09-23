@@ -19,7 +19,8 @@ godot --path .
 godot --path . -- --scenario=basic_forage --seed=42
 ```
 
-Keys: **Space** pause, **P** pheromone overlay, **1–5** speed (1/2/4/8/16× real time),
+Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
+channel values under the cursor), **S** TikTok/Reels safe zones, **1–5** speed (1/2/4/8/16× real time),
 mouse wheel zoom, middle-drag pan, **Esc** quit.
 
 ## Tools
@@ -28,6 +29,7 @@ mouse wheel zoom, middle-drag pan, **Esc** quit.
 tools/test.sh                                   # headless test suite (filter: tools/test.sh pheromones)
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
 tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
+tools/screenshot.sh two_species 2400 out.png -1 --safe=1 --debug=1 --pheromones=0    # overlays
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
 godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
 ```
@@ -136,3 +138,20 @@ _Written in M9, from the experience of adding harvesters._
   one, so the pile thins out seed by seed.
 - `seed_nest.gd` + renderer: a `BasicNest` that counts seeds; drawn as a cleared sandy
   disc with a growing pile of husks.
+
+## Visual style
+
+All drawing lives in `render/` (plus each species' own renderers):
+- `ground.gdshader`: static soil (large patches, clods, grain, round specks, shaded pebbles).
+  Static so it compresses well in video.
+- `ant.gdshader`: one shader for every ant: lit, glossy three-segment body, bilobed head for
+  big-headed castes, mandibles, antennae, six legs in a tripod gait, soft drop shadow in
+  a fixed world-space light direction (`light_dir`, shared with the ground and obstacles).
+  Everything comes from `CasteDef` (size, colour, head/thorax/abdomen scale, mandible size,
+  leg length); see the packing notes at the top of the shader.
+- `pheromone.gdshader`: additive glow (core + halo) per channel, coloured by the channel's
+  `color` and scaled by its `render_intensity`.
+- `obstacle.gdshader`: smooth stone walls with rim light and shadow; water with a damp bank.
+- `overlays.gd`: safe zones and the debug view.
+
+Shaders use a sine-free hash: `sin()`-based hashes show seams on some GPUs.

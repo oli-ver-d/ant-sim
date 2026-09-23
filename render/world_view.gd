@@ -1,17 +1,16 @@
 class_name WorldView
 extends Node2D
 ## Builds and owns all renderers for one Simulation, layered bottom to top:
-## ground, obstacles, pheromones, nests, food, ants, carried items.
+## ground, obstacles, nests, pheromone glow, food, ants, carried items, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
-
-const GROUND_COLOR := Color(0.16, 0.11, 0.07)
 
 var sim: Simulation
 var registry: Registry
 var pheromone_renderer: PheromoneRenderer
 var ant_renderer: AntRenderer
 var item_renderer: ItemRenderer
+var debug_view: Overlays.DebugView
 ## Interpolation between the previous and current tick, in [0, 1].
 var alpha: float = 1.0:
 	set(v):
@@ -20,32 +19,38 @@ var alpha: float = 1.0:
 			ant_renderer.alpha = v
 			item_renderer.alpha = v
 
-var _ground: ColorRect
 var _nest_layer: Node2D
 var _food_layer: Node2D
 var _bound_food: Dictionary[int, bool] = {}
 var _bound_colonies: int = 0
 
-func setup(simulation: Simulation, reg: Registry) -> void:
+## ground_seed varies the soil pattern; debug_readout receives the debug text.
+func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debug_readout: RichTextLabel = null) -> void:
 	sim = simulation
 	registry = reg
 
-	_ground = ColorRect.new()
-	_ground.color = GROUND_COLOR
-	_ground.size = Vector2(sim.config.world_size)
-	_ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_ground)
+	var ground := ColorRect.new()
+	ground.size = Vector2(sim.config.world_size)
+	ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ground_mat := ShaderMaterial.new()
+	ground_mat.shader = preload("res://render/ground.gdshader")
+	ground_mat.set_shader_parameter("world_size", Vector2(sim.config.world_size))
+	ground_mat.set_shader_parameter("seed", ground_seed)
+	ground.material = ground_mat
+	add_child(ground)
 
 	var obstacles := ObstacleRenderer.new()
 	obstacles.bind(sim)
 	add_child(obstacles)
 
+	# Nests sit on the ground, under the glow of the trails leading into them.
+	_nest_layer = Node2D.new()
+	add_child(_nest_layer)
+
 	pheromone_renderer = PheromoneRenderer.new()
 	pheromone_renderer.bind(sim)
 	add_child(pheromone_renderer)
 
-	_nest_layer = Node2D.new()
-	add_child(_nest_layer)
 	_food_layer = Node2D.new()
 	add_child(_food_layer)
 
@@ -56,6 +61,12 @@ func setup(simulation: Simulation, reg: Registry) -> void:
 	item_renderer = ItemRenderer.new()
 	item_renderer.bind(sim)
 	add_child(item_renderer)
+
+	if debug_readout != null:
+		debug_view = Overlays.DebugView.new()
+		debug_view.bind(sim, debug_readout)
+		debug_view.visible = false
+		add_child(debug_view)
 
 func _process(_delta: float) -> void:
 	# Pick up colonies and food sources added since the last frame (events, clicks).

@@ -5,7 +5,7 @@ extends Node2D
 ## using the channel's colour. Linear filtering softens the 4 px cells.
 
 ## Real value that maps to ~63% glow.
-@export var exposure_value: float = 0.6
+@export var exposure_value: float = 0.9
 @export var opacity: float = 0.55:
 	set(v):
 		opacity = v
@@ -30,7 +30,7 @@ func _process(_delta: float) -> void:
 		var bytes := field.values.slice(off, off + field.cell_count).to_byte_array()
 		_images[c].set_data(field.width, field.height, false, Image.FORMAT_RF, bytes)
 		(_sprites[c].texture as ImageTexture).update(_images[c])
-		(_sprites[c].material as ShaderMaterial).set_shader_parameter("gain", field.scale[c] / exposure_value)
+		(_sprites[c].material as ShaderMaterial).set_shader_parameter("gain", field.scale[c] * field.render_intensity[c] / exposure_value)
 
 func _add_sprite(c: int) -> void:
 	var field := sim.pheromones

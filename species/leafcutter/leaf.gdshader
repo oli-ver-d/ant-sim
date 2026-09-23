@@ -19,7 +19,11 @@ uniform vec4 stem_color : source_color;
 uniform bool shadow = false;
 
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7)) + seed) * 43758.5453);
+	// Sine-free hash (Dave Hoskins): stable across GPUs; sin()-based hashes lose
+	// precision for large inputs and show seams between noise cells.
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 float value_noise(vec2 p) {
@@ -62,7 +66,7 @@ void fragment() {
 
 	vec3 c = mix(base_color.rgb, vein_color.rgb, veins(p));
 	// Soft mottling at ~7 px scale.
-	float n = value_noise(p / 7.0) - 0.5;
+	float n = value_noise(p / 7.0 + seed) - 0.5;
 	c *= 1.0 + n * 0.12;
 	// Darker rim where the mask falls off: the outline and every fresh bite.
 	float rim = 1.0 - smoothstep(0.5, 0.9, m.r);

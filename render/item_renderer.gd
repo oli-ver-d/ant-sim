@@ -5,7 +5,11 @@ extends Node2D
 ## shape image are drawn as that image.
 
 ## How far ahead of the carrier's centre an item is held, in body lengths.
-const HOLD_OFFSET := 0.55
+const HOLD_OFFSET := 0.4
+## World-space offset of carried items' drop shadow (held items are raised, so
+## their shadow falls further than the ant's own).
+const SHADOW_OFFSET := Vector2(2.0, 3.5)
+const SHADOW := Color(0, 0, 0, 0.3)
 
 var sim: Simulation
 ## Fraction of the way from the previous tick to the current one (set by WorldView).
@@ -35,10 +39,15 @@ func _draw() -> void:
 				tex = ImageTexture.create_from_image(item.shape)
 				_textures[id] = tex
 			var size := Vector2(item.shape.get_size()) * item.pixel_size
+			if item.carrier >= 0:
+				draw_set_transform(at + SHADOW_OFFSET, rot)
+				draw_texture_rect(tex, Rect2(-size * 0.5, size), false, SHADOW)
 			draw_set_transform(at, rot)
 			draw_texture_rect(tex, Rect2(-size * 0.5, size), false)
 			draw_set_transform(Vector2.ZERO)
 		else:
+			if item.carrier >= 0:
+				draw_circle(at + SHADOW_OFFSET, item.radius, SHADOW)
 			draw_circle(at, item.radius, item.color)
 	# Forget textures of destroyed items.
 	for id: int in _textures.keys():

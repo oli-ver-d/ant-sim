@@ -36,6 +36,7 @@ var diffusion: PackedFloat32Array = []
 var cap: PackedFloat32Array = []
 var reinforce: PackedFloat32Array = []
 var colors: PackedColorArray = []
+var render_intensity: PackedFloat32Array = []
 var names: PackedStringArray = []
 var _index: Dictionary[StringName, int] = {}
 
@@ -64,6 +65,7 @@ func add_channel(channel_name: StringName, def: PheromoneChannelDef) -> int:
 	cap.append(def.cap)
 	reinforce.append(def.reinforce)
 	colors.append(def.color)
+	render_intensity.append(def.render_intensity)
 	names.append(channel_name)
 	_index[channel_name] = c
 	return c

@@ -10,8 +10,10 @@ extends Node2D
 ##   --probe=1              print FPS and simulation cost every 2 s
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   initial camera
+##   --safe=1 --debug=1 --pheromones=0   initial overlay state
 ##
-## Keys: Space pause, P pheromones, 1-5 speed (1/2/4/8/16x real time),
+## Keys: Space pause, P pheromones, D debug overlay, S safe zones,
+##       1-5 speed (1/2/4/8/16x real time),
 ##       mouse wheel zoom, middle-drag pan, Esc quit.
 
 const SPEEDS: PackedInt32Array = [1, 2, 4, 8, 16]
@@ -22,6 +24,8 @@ var sim: Simulation
 var view: WorldView
 var camera: Camera2D
 var hud: Label
+var debug_readout: RichTextLabel
+var safe_zones: Overlays.SafeZones
 
 var runner: SimRunner
 
@@ -51,9 +55,27 @@ func _ready() -> void:
 	if args.has("probe"):
 		add_child(load("res://tests/frame_probe.gd").new())
 
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	debug_readout = RichTextLabel.new()
+	debug_readout.bbcode_enabled = true
+	debug_readout.fit_content = true
+	debug_readout.position = Vector2(24, 190)
+	debug_readout.size = Vector2(700, 0)
+	debug_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	debug_readout.add_theme_font_size_override("normal_font_size", 24)
+	debug_readout.visible = false
+	layer.add_child(debug_readout)
+	safe_zones = Overlays.SafeZones.new()
+	safe_zones.visible = args.has("safe")
+	layer.add_child(safe_zones)
+
 	view = WorldView.new()
-	view.setup(sim, registry)
+	view.setup(sim, registry, float(sim.rng.seed % 100), debug_readout)
 	add_child(view)
+	view.pheromone_renderer.visible = args.get("pheromones", "1") != "0"
+	if args.has("debug"):
+		_toggle_debug()
 
 	camera = Camera2D.new()
 	camera.position = Vector2(config.world_size) * 0.5
@@ -64,8 +86,6 @@ func _ready() -> void:
 	add_child(camera)
 	camera.make_current()
 
-	var layer := CanvasLayer.new()
-	add_child(layer)
 	hud = Label.new()
 	hud.position = Vector2(24, 24)
 	hud.add_theme_font_size_override("font_size", 28)
@@ -76,7 +96,7 @@ func _ready() -> void:
 	_screenshot_path = args.get("screenshot", "")
 	if _screenshot_path != "":
 		paused = true
-		hud.visible = false
+		hud.visible = args.has("debug")
 		_frames_until_shot = 3
 
 func _process(delta: float) -> void:
@@ -118,6 +138,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				paused = not paused
 			KEY_P:
 				view.pheromone_renderer.visible = not view.pheromone_renderer.visible
+			KEY_D:
+				_toggle_debug()
+			KEY_S:
+				safe_zones.visible = not safe_zones.visible
 			_:
 				if key >= KEY_1 and key < KEY_1 + SPEEDS.size():
 					speed = SPEEDS[key - KEY_1]
@@ -137,3 +161,7 @@ func _parse_args() -> Dictionary:
 			var kv := arg.substr(2).split("=", true, 1)
 			out[kv[0]] = kv[1]
 	return out
+
+func _toggle_debug() -> void:
+	view.debug_view.visible = not view.debug_view.visible
+	debug_readout.visible = view.debug_view.visible
