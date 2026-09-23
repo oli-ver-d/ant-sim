@@ -9,6 +9,8 @@ const STRIDE := 16
 const QUAD_SCALE := 1.6
 
 var sim: Simulation
+## Fraction of the way from the previous tick to the current one (set by WorldView).
+var alpha: float = 1.0
 var _buffer: PackedFloat32Array = []
 # Per [colony][caste] look data, flattened: index = colony_base[colony] + caste.
 var _colony_base: PackedInt32Array = []
@@ -56,6 +58,9 @@ func _process(_delta: float) -> void:
 
 	var alive := sim.alive
 	var pos := sim.pos
+	var prev_pos := sim.prev_pos
+	var prev_heading := sim.prev_heading
+	var a := alpha
 	var heading := sim.heading
 	var colony_id := sim.colony_id
 	var caste_id := sim.caste_id
@@ -70,9 +75,10 @@ func _process(_delta: float) -> void:
 			continue
 		var look := _colony_base[colony_id[i]] + caste_id[i]
 		var s := _look_size[look]
-		var c := cos(heading[i]) * s
-		var sn := sin(heading[i]) * s
-		var p := pos[i]
+		var h := lerp_angle(prev_heading[i], heading[i], a)
+		var c := cos(h) * s
+		var sn := sin(h) * s
+		var p := prev_pos[i].lerp(pos[i], a)
 		# Transform2D rows: [x.x, y.x, 0, origin.x], [x.y, y.y, 0, origin.y]
 		_buffer[o] = c
 		_buffer[o + 1] = -sn

@@ -11,6 +11,14 @@ var sim: Simulation
 var registry: Registry
 var pheromone_renderer: PheromoneRenderer
 var ant_renderer: AntRenderer
+var item_renderer: ItemRenderer
+## Interpolation between the previous and current tick, in [0, 1].
+var alpha: float = 1.0:
+	set(v):
+		alpha = v
+		if ant_renderer != null:
+			ant_renderer.alpha = v
+			item_renderer.alpha = v
 
 var _ground: ColorRect
 var _nest_layer: Node2D
@@ -45,9 +53,9 @@ func setup(simulation: Simulation, reg: Registry) -> void:
 	ant_renderer.bind(sim)
 	add_child(ant_renderer)
 
-	var items := ItemRenderer.new()
-	items.bind(sim)
-	add_child(items)
+	item_renderer = ItemRenderer.new()
+	item_renderer.bind(sim)
+	add_child(item_renderer)
 
 func _process(_delta: float) -> void:
 	# Pick up colonies and food sources added since the last frame (events, clicks).

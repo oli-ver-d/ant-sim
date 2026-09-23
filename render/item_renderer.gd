@@ -8,6 +8,8 @@ extends Node2D
 const HOLD_OFFSET := 0.55
 
 var sim: Simulation
+## Fraction of the way from the previous tick to the current one (set by WorldView).
+var alpha: float = 1.0
 var _textures: Dictionary[int, ImageTexture] = {}
 
 func bind(simulation: Simulation) -> void:
@@ -25,8 +27,8 @@ func _draw() -> void:
 		var rot := item.rotation
 		if item.carrier >= 0:
 			var i := item.carrier
-			rot = sim.heading[i]
-			at = sim.pos[i] + Vector2.from_angle(rot) * sim.caste_of(i).size * HOLD_OFFSET
+			rot = lerp_angle(sim.prev_heading[i], sim.heading[i], alpha)
+			at = sim.prev_pos[i].lerp(sim.pos[i], alpha) + Vector2.from_angle(rot) * sim.caste_of(i).size * HOLD_OFFSET
 		if item.shape != null:
 			var tex: ImageTexture = _textures.get(id)
 			if tex == null:

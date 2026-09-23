@@ -13,9 +13,12 @@ extends Resource
 
 @export_group("Time")
 ## Fixed simulation ticks per simulated second. step() always advances 1 / tick_rate.
-@export var tick_rate: int = 60
-## Default number of sim ticks per rendered frame (scenarios may override over time).
-@export var ticks_per_frame: int = 1
+## 30 keeps GDScript cost down; renderers interpolate between ticks so motion
+## stays smooth at 60 fps.
+@export var tick_rate: int = 30
+## Default sim speed in ticks per rendered frame at 60 fps (scenarios may override).
+## Fractional values are fine: 0.5 = real time at tick_rate 30.
+@export var ticks_per_frame: float = 0.5
 
 @export_group("Population")
 ## Hard cap on live ants across all colonies (array capacity).

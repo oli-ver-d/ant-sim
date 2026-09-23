@@ -21,7 +21,7 @@ func test_determinism() -> void:
 	var a := _sim(7)
 	var b := _sim(7)
 	var c := _sim(8)
-	for t in 300:
+	for t in 150:
 		a.step()
 		b.step()
 		c.step()
@@ -33,13 +33,15 @@ func test_forage_obstacles_and_mass() -> void:
 	var sim := _sim()
 	var bad_positions := 0
 	var worst_mass_error := 0.0
-	for t in 3600:  # 60 simulated seconds
+	# 120 s: recruitment timing varies a lot by seed in the first minute
+	# (0-30 items at 60 s), but by 120 s every seed tried delivers 80+.
+	for t in 120 * _config.tick_rate:
 		sim.step()
 		if t % 10 == 0:
 			bad_positions += _ants_in_obstacles(sim)
 			worst_mass_error = maxf(worst_mass_error, absf(_mass_error(sim)))
 	var colony := sim.colonies[0]
-	check(colony.delivered_items >= 15, "delivered %d items in 60 s, expected >= 15" % colony.delivered_items)
+	check(colony.delivered_items >= 50, "delivered %d items in 120 s, expected >= 50" % colony.delivered_items)
 	check_eq(bad_positions, 0, "ants inside obstacle cells")
 	check(worst_mass_error < 0.001, "food taken = carried + delivered (worst error %f)" % worst_mass_error)
 

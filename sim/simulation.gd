@@ -54,6 +54,11 @@ var scratch_i: PackedInt32Array = []
 var target: PackedVector2Array = []
 ## Walk-cycle phase for rendering (advances with distance travelled).
 var anim_phase: PackedFloat32Array = []
+## Position and heading at the start of the current tick, so renderers can
+## interpolate between ticks. Snapshotting is cheap: assigning a packed array
+## shares it, and the first write in the tick makes the one copy.
+var prev_pos: PackedVector2Array = []
+var prev_heading: PackedFloat32Array = []
 
 var _free_slots: PackedInt32Array = []
 var _next_item_id: int = 0
@@ -96,6 +101,8 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	scratch_f0.resize(capacity)
 	scratch_f1.resize(capacity)
 	anim_phase.resize(capacity)
+	prev_pos.resize(capacity)
+	prev_heading.resize(capacity)
 	carried.resize(capacity)
 	carried.fill(-1)
 	scratch_i.resize(capacity)
@@ -154,7 +161,9 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float) -> i
 	var caste_def := colony.species.castes[caste]
 	alive[i] = 1
 	pos[i] = at
+	prev_pos[i] = at
 	heading[i] = heading_rad
+	prev_heading[i] = heading_rad
 	speed[i] = caste_def.speed * rng.randf_range(0.9, 1.1)
 	colony_id[i] = colony.id
 	caste_id[i] = caste
@@ -288,6 +297,8 @@ func find_sensed_food(at: Vector2, colony: Colony) -> FoodSource:
 ## Advances the simulation by exactly one fixed tick of `dt` seconds.
 func step() -> void:
 	tick_count += 1
+	prev_pos = pos
+	prev_heading = heading
 	var t0 := Time.get_ticks_usec()
 	for colony in colonies:
 		colony.nest.update(self, dt)

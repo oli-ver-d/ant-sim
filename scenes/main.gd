@@ -8,7 +8,7 @@ extends Node2D
 ##   --ticks=<n>            run n ticks before the first frame
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##
-## Keys: Space pause, P pheromones, 1-5 speed (1/2/4/8/16 ticks per frame),
+## Keys: Space pause, P pheromones, 1-5 speed (1/2/4/8/16x real time),
 ##       mouse wheel zoom, middle-drag pan, Esc quit.
 
 const SPEEDS: PackedInt32Array = [1, 2, 4, 8, 16]
@@ -87,6 +87,8 @@ func _process(delta: float) -> void:
 			_accumulator = 0.0
 		if ticks > 0:
 			_last_step_ms = (Time.get_ticks_usec() - t0) / 1000.0 / ticks
+		# Draw ants part-way between the last two ticks for smooth motion.
+		view.alpha = clampf(_accumulator / sim.dt, 0.0, 1.0)
 	_update_hud()
 
 func _update_hud() -> void:
