@@ -6,12 +6,27 @@
 	"colonies": [
 		{
 			"species": "leafcutter",
-			"nest": [540, 1560],
-			"population": {"minim": 80, "media": 280, "major": 40}
+			"nest": [540, 1420],
+			"population": {"minim": 80, "media": 280, "major": 40},
+			"release_per_second": 60
 		}
 	],
 	"food": [
-		{"type": "leaf", "pos": [600, 700], "rotation": 18, "length": 340, "width": 150, "shape": "elliptic", "teeth": 30, "seed": 11}
+		{"type": "leaf", "pos": [600, 560], "rotation": 18, "length": 340, "width": 150, "shape": "elliptic", "teeth": 30, "seed": 11}
 	],
-	"obstacles": []
+	"obstacles": [],
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 0.5},
+		{"t": 2.5, "tpf": 0.5},
+		{"t": 6, "tpf": 5},
+		{"t": 20, "tpf": 5}
+	],
+	"camera": [
+		{"t": 0, "pos": [540, 1400], "zoom": 3.2},
+		{"t": 2.0, "pos": [540, 1390], "zoom": 2.8, "ease": "linear"},
+		{"t": 6.5, "pos": [540, 960], "zoom": 1.0, "ease": "in_out"},
+		{"t": 14, "pos": [540, 960], "zoom": 1.0},
+		{"t": 18.5, "pos": [575, 720], "zoom": 2.2, "ease": "in_out"},
+		{"t": 20, "pos": [578, 712], "zoom": 2.3, "ease": "linear"}
+	]
 }

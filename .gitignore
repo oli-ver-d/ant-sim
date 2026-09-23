@@ -3,3 +3,6 @@
 
 # Recording output (frames and encoded videos)
 /renders/
+
+# Temporary window override written by tools/record.sh
+/override.cfg

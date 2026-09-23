@@ -2,18 +2,18 @@ class_name ScenarioLoader
 extends RefCounted
 ## Builds a Simulation from a JSON scenario file (res://scenarios/<name>.json).
 ##
-## {
-##   "name": "basic_forage", "seed": 1, "duration": 30,
-##   "colonies": [{"species": "...", "nest": [540, 1600], "nest_params": {},
-##                 "population": {"<caste id>": 100}}],
-##   "food": [{"type": "food_pile", "pos": [540, 300], ...type params}],
-##   "obstacles": [{"shape": "polyline", "points": [[x, y], ...], "width": 16, "kind": "wall"},
-##                 {"shape": "rect", "rect": [x, y, w, h], "kind": "water"},
-##                 {"shape": "circle", "center": [x, y], "radius": 30},
-##                 {"shape": "polygon", "points": [[x, y], ...]}]
-## }
-## Timed events, camera keyframes and ticks_per_frame arrive with the scenario
-## system in a later milestone.
+## Simulation content (used here):
+##   "seed": 1,
+##   "colonies":  [{"species": "...", "nest": [x, y], "nest_params": {}, "population": {"<caste>": n}}],
+##   "food":      [{"type": "food_pile", "pos": [x, y], ...type params}],
+##   "obstacles": [shape, ...]              (see ScenarioEvents for shapes)
+##   "events":    [{"t": seconds, "type": ..., ...}]   (see ScenarioEvents)
+##
+## Playback settings (used by ScenarioPlayer, not the simulation):
+##   "duration": video seconds,
+##   "warmup": simulated seconds to run before the first frame,
+##   "ticks_per_frame": 0.5 | [{"t": video s, "tpf": 0.5}, ...]  (ramped linearly),
+##   "camera": [{"t": video s, "pos": [x, y] | "follow": {...}, "zoom": 1, "ease": "in_out"}, ...]
 
 const SCENARIO_DIR := "res://scenarios"
 
@@ -35,47 +35,17 @@ static func load_data(scenario_name: String) -> Dictionary:
 static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
 	var seed_value: int = seed_override if seed_override >= 0 else int(data.get("seed", 1))
 	var sim := Simulation.new(config, registry, seed_value)
-
 	for ob: Dictionary in data.get("obstacles", []):
-		_add_obstacle(sim.world, ob)
-
+		ScenarioEvents.add_obstacle(sim.world, ob)
 	for food: Dictionary in data.get("food", []):
 		sim.add_food_source(food["type"], food)
-
 	for col: Dictionary in data.get("colonies", []):
-		var colony := sim.add_colony(col["species"], _vec2(col["nest"]), col.get("nest_params", {}))
-		var population: Dictionary = col.get("population", {})
-		# Iterate castes in SpeciesDef order so spawn order doesn't depend on JSON key order.
-		for c in colony.species.castes.size():
-			var count := int(population.get(str(colony.species.castes[c].id), 0))
-			for n in count:
-				sim.spawn_ant(colony, c, colony.nest.entrance_position(), sim.rng.randf_range(-PI, PI))
+		ScenarioEvents.add_colony(sim, col)
+	var events: Array[Dictionary] = []
+	for ev: Dictionary in data.get("events", []):
+		events.append(ev)
+	sim.schedule_events(events)
 	return sim
 
 static func load_simulation(scenario_name: String, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
 	return build(load_data(scenario_name), registry, config, seed_override)
-
-static func _add_obstacle(world: World, ob: Dictionary) -> void:
-	var kind: int = World.Cell.WATER if ob.get("kind", "wall") == "water" else World.Cell.WALL
-	match ob.get("shape", "polyline"):
-		"polyline":
-			world.draw_polyline(_points(ob["points"]), float(ob.get("width", 16.0)), kind)
-		"polygon":
-			world.fill_polygon(_points(ob["points"]), kind)
-		"rect":
-			var r: Array = ob["rect"]
-			world.fill_rect(Rect2(r[0], r[1], r[2], r[3]), kind)
-		"circle":
-			world.fill_circle(_vec2(ob["center"]), float(ob["radius"]), kind)
-		var other:
-			push_error("Unknown obstacle shape %s" % other)
-
-static func _points(arr: Array) -> PackedVector2Array:
-	var out: PackedVector2Array = []
-	for p: Variant in arr:
-		out.append(_vec2(p))
-	return out
-
-static func _vec2(v: Variant) -> Vector2:
-	var a: Array = v
-	return Vector2(a[0], a[1])

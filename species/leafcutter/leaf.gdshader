@@ -56,8 +56,41 @@ float veins(vec2 p) {
 	return v;
 }
 
+// Cubic B-spline weights for fractional position v.
+vec4 bspline(float v) {
+	vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - v;
+	vec4 s = n * n * n;
+	float x = s.x;
+	float y = s.y - 4.0 * s.x;
+	float z = s.z - 4.0 * s.y + 6.0 * s.x;
+	return vec4(x, y, z, 6.0 - x - y - z) / 6.0;
+}
+
+// Bicubic (B-spline) sample using 4 bilinear fetches. Thresholding a bilinear
+// mask leaves visible corners at cell scale when zoomed in; the B-spline gives
+// smooth, rounded outlines and bite arcs.
+vec4 texture_bicubic(sampler2D tex, vec2 uv) {
+	vec2 tex_size = vec2(textureSize(tex, 0));
+	vec2 inv = 1.0 / tex_size;
+	uv = uv * tex_size - 0.5;
+	vec2 f = fract(uv);
+	uv -= f;
+	vec4 xc = bspline(f.x);
+	vec4 yc = bspline(f.y);
+	vec4 c = uv.xxyy + vec2(-0.5, 1.5).xyxy;
+	vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+	vec4 o = (c + vec4(xc.yw, yc.yw) / s) * inv.xxyy;
+	vec4 s0 = texture(tex, o.xz);
+	vec4 s1 = texture(tex, o.yz);
+	vec4 s2 = texture(tex, o.xw);
+	vec4 s3 = texture(tex, o.yw);
+	float sx = s.x / (s.x + s.y);
+	float sy = s.z / (s.z + s.w);
+	return mix(mix(s3, s2, sx), mix(s1, s0, sx), sy);
+}
+
 void fragment() {
-	vec2 m = texture(TEXTURE, UV).rg;
+	vec2 m = texture_bicubic(TEXTURE, UV).rg;
 	vec2 p = origin + UV * size;
 	float aa_t = max(fwidth(m.r), 0.02);
 	float tissue = smoothstep(0.5 - aa_t, 0.5 + aa_t, m.r);

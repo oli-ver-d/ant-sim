@@ -41,6 +41,32 @@ func receive_item(_sim: Simulation, _item: Item) -> void:
 func update(_sim: Simulation, _dt: float) -> void:
 	pass
 
+# --- Gradual release ---------------------------------------------------------------
+# Ants can start "inside" the nest and emerge over time instead of all at once
+# (scenario colony option "release_per_second"). The Simulation calls
+# release_waiting() every tick, before update(), for every nest type.
+
+## Caste indices of ants still inside, in emergence order.
+var waiting: PackedInt32Array = []
+## Ants released per second.
+var release_rate: float = 0.0
+var _release_budget: float = 0.0
+
+## Queues ants to emerge at `per_second`.
+func queue_release(castes: PackedInt32Array, per_second: float) -> void:
+	waiting.append_array(castes)
+	release_rate = per_second
+
+func release_waiting(sim: Simulation, dt: float) -> void:
+	if waiting.is_empty() or not has_entrance():
+		return
+	_release_budget += release_rate * dt
+	var colony := sim.colonies[colony_id]
+	while _release_budget >= 1.0 and not waiting.is_empty():
+		_release_budget -= 1.0
+		sim.spawn_ant(colony, waiting[0], entrance_position(), sim.rng.randf_range(-PI, PI))
+		waiting.remove_at(0)
+
 ## Spawns `count` ants at the entrance, choosing castes by spawn_ratio.
 func spawn_ants(sim: Simulation, count: int) -> void:
 	for n in count:

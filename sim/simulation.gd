@@ -75,6 +75,13 @@ var _next_food_id: int = 0
 var _blocked_cells: PackedInt32Array = []
 var _blocked_version: int = -1
 
+## Timed scenario events sorted by "t" (simulated seconds); see ScenarioEvents.
+var events: Array[Dictionary] = []
+var _next_event: int = 0
+## Active rain: [{"area": {...}, "until": seconds}]. Wipes pheromones in its
+## area every tick while active; renderers may show it.
+var rain: Array[Dictionary] = []
+
 ## Accumulated microseconds spent in each part of step(), for profiling.
 var profile_usec: Dictionary[String, int] = {"nests": 0, "ants": 0, "pheromones": 0}
 
@@ -346,7 +353,10 @@ func begin_step() -> void:
 	assert(not in_tick(), "begin_step() called twice")
 	tick_count += 1
 	var t0 := Time.get_ticks_usec()
+	_apply_due_events()
+	_apply_rain()
 	for colony in colonies:
+		colony.nest.release_waiting(self, dt)
 		colony.nest.update(self, dt)
 	var lookahead := 0.0
 	for colony in colonies:
@@ -415,3 +425,38 @@ static func _vec2(v: Variant) -> Vector2:
 		return v
 	var a: Array = v
 	return Vector2(a[0], a[1])
+
+# --- Scenario events and weather -------------------------------------------------
+
+## Simulated seconds at the end of the current tick.
+func time() -> float:
+	return tick_count * dt
+
+## Replaces the timed event list (stable-sorted by "t").
+func schedule_events(list: Array[Dictionary]) -> void:
+	events = list.duplicate()
+	events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.get("t", 0.0)) < float(b.get("t", 0.0)))
+	_next_event = 0
+
+func _apply_due_events() -> void:
+	while _next_event < events.size() and float(events[_next_event].get("t", 0.0)) <= time() + 1e-6:
+		ScenarioEvents.apply(self, events[_next_event])
+		_next_event += 1
+
+## Starts rain over an area ({"center": [x, y], "radius": r} or {"rect": [x, y, w, h]})
+## for `duration` simulated seconds.
+func start_rain(area: Dictionary, duration: float) -> void:
+	rain.append({"area": area, "until": time() + duration})
+
+func _apply_rain() -> void:
+	var k := 0
+	while k < rain.size():
+		if time() > float(rain[k]["until"]):
+			rain.remove_at(k)
+			continue
+		var area: Dictionary = rain[k]["area"]
+		if area.has("rect"):
+			pheromones.wipe_rect(ScenarioEvents.rect2(area["rect"]))
+		else:
+			pheromones.wipe_circle(ScenarioEvents.vec2(area["center"]), float(area["radius"]))
+		k += 1

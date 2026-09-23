@@ -19,9 +19,14 @@ godot --path .
 godot --path . -- --scenario=basic_forage --seed=42
 ```
 
+The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
-channel values under the cursor), **S** TikTok/Reels safe zones, **1–5** speed (1/2/4/8/16× real time),
-mouse wheel zoom, middle-drag pan, **Esc** quit.
+channel values under the cursor), **S** TikTok/Reels safe zones, **F** follow the ant under
+the cursor (again to stop), **C** back to the scenario camera, **1–5** speed (1/2/4/8/16× the
+scenario's pace), mouse wheel zoom, middle-drag pan, **Esc** quit.
+
+`--at=12.5` fast-forwards to a video time, e.g. to check a camera move:
+`godot --path . -- --scenario=chaos_to_highway --at=12.5`
 
 ## Tools
 
@@ -104,13 +109,44 @@ Included: `basic_forage` (core test bed with food piles), `chaos_to_highway` (on
 trail self-organises), `leaf_strip` (one giant leaf stripped completely, for timelapse),
 `two_species` (a leafcutter and a harvester colony foraging side by side).
 
-JSON files in `scenarios/`: seed, colonies (species, nest position, population per
-caste), food sources (type + type-specific params) and obstacles (polyline walls,
-rects, circles, polygons; `"kind": "water"` for water). See `sim/scenario_loader.gd`.
+JSON files in `scenarios/`. Simulation content:
+- `seed`
+- `colonies`: species, nest position, population per caste, optional `release_per_second`
+  (ants emerge gradually instead of all at once), optional `nest_params`
+- `food`: type + type-specific params
+- `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water
+- `events`: timed (simulated seconds): `spawn_food`, `add_obstacle`, `remove_obstacle`,
+  `add_colony`, `rain` (see `sim/scenario_events.gd`)
+
+Playback (video) settings:
+- `duration`: video length in seconds
+- `warmup`: simulated seconds to run before the first frame
+- `ticks_per_frame`: a number, or `[{"t": video s, "tpf": n}, ...]` ramped linearly.
+  0.5 = real time (30 ticks/s at 60 fps); 5 = 10× timelapse
+- `camera`: keyframes `{"t", "pos": [x, y], "zoom", "ease"}`; `"follow": {"near": [x, y],
+  "state": "carry_home"}` in place of `pos` tracks the nearest matching ant
+  (see `render/camera_director.gd`)
+- `render`: `{"pheromones": true, "pheromone_opacity": 0.55}`
 
 ## Recording
 
-_Coming in M5._
+```bash
+tools/record.sh chaos_to_highway            # scenario seed and duration
+tools/record.sh chaos_to_highway 7 15       # seed 7, 15 seconds
+```
+
+Writes `renders/<scenario>_seed<N>_<timestamp>.mp4` (1080×1920, 60 fps, H.264 yuv420p,
+CRF 18, no audio). How it works:
+1. `scenes/record.tscn` runs under Godot's Movie Maker (`--write-movie`, `--fixed-fps 60`),
+   so every frame advances exactly 1/60 s of video however slow the simulation is.
+   The output is perfectly smooth and the same seed gives the same video.
+2. Movie Maker records at the window size chosen at startup, so `record.sh` writes a
+   temporary `override.cfg` (1080×1920 window) and deletes it afterwards. Godot renders
+   the full frame even when the screen is smaller.
+3. Frames are PNGs in `renders/frames_<name>/`; `tools/encode.sh` turns them into the MP4
+   and deletes them (`KEEP_FRAMES=1` keeps them).
+
+A 20 s video is 1200 PNG frames; most of the time goes into writing PNGs.
 
 ## How to add a new species
 

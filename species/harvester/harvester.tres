@@ -45,7 +45,7 @@ half_life = 30.0
 diffusion = 0.6
 cap = 10.0
 color = Color(0.72, 0.45, 1, 1)
-render_intensity = 0.45
+render_intensity = 0.32
 
 [sub_resource type="Resource" id="Channel_food"]
 script = ExtResource("3_channel")
