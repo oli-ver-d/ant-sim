@@ -84,6 +84,9 @@ var _blocked_version: int = -1
 ## Timed scenario events sorted by "t" (simulated seconds); see ScenarioEvents.
 var events: Array[Dictionary] = []
 var _next_event: int = 0
+## Incremented whenever an item is created, destroyed, picked up or put down,
+## so renderers of items lying on the ground know when to redraw.
+var items_version: int = 0
 ## Rain showers, past and present: [{"area", "start", "until", "keep"}]
 ## (see start_rain). Active ones wash pheromones out of their area.
 var rain: Array[Dictionary] = []
@@ -143,17 +146,8 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	var def := registry.species.get(species_id) as SpeciesDef
 	assert(def != null, "Unknown species %s" % species_id)
 	var colony := Colony.new(colonies.size(), def, nest_pos)
-	var channel_overrides: Dictionary = overrides.get("channels", {})
 	for ch in def.channels:
-		var channel := ch
-		if channel_overrides.has(str(ch.name)):
-			# This colony's own tweaks, e.g. {"home": {"half_life": 60}}.
-			channel = ch.duplicate()
-			var tweaks: Dictionary = channel_overrides[str(ch.name)]
-			for key: String in tweaks:
-				assert(key in channel, "Unknown channel property %s" % key)
-				channel.set(key, tweaks[key])
-		colony.channels[ch.name] = pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), channel)
+		colony.channels[ch.name] = pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), _channel_def(ch, overrides))
 	colony.build_params(config, behaviour_index, overrides)
 	var nest_script: Script = registry.nest_types.get(def.nest_type)
 	assert(nest_script != null, "Unknown nest type %s" % def.nest_type)
@@ -164,6 +158,43 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	colony.nest.setup(self, colony, nest_params)
 	colonies.append(colony)
 	return colony
+
+## Moves ants standing on blocked cells (e.g. after a wall was drawn over
+## them) to the nearest free cell, so no ant is ever inside an obstacle.
+## Riders are skipped: they follow their item. Returns how many were moved.
+func evict_ants_from_obstacles() -> int:
+	var moved := 0
+	for i in high_water:
+		if alive[i] == 0 or riding[i] >= 0 or not world.is_blocked(pos[i]):
+			continue
+		var p := world.nearest_free(pos[i])
+		pos[i] = p
+		# Jump the render snapshots too, so the ant doesn't streak across the wall.
+		prev_pos[i] = p
+		shown_pos[i] = p
+		moved += 1
+	return moved
+
+## Re-applies config, species and colony settings to every colony (params
+## and pheromone channel settings), e.g. after live tuning. Structural config
+## (world size, tick rate... see SimConfig.STRUCTURAL) is not re-applied.
+func refresh_params() -> void:
+	for colony in colonies:
+		colony.build_params(config, behaviour_index, colony.overrides)
+		for ch in colony.species.channels:
+			pheromones.configure_channel(colony.channels[ch.name], _channel_def(ch, colony.overrides))
+
+## The channel definition a colony uses: the species' own, or a copy with
+## the colony's "channels" overrides applied (e.g. {"home": {"half_life": 60}}).
+static func _channel_def(ch: PheromoneChannelDef, overrides: Dictionary) -> PheromoneChannelDef:
+	var tweaks: Dictionary = overrides.get("channels", {}).get(str(ch.name), {})
+	if tweaks.is_empty():
+		return ch
+	var channel := ch.duplicate() as PheromoneChannelDef
+	for key: String in tweaks:
+		assert(key in channel, "Unknown channel property %s" % key)
+		channel.set(key, tweaks[key])
+	return channel
 
 func add_food_source(type_id: String, params: Dictionary) -> FoodSource:
 	var script: Script = registry.food_source_types.get(type_id)
@@ -272,7 +303,9 @@ func lay(i: int, c: int) -> void:
 	# Inlined PheromoneField.deposit() (max + reinforce); ants are always inside the world.
 	var field := pheromones
 	var at := pos[i]
-	var idx := c * field.cell_count + int(at.y * field.inv_cell) * field.width + int(at.x * field.inv_cell)
+	var row := int(at.y * field.inv_cell)
+	var idx := c * field.cell_count + row * field.width + int(at.x * field.inv_cell)
+	field.row_active[c * field.height + row] = 1
 	var s := field.scale[c]
 	var a := amount / s
 	field.values[idx] = minf(maxf(field.values[idx], a) + a * field.reinforce[c], field.cap[c] / s)
@@ -288,10 +321,12 @@ func create_item(type_id: String, mass: float) -> Item:
 	item.type_id = type_id
 	item.mass = mass
 	items[item.id] = item
+	items_version += 1
 	return item
 
 func destroy_item(item_id: int) -> void:
 	items.erase(item_id)
+	items_version += 1
 
 func item_of(i: int) -> Item:
 	return items.get(carried[i]) if carried[i] >= 0 else null
@@ -302,6 +337,7 @@ func pick_up(i: int, item: Item) -> void:
 		_set_on_ground(item, false)
 	carried[i] = item.id
 	item.carrier = i
+	items_version += 1
 
 ## Puts the carried item on the ground at the ant's position. Riders get off.
 func drop_item(i: int) -> Item:
@@ -313,6 +349,7 @@ func drop_item(i: int) -> Item:
 		item.rotation = heading[i]
 		_dismount_all(item)
 		_set_on_ground(item, true)
+		items_version += 1
 	return item
 
 ## Places a new item on the ground (e.g. debris from a scenario).
@@ -321,6 +358,7 @@ func place_on_ground(item: Item, at: Vector2, rotation_rad: float) -> void:
 	item.position = at
 	item.rotation = rotation_rad
 	_set_on_ground(item, true)
+	items_version += 1
 
 ## Hands the carried item to the ant's nest and records the delivery.
 ## Riders get off at the nest.

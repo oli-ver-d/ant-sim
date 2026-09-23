@@ -5,10 +5,40 @@ extends SceneTree
 ##   godot --headless --path . -s res://tests/run_tests.gd -- [name_filter]
 ##
 ## Use tools/test.sh, which also refreshes the class cache first.
+##
+## Tests run on the first frame (not in _initialize) so the scene tree is fully
+## up: tests may add scenes to root and get _ready() as in the app.
+## A test fails if it records a failed check or hits a script error (a
+## runtime error stops the test function early, which would otherwise look
+## like a pass). Engine errors (push_error) don't count: some tests exercise
+## error paths on purpose.
 
 const TEST_DIR := "res://tests"
 
+var _started := false
+var _errors := ErrorCounter.new()
+
+## Counts script errors reported while tests run.
+class ErrorCounter extends Logger:
+	var script_errors: int = 0
+	var last_message: String = ""
+
+	func _log_error(_function: String, _file: String, _line: int, code: String, rationale: String,
+			_editor_notify: bool, error_type: int, _script_backtrace: Array[ScriptBacktrace]) -> void:
+		if error_type == ERROR_TYPE_SCRIPT:
+			script_errors += 1
+			last_message = rationale if rationale != "" else code
+
 func _initialize() -> void:
+	OS.add_logger(_errors)
+
+func _process(_delta: float) -> bool:
+	if not _started:
+		_started = true
+		_run()
+	return false
+
+func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	var name_filter: String = args[0] if args.size() > 0 else ""
 	var passed := 0
@@ -39,9 +69,12 @@ func _initialize() -> void:
 				continue
 			tc.current_test = full_name
 			var failures_before := tc.failures.size()
+			var errors_before := _errors.script_errors
 			var t0 := Time.get_ticks_msec()
 			tc.call(method_name)
 			var ms := Time.get_ticks_msec() - t0
+			if _errors.script_errors > errors_before:
+				tc.failures.append("%s: script error (%s)" % [full_name, _errors.last_message])
 			if tc.failures.size() == failures_before:
 				passed += 1
 				print("PASS  %s (%d ms)" % [full_name, ms])

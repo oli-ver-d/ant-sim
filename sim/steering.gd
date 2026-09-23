@@ -121,16 +121,17 @@ static func avoid_turn(world: World, at: Vector2, heading_rad: float, lookahead:
 ##   3. advance the walk-cycle phase by distance travelled.
 static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float, dt: float) -> void:
 	var colony := sim.colonies[sim.colony_id[i]]
-	var caste := colony.species.castes[sim.caste_id[i]]
+	var c := sim.caste_id[i]
 	var world := sim.world
 	var at := sim.pos[i]
 	var h := sim.heading[i]
-	var max_turn := caste.turn_rate
+	var max_turn := colony.caste_turn_rate[c]
 
 	var turn := desired_turn * max_turn + sim.rng.randf_range(-1.0, 1.0) * colony.wander_strength
 	var avoid := 0.0
 	var cell := int(at.y * world.inv_cell) * world.width + int(at.x * world.inv_cell)
-	if world.near_blocked[cell] != 0:
+	var near := world.near_blocked[cell] != 0
+	if near:
 		avoid = avoid_turn(world, at, h, colony.avoid_lookahead)
 		if avoid != 0.0:
 			turn = avoid * max_turn
@@ -144,7 +145,7 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 	var next := Vector2(at.x + cos(h) * step_len, at.y + sin(h) * step_len)
 	# Away from obstacles (not near_blocked) a single step can't reach a blocked cell.
 	var blocked := false
-	if world.near_blocked[cell] != 0:
+	if near:
 		var next_cell := world.cell_at(next)
 		blocked = next_cell < 0 or world.obstacles[next_cell] != World.Cell.FREE
 	if avoid != 0.0 or blocked:
@@ -156,7 +157,7 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 	else:
 		sim.pos[i] = next
 	sim.heading[i] = h
-	sim.anim_phase[i] += step_len / maxf(caste.size, 1.0) * TAU * 0.5
+	sim.anim_phase[i] += step_len * colony.caste_phase_per_unit[c]
 
 ## Path integration for homeward ants. Combines a pheromone turn with the ant's
 ## sense of where `home` is:

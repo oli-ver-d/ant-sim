@@ -12,12 +12,13 @@ extends Node2D
 ##   --probe=1              print FPS and simulation cost every 2 s
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   manual camera (overrides the scenario's)
-##   --safe=1 --debug=1 --pheromones=0 --cutaway=1   initial overlay state
+##   --safe=1 --debug=1 --pheromones=0 --cutaway=1 --tuning=1   initial overlay state
 ##
 ## Keys: Space pause, P pheromones, D debug overlay, S safe zones, N nest cutaway,
-##       F follow the ant under the cursor (again to stop), C scenario camera,
-##       1-5 speed (1/2/4/8/16x the scenario's pace),
-##       mouse wheel zoom, middle-drag pan, Esc quit.
+##       T tuning panel, F follow the ant under the cursor (again to stop),
+##       C scenario camera, 1-5 speed (1/2/4/8/16x the scenario's pace), Esc quit.
+## Mouse: left-drag draws walls (Shift+left-drag erases), right-click places
+##       the food type selected in the tuning panel, wheel zooms, middle-drag pans.
 
 const SPEEDS: PackedFloat32Array = [1, 2, 4, 8, 16]
 
@@ -26,6 +27,7 @@ var sim: Simulation
 var hud: Label
 var debug_readout: RichTextLabel
 var safe_zones: Overlays.SafeZones
+var tuning: TuningPanel
 
 var paused := false
 var speed := 1.0
@@ -33,6 +35,17 @@ var _screenshot_path := ""
 var _frames_until_shot := -1
 ## Smoothed milliseconds of simulation work per rendered frame.
 var _sim_ms := 0.0
+## Wall drawing: last stamped point while the left button is held.
+var _drawing := false
+var _draw_last := Vector2.ZERO
+var _food_rng := RandomNumberGenerator.new()
+## Per colony: deliveries at the start of each of the last 60 sim seconds.
+var _delivery_history: Array[PackedInt32Array] = []
+var _history_second := -1
+
+const WALL_WIDTH := 16.0
+## Longest stretch of time one interactive frame may advance (seconds).
+const MAX_FRAME_ADVANCE := 1.0 / 30.0
 
 func _ready() -> void:
 	var args := _parse_args()
@@ -63,6 +76,14 @@ func _ready() -> void:
 	player.setup(args.get("scenario", "basic_forage"), int(args.get("seed", -1)), int(args.get("ticks", 0)), debug_readout)
 	sim = player.sim
 
+	tuning = TuningPanel.new()
+	tuning.setup(sim, player.registry)
+	tuning.position = Vector2(1080 - TuningPanel.WIDTH - 16, 170)
+	tuning.size = Vector2(TuningPanel.WIDTH, 1920 - 170 - 420)
+	tuning.visible = false
+	layer.add_child(tuning)
+	_food_rng.randomize()
+
 	var ants := int(args.get("ants", 0))
 	for colony in sim.colonies:
 		if ants > colony.population:
@@ -85,6 +106,8 @@ func _ready() -> void:
 		player.view.pheromone_renderer.visible = false
 	if args.has("debug"):
 		_toggle_debug()
+	if args.has("tuning"):
+		tuning.visible = true
 	if args.has("cutaway") and player.cutaway == null:
 		player.toggle_cutaway()
 	if args.has("probe"):
@@ -108,7 +131,10 @@ func _process(delta: float) -> void:
 
 	if not paused:
 		var t0 := Time.get_ticks_usec()
-		player.advance(delta, speed)
+		# Advance at most two frames' worth: if a frame runs long (a heavy
+		# scene, a hitch), the sim slows down instead of asking for ever more
+		# ticks per frame and spiralling. Recordings always advance 1/60 s.
+		player.advance(minf(delta, MAX_FRAME_ADVANCE), speed)
 		_sim_ms = lerpf(_sim_ms, (Time.get_ticks_usec() - t0) / 1000.0, 0.1)
 	_update_hud()
 
@@ -116,9 +142,12 @@ func _update_hud() -> void:
 	var lines: PackedStringArray = []
 	lines.append("FPS %d   t %.1fs   sim %.0fs   %.1f ms/frame   x%d%s" % [Engine.get_frames_per_second(),
 			player.video_time, sim.time(), _sim_ms, int(speed), "   PAUSED" if paused else ""])
+	_sample_deliveries()
 	for colony in sim.colonies:
-		lines.append("%s #%d: %d ants, %d delivered" % [colony.species.display_name, colony.id,
-				colony.population, colony.delivered_items])
+		var history := _delivery_history[colony.id]
+		var per_min := colony.delivered_items - history[0] if history.size() > 0 else 0
+		lines.append("%s #%d: %d ants, %d delivered (%d/min)" % [colony.species.display_name, colony.id,
+				colony.population, colony.delivered_items, per_min])
 	hud.text = "\n".join(lines)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -138,6 +167,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				safe_zones.visible = not safe_zones.visible
 			KEY_N:
 				player.toggle_cutaway()
+			KEY_T:
+				tuning.visible = not tuning.visible
 			KEY_F:
 				if cam.mode == CameraDirector.Mode.FOLLOW:
 					cam.mode = CameraDirector.Mode.MANUAL
@@ -151,9 +182,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_:
 				if key >= KEY_1 and key < KEY_1 + SPEEDS.size():
 					speed = SPEEDS[key - KEY_1]
-	elif event is InputEventMouseButton and event.pressed:
+	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_drawing = mb.pressed
+			if mb.pressed:
+				_draw_last = _world_at(mb.position)
+				_stamp_wall(_draw_last, _draw_last, mb.shift_pressed)
+		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+			_place_food(_world_at(mb.position))
+		elif mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 			if cam.mode == CameraDirector.Mode.SCRIPT:
 				cam.mode = CameraDirector.Mode.MANUAL
 			var factor := 1.1 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.1
@@ -161,6 +199,30 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_MIDDLE:
 		cam.mode = CameraDirector.Mode.MANUAL
 		cam.position -= (event as InputEventMouseMotion).relative / cam.zoom
+	elif event is InputEventMouseMotion and _drawing:
+		var at := _world_at((event as InputEventMouseMotion).position)
+		_stamp_wall(_draw_last, at, (event as InputEventMouseMotion).shift_pressed)
+		_draw_last = at
+
+## World position under a point in viewport coordinates (as mouse events give).
+func _world_at(screen: Vector2) -> Vector2:
+	return get_viewport().get_canvas_transform().affine_inverse() * screen
+
+## Left-drag: draws a wall segment (or erases with Shift). Ants caught under a
+## new wall are moved out, so none ever ends up inside an obstacle.
+func _stamp_wall(a: Vector2, b: Vector2, erase: bool) -> void:
+	var kind := World.Cell.FREE if erase else World.Cell.WALL
+	sim.world.draw_polyline(PackedVector2Array([a, b]), WALL_WIDTH, kind)
+	if not erase:
+		sim.evict_ants_from_obstacles()
+
+## Right-click: places the tuning panel's selected food type (default
+## parameters, random rotation and shape seed) under the cursor.
+func _place_food(at: Vector2) -> void:
+	if tuning.food_type == "" or sim.world.is_blocked(at):
+		return
+	sim.add_food_source(tuning.food_type, {"pos": [at.x, at.y],
+			"rotation": _food_rng.randf_range(0.0, 360.0), "seed": _food_rng.randi()})
 
 func _parse_args() -> Dictionary:
 	var out := {}
@@ -173,3 +235,19 @@ func _parse_args() -> Dictionary:
 func _toggle_debug() -> void:
 	player.view.debug_view.visible = not player.view.debug_view.visible
 	debug_readout.visible = player.view.debug_view.visible
+
+## Records each colony's delivery count once per simulated second, keeping
+## the last 60, for the "per minute" rate in the HUD.
+func _sample_deliveries() -> void:
+	while _delivery_history.size() < sim.colonies.size():
+		_delivery_history.append(PackedInt32Array())
+	var second := int(sim.time())
+	if second == _history_second:
+		return
+	_history_second = second
+	for colony in sim.colonies:
+		var history := _delivery_history[colony.id]
+		history.append(colony.delivered_items)
+		if history.size() > 60:
+			history.remove_at(0)
+		_delivery_history[colony.id] = history

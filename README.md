@@ -21,9 +21,20 @@ godot --path . -- --scenario=basic_forage --seed=42
 
 The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
-channel values under the cursor), **S** TikTok/Reels safe zones, **N** nest cutaway inset, **F** follow the ant under
-the cursor (again to stop), **C** back to the scenario camera, **1–5** speed (1/2/4/8/16× the
-scenario's pace), mouse wheel zoom, middle-drag pan, **Esc** quit.
+channel values under the cursor), **S** TikTok/Reels safe zones, **N** nest cutaway inset,
+**T** tuning panel, **F** follow the ant under the cursor (again to stop), **C** back to the
+scenario camera, **1–5** speed (1/2/4/8/16× the scenario's pace), **Esc** quit.
+
+Mouse: **left-drag** draws a wall (**Shift**+left-drag erases; ants under a new wall are
+moved out), **right-click** places food of the type selected in the tuning panel, wheel zooms,
+middle-drag pans. The HUD shows FPS and, per colony, ants, items delivered and deliveries
+in the last minute.
+
+The tuning panel (**T**, never shown in recordings) has a colony selector (which species to
+tune and whose food right-click places), live sliders for every `SimConfig` value that can
+change while running and for the selected species' numeric tunables and pheromone channels,
+**Save** (writes `sim/default_config.tres` and the species' `.tres`) and **Reset**.
+Scenario per-colony overrides still take precedence over the sliders.
 
 `--at=12.5` fast-forwards to a video time, e.g. to check a camera move:
 `godot --path . -- --scenario=chaos_to_highway --at=12.5`
@@ -186,9 +197,121 @@ CRF 18, no audio). How it works:
 
 With PNG most of the time goes into Godot writing the 1080×1920 PNGs (~0.7 s each).
 
+## Performance
+
+Measured on this project's dev laptop (Intel UHD integrated GPU, CPU at 2.3 GHz, Godot 4.7
+editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s;
+`tests/bench.gd` times the simulation headless.
+
+| Case | Result |
+|---|---|
+| 3,000 ants, real time, interactive (`--probe=1 --ants=3000`) | 60 fps while exploring; settles around 27 fps once foraging is busy |
+| Simulation cost | about 7.5–9 µs per ant per tick (GDScript); 25 ms per tick at 3,000 ants |
+| Pheromones (2 channels) | 0.4–1.7 ms per tick (only rows holding pheromone are diffused) |
+| GPU | 7–12 ms per frame at 3,000 ants |
+| 15,000 ants offline (`bench.gd basic_forage 300 15000`) | 135 ms per tick; recording works at any speed |
+
+- At 30 ticks/s and 60 fps each frame runs half a tick, so 3,000 ants need about 12.5 ms of
+  every 16.7 ms frame for the simulation alone. That fits while ants explore, but busy
+  foraging (more states, carried items to draw) tips it over. The ant logic is the limit, not
+  pheromones or rendering. Getting to a steady 60 fps at 3,000+ ants needs the ant update in
+  native code (GDExtension), which hasn't been done.
+- If a frame runs long, the interactive app advances at most 1/30 s per frame, so a heavy
+  scene runs slower rather than spiralling into ever longer frames. Recordings always advance
+  exactly 1/60 s per frame and are unaffected.
+- Recording is offline, so timelapses and large colonies are fine; they only take longer to
+  record.
+
 ## How to add a new species
 
-_Written in M9, from the experience of adding harvesters._
+Harvester ants (`species/harvester/`) were added this way in M3, as a test of the design:
+six new files (plus a scenario and a test) and **no changes to `/sim`, `/render` or the
+leafcutter module**. What it took, in order:
+
+### 1. Make the folder and the species data
+
+Create `species/<name>/` with a `SpeciesDef` resource (`<name>.tres`). Copying
+`harvester.tres` is the quickest start: it's the minimal complete species. It holds:
+
+- **castes** (`CasteDef`): size, speed, turn rate, colour, body proportions (head /
+  thorax / abdomen scale, mandibles, leg length; the shared ant shader draws them),
+  `spawn_ratio`, `carry_capacity`, the list of behaviour `states` the caste may use and its
+  `initial_state`. Optional per-caste `state_params` override the species' wiring for that
+  caste (leafcutter majors use this to go back to patrolling instead of foraging).
+- **channels** (`PheromoneChannelDef`): name, half-life, diffusion, cap, reinforce, overlay
+  colour. Each colony gets its own copy (`c0.home`, `c1.home`), so species never read each
+  other's trails unless a behaviour does so on purpose.
+- **state_params**: the wiring. For each state, which channel to follow and lay and which
+  state comes next, e.g. `"carry_home": {"follow_channel": "home", "lay_channel": "food",
+  "on_arrive": "deliver"}`. Keys ending in `_channel` are channel names and get resolved to
+  field indices for you. The core behaviours document their params at the top of each file in
+  `sim/behaviours/`.
+- **nest_type / nest_params**, **food_source_types**, **item_types**, and **tunables**
+  (species-only values, plus overrides of any `SimConfig` value).
+
+Harvesters needed no new behaviours at all: `explore`, `follow_trail`, `go_to_food`,
+`carry_home` and `deliver` wired with harvester channels are enough for a foraging species.
+Start there, then add behaviours only for what's really new.
+
+### 2. Add what's new, as small classes
+
+Only what the species really has that the core doesn't:
+
+| Piece | Base class | Harvester example | Leafcutter example |
+|---|---|---|---|
+| Behaviour state | `Behaviour` (`tick()` returns the next state id or `""`) | none | `cut_leaf`, `hitchhike`, `patrol_trail` |
+| Food source | `FoodSource` (`take()`, `nearest_access_point()`, `is_sensed_at()`, ...) | `seed_pile.gd` | `leaf_source.gd` |
+| Nest | `NestType` or `BasicNest` (`receive_item()`, `update()`, optional waste) | `seed_nest.gd` | `fungus_nest.gd` |
+| Renderer | any `Node2D` with `bind(sim, target)` | `seed_pile_renderer.gd`, `seed_nest_renderer.gd` | `leaf_renderer.gd`, `fungus_nest_renderer.gd` |
+| Cutaway view | a `Control` with `bind(sim, nest)` | none | `fungus_cutaway.gd` |
+
+Behaviours work on ant indices and the `Simulation` arrays (`sim.pos[i]`, `sim.heading[i]`,
+...), never on per-ant nodes. Use `Steering.move()` to move (it handles wandering, obstacle
+avoidance and walls) and `sim.lay(i, channel)` to deposit. Put per-state memory in the generic
+scratch slots (`scratch_f0/f1/i`, `target`) and all randomness through `sim.rng`, so runs stay
+deterministic. Renderers only read the simulation.
+
+### 3. Register it
+
+`species/<name>/register.gd` is found automatically (the Registry scans `species/*/register.gd`):
+
+```gdscript
+extends RefCounted
+
+func register(registry: Registry) -> void:
+	registry.register_species("harvester", preload("res://species/harvester/harvester.tres"))
+	registry.register_food_source_type("seed_pile", SeedPile)
+	registry.register_item_type("seed", Item)
+	registry.register_nest_type("seed_nest", SeedNest)
+	registry.register_renderer("food:seed_pile", SeedPileRenderer)
+	registry.register_renderer("nest:seed_nest", SeedNestRenderer)
+	# registry.register_behaviour("my_state", MyState.new())
+	# registry.register_renderer("cutaway:my_nest", MyCutaway)
+```
+
+### 4. Put it in a scenario and test it
+
+Add a colony to a scenario (`"species": "<name>"`, nest, population per caste) and run it
+with **D** on to see every ant's state. Then add a test like `tests/test_two_species.gd`: the
+colony forages successfully, food mass is conserved, no ant is ever inside an obstacle.
+`tests/test_core_generic.gd` automatically checks that the new species' name never appears
+in `/sim` or `/render`.
+
+### Lessons (what went wrong along the way)
+
+- **Every reachable state must be in the caste's `states` list.** Defaults count too:
+  `follow_trail` goes to `explore` on timeout unless `on_timeout` says otherwise. Leafcutter
+  majors, which have no `explore`, hit this in M7 (an assertion caught it). When a caste
+  leaves out a core state, override every transition that leads to it.
+- **"Would a second species plausibly need this?"** If yes, it belongs in the core, made
+  generic: riding on items, debris, waste carrying, cutaway panels and bridges all started
+  as leafcutter needs. If no, it stays in the species folder.
+- **New `class_name` scripts** need the class cache refreshed (`tools/test.sh` does it;
+  otherwise run `godot --headless --path . --import` once) before other scripts can use them.
+- **Packed arrays are values.** Writing through a copy (a local variable, or an element of
+  an `Array`) silently changes nothing. Write through the owning object (`sim.pos[i] = p`).
+- **Tune with the panel** (**T**): the species' numeric tunables and pheromone channels get
+  live sliders, and **Save** writes them back into the species' `.tres`.
 
 ## Species: leafcutter ants
 

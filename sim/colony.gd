@@ -41,6 +41,12 @@ var food_check_interval: int
 var carry_mass_slowdown: float
 var clutter_slowdown: float
 var obstacle_memory: float
+## Per caste, cached for Steering.move: max turn rate, and walk-cycle phase
+## advanced per world unit travelled.
+var caste_turn_rate: PackedFloat32Array = []
+var caste_phase_per_unit: PackedFloat32Array = []
+## This colony's own tweaks (see build_params), kept so params can be rebuilt.
+var overrides: Dictionary = {}
 var arrive_distance: float
 
 func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
@@ -57,7 +63,9 @@ func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
 ##   {"params": {"deposit_half_life": 20, ...}, "state_params": {"explore": {...}}}
 ## "params" win over config and species tunables; "state_params" are merged
 ## over the species' and caste's state params for every caste.
-func build_params(config: SimConfig, state_index: Dictionary[String, int], overrides: Dictionary = {}) -> void:
+func build_params(config: SimConfig, state_index: Dictionary[String, int], colony_overrides: Dictionary = {}) -> void:
+	overrides = colony_overrides
+	params.clear()
 	for prop in config.get_property_list():
 		if prop["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE:
 			params[StringName(prop["name"])] = config.get(prop["name"])
@@ -102,6 +110,12 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int], overr
 	for state_id: Variant in species.state_params:
 		assert(state_index.has(str(state_id)), "Species %s has params for unknown state %s" % [species.id, state_id])
 
+	caste_turn_rate.resize(species.castes.size())
+	caste_phase_per_unit.resize(species.castes.size())
+	for c in species.castes.size():
+		caste_turn_rate[c] = species.castes[c].turn_rate
+		# Half a stride cycle per body length.
+		caste_phase_per_unit[c] = TAU * 0.5 / maxf(species.castes[c].size, 1.0)
 	caste_initial_state.resize(species.castes.size())
 	for c in species.castes.size():
 		var caste := species.castes[c]

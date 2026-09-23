@@ -18,12 +18,17 @@ var alpha: float = 1.0
 ## True: draw items on the ground; false: draw carried items.
 var ground_layer: bool = false
 var _textures: Dictionary[int, ImageTexture] = {}
+var _drawn_version: int = -1
 
 func bind(simulation: Simulation) -> void:
 	sim = simulation
 
 func _process(_delta: float) -> void:
-	queue_redraw()
+	# Carried items move every frame; items on the ground only change when the
+	# simulation's item set does.
+	if not ground_layer or sim.items_version != _drawn_version:
+		_drawn_version = sim.items_version
+		queue_redraw()
 
 func _draw() -> void:
 	if sim == null:

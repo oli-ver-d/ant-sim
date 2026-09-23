@@ -44,6 +44,11 @@ var _index: Dictionary[StringName, int] = {}
 var _band_start: int = 0
 ## Horizontal 3-tap sums for the current band (plus one row above and below).
 var _row_sums: PackedFloat32Array = []
+## Per channel and grid row (index c * height + y): 1 if the row may hold
+## non-zero values. Deposits set it; diffusion clears it for rows that end up
+## all zero. Rows with nothing in them or their neighbours skip diffusion,
+## which is most of the grid (trails cover a small part of the world).
+var row_active: PackedByteArray = []
 
 func _init(grid: Vector2i, cell: int, diffuse_every_n_ticks: int, dt: float) -> void:
 	width = grid.x
@@ -58,17 +63,29 @@ func add_channel(channel_name: StringName, def: PheromoneChannelDef) -> int:
 	assert(not _index.has(channel_name), "Duplicate pheromone channel %s" % channel_name)
 	var c := names.size()
 	values.resize(values.size() + cell_count)  # new cells are zero
+	row_active.resize(row_active.size() + height)
 	scale.append(1.0)
-	decay_per_tick.append(pow(0.5, tick_dt / maxf(def.half_life, 0.001)))
-	# Blend fraction per diffusion pass; one pass covers diffuse_every ticks.
-	diffusion.append(clampf(def.diffusion * tick_dt * diffuse_every, 0.0, 1.0))
-	cap.append(def.cap)
-	reinforce.append(def.reinforce)
+	# (Appended one by one: packed arrays put in an Array literal are copies.)
+	decay_per_tick.append(0.0)
+	diffusion.append(0.0)
+	cap.append(0.0)
+	reinforce.append(0.0)
+	render_intensity.append(0.0)
 	colors.append(def.color)
-	render_intensity.append(def.render_intensity)
 	names.append(channel_name)
 	_index[channel_name] = c
+	configure_channel(c, def)
 	return c
+
+## (Re)applies a channel definition's settings to channel c; values stay.
+func configure_channel(c: int, def: PheromoneChannelDef) -> void:
+	decay_per_tick[c] = pow(0.5, tick_dt / maxf(def.half_life, 0.001))
+	# Blend fraction per diffusion pass; one pass covers diffuse_every ticks.
+	diffusion[c] = clampf(def.diffusion * tick_dt * diffuse_every, 0.0, 1.0)
+	cap[c] = def.cap
+	reinforce[c] = def.reinforce
+	colors[c] = def.color
+	render_intensity[c] = def.render_intensity
 
 func channel_count() -> int:
 	return names.size()
@@ -91,6 +108,8 @@ func deposit(c: int, pos: Vector2, amount: float) -> void:
 	if cell < 0:
 		return
 	var i := c * cell_count + cell
+	@warning_ignore("integer_division")
+	row_active[c * height + cell / width] = 1
 	var s := scale[c]
 	var a := amount / s
 	values[i] = minf(maxf(values[i], a) + a * reinforce[c], cap[c] / s)
@@ -170,15 +189,26 @@ func _renormalise(c: int) -> void:
 ## 3-tap pass back into values. _row_sums holds band rows y0-1 .. y1 (one extra
 ## row each side); rows outside the grid are left as zeros, so trails fade at
 ## the world edge and the inner loop needs no bounds checks.
+##
+## Rows that are all zero (row_active == 0) are skipped: their horizontal sums
+## stay zero, and a row whose neighbourhood (itself and the rows above and
+## below) is empty stays empty, so it isn't touched at all.
 func _diffuse_band(c: int, y0: int, y1: int) -> void:
 	var off := c * cell_count
+	var act := c * height
 	var band_rows := y1 - y0 + 2
 	if _row_sums.size() != band_rows * width:
 		_row_sums.resize(band_rows * width)
 	_row_sums.fill(0.0)
 
-	# Horizontal pass: _row_sums[r][x] = v[x-1] + v[x] + v[x+1], r = y - (y0 - 1)
+	# Horizontal pass: _row_sums[r][x] = v[x-1] + v[x] + v[x+1], r = y - (y0 - 1).
+	# had[r]: whether that row had any content before this pass.
+	var had := PackedByteArray()
+	had.resize(band_rows)
 	for y in range(maxi(0, y0 - 1), mini(height, y1 + 1)):
+		if row_active[act + y] == 0:
+			continue
+		had[y - y0 + 1] = 1
 		var src := off + y * width
 		var dst := (y - y0 + 1) * width
 		var prev := 0.0
@@ -196,10 +226,19 @@ func _diffuse_band(c: int, y0: int, y1: int) -> void:
 	var keep := 1.0 - d
 	var flush := FLUSH_EPSILON / scale[c]
 	for y in range(y0, y1):
-		var mid := (y - y0 + 1) * width
+		var r := y - y0 + 1
+		if had[r - 1] == 0 and had[r] == 0 and had[r + 1] == 0:
+			continue
+		var mid := r * width
 		var above := mid - width
 		var below := mid + width
 		var row := off + y * width
+		var any := false
 		for x in width:
 			var v := values[row + x] * keep + (_row_sums[above + x] + _row_sums[mid + x] + _row_sums[below + x]) * k
-			values[row + x] = v if v > flush else 0.0
+			if v > flush:
+				values[row + x] = v
+				any = true
+			else:
+				values[row + x] = 0.0
+		row_active[act + y] = 1 if any else 0

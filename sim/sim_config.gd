@@ -5,6 +5,11 @@ extends Resource
 ## Default values here are the source of truth; res://sim/default_config.tres
 ## only stores overrides.
 
+## Settings fixed when a Simulation is created (sizes of grids and arrays,
+## tick length) or owned by the scenario: live tuning can't change these.
+const STRUCTURAL: PackedStringArray = ["world_size", "cell_size", "tick_rate", "ticks_per_frame",
+		"max_ants", "diffuse_every_n_ticks"]
+
 @export_group("World")
 ## World size in world units (1 unit = 1 px at default zoom).
 @export var world_size: Vector2i = Vector2i(1080, 1920)

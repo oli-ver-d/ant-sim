@@ -195,3 +195,26 @@ func add_bridge(points: PackedVector2Array, width: float) -> void:
 		if before[i] != Cell.FREE and obstacles[i] == Cell.FREE:
 			bridged[i] = before[i]
 	bridges.append({"points": points, "width": width})
+
+## Centre of the free cell nearest to `pos` (searching rings of cells out to
+## `max_cells`), or `pos` itself if none is found.
+func nearest_free(pos: Vector2, max_cells: int = 40) -> Vector2:
+	var cx := int(pos.x * _inv_cell)
+	var cy := int(pos.y * _inv_cell)
+	for r in range(0, max_cells + 1):
+		var best := -1
+		var best_d := INF
+		for y in range(cy - r, cy + r + 1):
+			for x in range(cx - r, cx + r + 1):
+				# Only the ring at distance r (inner rings were already searched).
+				if maxi(absi(x - cx), absi(y - cy)) != r:
+					continue
+				if x < 0 or y < 0 or x >= width or y >= height or obstacles[y * width + x] != Cell.FREE:
+					continue
+				var d := cell_center(y * width + x).distance_squared_to(pos)
+				if d < best_d:
+					best_d = d
+					best = y * width + x
+		if best >= 0:
+			return cell_center(best)
+	return pos
