@@ -133,7 +133,13 @@ Playback (video) settings:
 ```bash
 tools/record.sh chaos_to_highway            # scenario seed and duration
 tools/record.sh chaos_to_highway 7 15       # seed 7, 15 seconds
+FORMAT=avi tools/record.sh chaos_to_highway # fast draft (MJPEG capture)
 ```
+
+| `FORMAT` | Capture | 20 s video takes | Notes |
+|---|---|---|---|
+| `png` (default) | lossless PNG frames | ~13 min | best quality, for final uploads |
+| `avi` | MJPEG, `MJPEG_QUALITY=1.0` | ~2 min | very slightly softer (SSIM 0.989 vs PNG), ~70% larger MP4 |
 
 Writes `renders/<scenario>_seed<N>_<timestamp>.mp4` (1080×1920, 60 fps, H.264 yuv420p,
 CRF 18, no audio). How it works:
@@ -143,10 +149,12 @@ CRF 18, no audio). How it works:
 2. Movie Maker records at the window size chosen at startup, so `record.sh` writes a
    temporary `override.cfg` (1080×1920 window) and deletes it afterwards. Godot renders
    the full frame even when the screen is smaller.
-3. Frames are PNGs in `renders/frames_<name>/`; `tools/encode.sh` turns them into the MP4
-   and deletes them (`KEEP_FRAMES=1` keeps them).
+3. The capture (PNG frames or `capture.avi`) goes to `renders/capture_<name>/`;
+   `tools/encode.sh` turns it into the MP4 and deletes it (`KEEP_FRAMES=1` keeps it).
+   MJPEG is full-range colour, so `encode.sh` converts it to standard TV range; without
+   that the MP4 is tagged `yuvj420p` and some players shift the colours.
 
-A 20 s video is 1200 PNG frames; most of the time goes into writing PNGs.
+With PNG most of the time goes into Godot writing the 1080×1920 PNGs (~0.7 s each).
 
 ## How to add a new species
 
