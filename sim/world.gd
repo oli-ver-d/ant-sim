@@ -178,3 +178,20 @@ func _stamp(center: Vector2, radius: float, kind: int) -> void:
 			var c := Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size)
 			if c.distance_squared_to(center) <= r2 + cell_size * cell_size * 0.25:
 				set_cell(cx, cy, kind)
+
+## Bridges: walkable strips laid over obstacles (e.g. a twig across water).
+## [{"points": PackedVector2Array, "width": float}], for renderers.
+var bridges: Array[Dictionary] = []
+## Cells a bridge made walkable, with the obstacle kind underneath, so
+## renderers can still draw the water below the bridge.
+var bridged: Dictionary[int, int] = {}
+
+## Lays a bridge along a polyline: its cells become FREE (remembering what was
+## there) and it is listed in `bridges`.
+func add_bridge(points: PackedVector2Array, width: float) -> void:
+	var before := obstacles.duplicate()
+	draw_polyline(points, width, Cell.FREE)
+	for i in obstacles.size():
+		if before[i] != Cell.FREE and obstacles[i] == Cell.FREE:
+			bridged[i] = before[i]
+	bridges.append({"points": points, "width": width})

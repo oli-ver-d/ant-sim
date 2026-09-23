@@ -37,6 +37,11 @@ extends Resource
 @export var sense_threshold: float = 0.01
 ## Distance at which an ant counts as having reached a target point.
 @export var arrive_distance: float = 3.0
+## Seconds after bumping into an obstacle during which homing ants trust the
+## trail over their sense of where home is (path integration), so they can
+## follow a detour (along a bank to a bridge, through a maze) instead of
+## pushing straight at home into the obstacle.
+@export var obstacle_memory: float = 4.0
 
 @export_group("Foraging")
 ## Explorers check for nearby food sources once every N ticks (staggered per ant).

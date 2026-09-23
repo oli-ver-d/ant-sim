@@ -60,7 +60,8 @@ states = PackedStringArray("patrol_trail", "clear_debris", "follow_trail")
 initial_state = "patrol_trail"
 state_params = {
 "follow_trail": {
-"on_arrive": "patrol_trail"
+"on_arrive": "patrol_trail",
+"on_timeout": "patrol_trail"
 }
 }
 carry_capacity = 2.0

@@ -1,0 +1,50 @@
+{
+	"name": "maze",
+	"description": "A leaf behind rows of stone walls; the colony finds the gaps, then settles on the shortest route.",
+	"seed": 1,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1620],
+			"population": {"minim": 60, "media": 300, "major": 30},
+			"release_per_second": 40,
+			"params": {"deposit_half_life": 30, "obstacle_memory": 8},
+			"state_params": {"explore": {"give_up_after": 60, "avoid_channel": "home"}}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [560, 560], "rotation": 8, "length": 360, "width": 170, "shape": "elliptic", "teeth": 30, "seed": 9}
+	],
+	"obstacles": [
+		{"shape": "polyline", "points": [[-20, 1420], [200, 1420]], "width": 16},
+		{"shape": "polyline", "points": [[270, 1420], [800, 1420]], "width": 16},
+		{"shape": "polyline", "points": [[870, 1420], [1100, 1420]], "width": 16},
+		{"shape": "polyline", "points": [[540, 1420], [540, 1320]], "width": 16},
+
+		{"shape": "polyline", "points": [[-20, 1180], [120, 1180]], "width": 16},
+		{"shape": "polyline", "points": [[190, 1180], [620, 1180]], "width": 16},
+		{"shape": "polyline", "points": [[690, 1180], [1100, 1180]], "width": 16},
+		{"shape": "polyline", "points": [[360, 1180], [360, 1290]], "width": 16},
+		{"shape": "polyline", "points": [[860, 1180], [860, 1080]], "width": 16},
+
+		{"shape": "polyline", "points": [[-20, 940], [300, 940]], "width": 16},
+		{"shape": "polyline", "points": [[370, 940], [960, 940]], "width": 16},
+		{"shape": "polyline", "points": [[1030, 940], [1100, 940]], "width": 16},
+		{"shape": "polyline", "points": [[560, 940], [560, 1060]], "width": 16}
+	],
+	"warmup": 120,
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 2.0},
+		{"t": 2, "tpf": 2.0},
+		{"t": 4, "tpf": 8.0},
+		{"t": 16, "tpf": 8.0},
+		{"t": 17.5, "tpf": 1.0},
+		{"t": 20, "tpf": 1.0}
+	],
+	"camera": [
+		{"t": 0, "pos": [540, 1060], "zoom": 1.25},
+		{"t": 16, "pos": [540, 1060], "zoom": 1.25},
+		{"t": 18, "follow": {"near": [250, 1300], "state": "carry_home"}, "zoom": 3.2, "ease": "in_out"}
+	]
+}

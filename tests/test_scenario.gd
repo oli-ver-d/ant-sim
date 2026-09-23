@@ -47,9 +47,9 @@ func test_rain_wipes_pheromones_in_area_while_active() -> void:
 	_run_seconds(sim, 1.5)
 	check_eq(sim.pheromones.sample(ch, Vector2(300, 300)), 0.0, "rain wiped its area")
 	check(sim.pheromones.sample(ch, Vector2(800, 300)) > 0.0, "outside the rain untouched")
-	check_eq(sim.rain.size(), 1, "rain active")
+	check(sim.rain_active(sim.rain[0]), "rain active")
 	_run_seconds(sim, 2.0)
-	check_eq(sim.rain.size(), 0, "rain over")
+	check(not sim.rain_active(sim.rain[0]), "rain over")
 
 func test_add_colony_event() -> void:
 	var data := _base_data()

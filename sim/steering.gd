@@ -57,6 +57,31 @@ static func sense_turn(sim: Simulation, c: int, at: Vector2, heading_rad: float,
 		return 0.0
 	return -1.0 if left > right else 1.0
 
+## The opposite of sense_turn(): turns toward the *weaker* side sensor of
+## channel c (0 if the centre is weakest or nothing is sensed). Explorers use
+## it on their own home trail to push into ground nobody has walked yet.
+static func sense_away(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony) -> float:
+	var field := sim.pheromones
+	var fwd := Vector2(cos(heading_rad), sin(heading_rad)) * colony.sensor_distance
+	var centre := _sample_open(sim, c, at + fwd)
+	var left := _sample_open(sim, c, at + fwd.rotated(-colony.sensor_angle))
+	var right := _sample_open(sim, c, at + fwd.rotated(colony.sensor_angle))
+	if centre <= left and centre <= right:
+		return 0.0
+	# Too faint everywhere walkable: no preference.
+	var strongest := 0.0
+	for v: float in [centre, left, right]:
+		if v < INF:
+			strongest = maxf(strongest, v)
+	if strongest * field.scale[c] < colony.sense_threshold:
+		return 0.0
+	return -1.0 if left < right else 1.0
+
+## Raw pheromone at a point, or +INF on obstacles (so walls never look like
+## "unexplored ground").
+static func _sample_open(sim: Simulation, c: int, p: Vector2) -> float:
+	return INF if sim.world.is_blocked(p) else sim.pheromones.sample_raw(c, p)
+
 ## Turn input in [-1, 1] that steers heading toward `goal`. Proportional near
 ## the goal direction so ants don't oscillate around it.
 static func turn_toward(at: Vector2, heading_rad: float, goal: Vector2) -> float:
@@ -65,13 +90,17 @@ static func turn_toward(at: Vector2, heading_rad: float, goal: Vector2) -> float
 
 ## Obstacle avoidance. Probes ahead and to both sides at `lookahead` distance.
 ## Returns 0 when the way is clear, otherwise a turn in [-1, 1] away from the
-## blocked side. When blocked dead ahead with both near sides open, the wider
+## blocked side. In a narrow passage (both sides blocked, ahead clear) keeps
+## going. When blocked dead ahead with both near sides open, the wider
 ## probes decide; ties turn right so the choice stays deterministic.
 static func avoid_turn(world: World, at: Vector2, heading_rad: float, lookahead: float) -> float:
 	var ahead := world.is_blocked(at + Vector2.from_angle(heading_rad) * lookahead)
 	var left := world.is_blocked(at + Vector2.from_angle(heading_rad - AVOID_PROBE_ANGLE) * lookahead)
 	var right := world.is_blocked(at + Vector2.from_angle(heading_rad + AVOID_PROBE_ANGLE) * lookahead)
 	if not ahead and not left and not right:
+		return 0.0
+	# A narrow passage (e.g. a bridge): walls on both sides but clear ahead.
+	if not ahead and left and right:
 		return 0.0
 	if left and not right:
 		return 1.0
@@ -118,6 +147,8 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 	if world.near_blocked[cell] != 0:
 		var next_cell := world.cell_at(next)
 		blocked = next_cell < 0 or world.obstacles[next_cell] != World.Cell.FREE
+	if avoid != 0.0 or blocked:
+		sim.since_obstacle[i] = 0.0
 	if blocked:
 		# Can't step: stay here and rotate away so we don't grind into the wall.
 		h = wrapf(h + (avoid if avoid != 0.0 else 1.0) * max_turn * dt, -PI, PI)

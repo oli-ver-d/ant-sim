@@ -1,0 +1,33 @@
+{
+	"name": "rain_reset",
+	"description": "A downpour washes an established leafcutter trail away; the colony rebuilds it.",
+	"seed": 3,
+	"duration": 20,
+	"warmup": 140,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1420],
+			"population": {"minim": 90, "media": 300, "major": 40},
+			"release_per_second": 60
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [600, 560], "rotation": 18, "length": 360, "width": 160, "shape": "elliptic", "teeth": 30, "seed": 7}
+	],
+	"events": [
+		{"t": 143, "type": "rain", "duration": 6, "wash_half_life": 0.6}
+	],
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 1.0},
+		{"t": 5, "tpf": 1.0},
+		{"t": 7.5, "tpf": 2.5},
+		{"t": 20, "tpf": 2.5}
+	],
+	"camera": [
+		{"t": 0, "pos": [560, 1010], "zoom": 1.35},
+		{"t": 5, "pos": [560, 1000], "zoom": 1.5, "ease": "in_out"},
+		{"t": 8, "pos": [550, 990], "zoom": 1.2, "ease": "in_out"},
+		{"t": 20, "pos": [550, 990], "zoom": 1.2}
+	]
+}

@@ -113,8 +113,9 @@ func total(c: int) -> float:
 		sum += values[off + i]
 	return sum * scale[c]
 
-## Clears all channels inside a circle (used by rain events).
-func wipe_circle(center: Vector2, radius: float) -> void:
+## Scales all channels inside a circle by `keep` (0 clears them; rain uses a
+## per-tick factor so trails wash out over a moment instead of vanishing).
+func wipe_circle(center: Vector2, radius: float, keep: float = 0.0) -> void:
 	var r_cells := int(ceil(radius / cell_size))
 	var cc := Vector2i(int(center.x * inv_cell), int(center.y * inv_cell))
 	var r2 := (radius / cell_size) * (radius / cell_size)
@@ -122,10 +123,10 @@ func wipe_circle(center: Vector2, radius: float) -> void:
 		for x in range(maxi(0, cc.x - r_cells), mini(width, cc.x + r_cells + 1)):
 			if Vector2(x - cc.x, y - cc.y).length_squared() <= r2:
 				for c in names.size():
-					values[c * cell_count + y * width + x] = 0.0
+					values[c * cell_count + y * width + x] *= keep
 
-## Clears all channels inside a world-space rectangle.
-func wipe_rect(rect: Rect2) -> void:
+## Scales all channels inside a world-space rectangle by `keep` (0 clears them).
+func wipe_rect(rect: Rect2, keep: float = 0.0) -> void:
 	var x0 := clampi(int(rect.position.x * inv_cell), 0, width)
 	var y0 := clampi(int(rect.position.y * inv_cell), 0, height)
 	var x1 := clampi(int(ceil(rect.end.x / cell_size)), 0, width)
@@ -134,7 +135,7 @@ func wipe_rect(rect: Rect2) -> void:
 		for y in range(y0, y1):
 			var row := c * cell_count + y * width
 			for x in range(x0, x1):
-				values[row + x] = 0.0
+				values[row + x] *= keep
 
 ## Zeroes the given cells in every channel (e.g. obstacle cells, so trails
 ## don't diffuse through walls).

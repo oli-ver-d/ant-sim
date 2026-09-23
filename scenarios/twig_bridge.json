@@ -1,0 +1,41 @@
+{
+	"name": "twig_bridge",
+	"description": "A leaf across a stream; a single fallen twig is the only way over.",
+	"seed": 2,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [620, 1440],
+			"population": {"minim": 60, "media": 260, "major": 30},
+			"release_per_second": 40
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [600, 520], "rotation": -12, "length": 320, "width": 150, "shape": "elliptic", "teeth": 28, "seed": 5}
+	],
+	"obstacles": [
+		{"shape": "polygon", "kind": "water", "points": [
+			[-20, 872], [90, 858], [180, 866], [270, 884], [360, 876], [450, 856], [540, 848], [630, 860],
+			[720, 880], [810, 884], [900, 868], [990, 852], [1100, 860],
+			[1100, 1036], [990, 1048], [900, 1060], [810, 1052], [720, 1030], [630, 1022], [540, 1034],
+			[450, 1052], [360, 1062], [270, 1048], [180, 1030], [90, 1036], [-20, 1050]
+		]},
+		{"shape": "polyline", "kind": "bridge", "points": [[468, 1086], [430, 824]], "width": 14}
+	],
+	"warmup": 15,
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 1.0},
+		{"t": 2, "tpf": 1.0},
+		{"t": 4, "tpf": 6.0},
+		{"t": 15, "tpf": 6.0},
+		{"t": 16.5, "tpf": 1.0},
+		{"t": 20, "tpf": 1.0}
+	],
+	"camera": [
+		{"t": 0, "pos": [540, 980], "zoom": 1.0},
+		{"t": 14.5, "pos": [540, 980], "zoom": 1.0},
+		{"t": 17, "pos": [452, 955], "zoom": 3.0, "ease": "in_out"},
+		{"t": 20, "pos": [450, 950], "zoom": 3.3, "ease": "linear"}
+	]
+}

@@ -49,6 +49,8 @@ var timer: PackedFloat32Array = []
 ## Seconds since this ant last touched a trail source (nest or food);
 ## deposit strength decays with it so trails are strongest near their origin.
 var source_age: PackedFloat32Array = []
+## Seconds since this ant last had to steer around an obstacle (see Steering.move).
+var since_obstacle: PackedFloat32Array = []
 ## Generic scratch slots for behaviours (meaning depends on the current state).
 var scratch_f0: PackedFloat32Array = []
 var scratch_f1: PackedFloat32Array = []
@@ -82,8 +84,8 @@ var _blocked_version: int = -1
 ## Timed scenario events sorted by "t" (simulated seconds); see ScenarioEvents.
 var events: Array[Dictionary] = []
 var _next_event: int = 0
-## Active rain: [{"area": {...}, "until": seconds}]. Wipes pheromones in its
-## area every tick while active; renderers may show it.
+## Rain showers, past and present: [{"area", "start", "until", "keep"}]
+## (see start_rain). Active ones wash pheromones out of their area.
 var rain: Array[Dictionary] = []
 
 ## Accumulated microseconds spent in each part of step(), for profiling.
@@ -117,6 +119,7 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	speed.resize(capacity)
 	timer.resize(capacity)
 	source_age.resize(capacity)
+	since_obstacle.resize(capacity)
 	scratch_f0.resize(capacity)
 	scratch_f1.resize(capacity)
 	anim_phase.resize(capacity)
@@ -132,13 +135,26 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 
 # --- Setup ---------------------------------------------------------------------
 
-func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dictionary = {}) -> Colony:
+## overrides: this colony's own tweaks: "params" and "state_params" (see
+## Colony.build_params) and "channels": {"home": {"half_life": 60, ...}}
+## (PheromoneChannelDef properties).
+func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dictionary = {},
+		overrides: Dictionary = {}) -> Colony:
 	var def := registry.species.get(species_id) as SpeciesDef
 	assert(def != null, "Unknown species %s" % species_id)
 	var colony := Colony.new(colonies.size(), def, nest_pos)
+	var channel_overrides: Dictionary = overrides.get("channels", {})
 	for ch in def.channels:
-		colony.channels[ch.name] = pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), ch)
-	colony.build_params(config, behaviour_index)
+		var channel := ch
+		if channel_overrides.has(str(ch.name)):
+			# This colony's own tweaks, e.g. {"home": {"half_life": 60}}.
+			channel = ch.duplicate()
+			var tweaks: Dictionary = channel_overrides[str(ch.name)]
+			for key: String in tweaks:
+				assert(key in channel, "Unknown channel property %s" % key)
+				channel.set(key, tweaks[key])
+		colony.channels[ch.name] = pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), channel)
+	colony.build_params(config, behaviour_index, overrides)
 	var nest_script: Script = registry.nest_types.get(def.nest_type)
 	assert(nest_script != null, "Unknown nest type %s" % def.nest_type)
 	colony.nest = nest_script.new()
@@ -196,6 +212,7 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float) -> i
 	carried[i] = -1
 	timer[i] = 0.0
 	source_age[i] = 0.0
+	since_obstacle[i] = 1e6
 	scratch_f0[i] = 0.0
 	scratch_f1[i] = 0.0
 	scratch_i[i] = -1
@@ -459,6 +476,7 @@ func step_ants(count: int) -> bool:
 			continue
 		timer[i] += dt
 		source_age[i] += dt
+		since_obstacle[i] += dt
 		var next := behaviours[state[i]].tick(self, i, dt)
 		if next != "":
 			change_state(i, next)
@@ -527,20 +545,29 @@ func _apply_due_events() -> void:
 		ScenarioEvents.apply(self, events[_next_event])
 		_next_event += 1
 
-## Starts rain over an area ({"center": [x, y], "radius": r} or {"rect": [x, y, w, h]})
-## for `duration` simulated seconds.
-func start_rain(area: Dictionary, duration: float) -> void:
-	rain.append({"area": area, "until": time() + duration})
+## Starts rain for `duration` simulated seconds over an area ({"center": [x, y],
+## "radius": r} or {"rect": [x, y, w, h]}; empty = the whole world). While it
+## rains, pheromones in the area halve every `wash_half_life` seconds
+## (0 = wiped at once). Showers stay in `rain` after they end (renderers use
+## them to draw the ground drying); rain_active() says which are falling.
+func start_rain(area: Dictionary, duration: float, wash_half_life: float = 0.0) -> void:
+	var keep := 0.0
+	if wash_half_life > 0.0:
+		keep = pow(0.5, dt / wash_half_life)
+	if area.is_empty():
+		area = {"rect": [0, 0, config.world_size.x, config.world_size.y]}
+	rain.append({"area": area, "start": time(), "until": time() + duration, "keep": keep})
+
+func rain_active(shower: Dictionary) -> bool:
+	return time() >= float(shower["start"]) and time() <= float(shower["until"])
 
 func _apply_rain() -> void:
-	var k := 0
-	while k < rain.size():
-		if time() > float(rain[k]["until"]):
-			rain.remove_at(k)
+	for shower in rain:
+		if not rain_active(shower):
 			continue
-		var area: Dictionary = rain[k]["area"]
+		var area: Dictionary = shower["area"]
+		var keep := float(shower["keep"])
 		if area.has("rect"):
-			pheromones.wipe_rect(ScenarioEvents.rect2(area["rect"]))
+			pheromones.wipe_rect(ScenarioEvents.rect2(area["rect"]), keep)
 		else:
-			pheromones.wipe_circle(ScenarioEvents.vec2(area["center"]), float(area["radius"]))
-		k += 1
+			pheromones.wipe_circle(ScenarioEvents.vec2(area["center"]), float(area["radius"]), keep)

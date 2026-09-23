@@ -4,8 +4,13 @@ extends Behaviour
 ## Switches to `on_food` when a food source is sensed, or `on_give_up` after
 ## roughly `give_up_after` seconds without finding any.
 ##
+## With `avoid_channel` (usually the colony's own home trail), when there is
+## nothing to follow the ant steers toward the least-walked side instead, so
+## the colony's search keeps pushing into new ground (e.g. unexplored
+## corridors of a maze).
+##
 ## params: follow_channel, lay_channel, on_food ("go_to_food"),
-##         give_up_after (s, 0 = never), on_give_up
+##         give_up_after (s, 0 = never), on_give_up, avoid_channel
 ## scratch_f0: this ant's give-up time (jittered so ants don't all give up at once)
 
 ## Give-up time varies per ant by this fraction either way.
@@ -39,6 +44,9 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 	var follow: int = p.get("follow_channel", -1)
 	if follow >= 0:
 		turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony)
+	var avoid: int = p.get("avoid_channel", -1)
+	if turn == 0.0 and avoid >= 0:
+		turn = Steering.sense_away(sim, avoid, at, sim.heading[i], colony)
 	Steering.move(sim, i, turn, sim.speed[i], dt)
 
 	var lay: int = p.get("lay_channel", -1)

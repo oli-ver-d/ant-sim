@@ -10,12 +10,15 @@ extends RefCounted
 ##   {"t": 30, "type": "add_obstacle",    "obstacle": {shape...}}
 ##   {"t": 30, "type": "remove_obstacle", "obstacle": {shape...}}   (clears those cells)
 ##   {"t": 30, "type": "add_colony",      "colony": {colony...}}
-##   {"t": 30, "type": "rain", "duration": 6, "area": {"center": [x, y], "radius": r} | {"rect": [x, y, w, h]}}
+##   {"t": 30, "type": "rain", "duration": 6, "area": {"center": [x, y], "radius": r} | {"rect": [x, y, w, h]},
+##    "wash_half_life": 0.5}   (no area = whole world; half-life 0 = wiped at once)
 ##   {"t": 30, "type": "drop_debris", "debris": [{"type": "twig", "pos": [x, y], ...}, ...]}  (see Debris)
 ##   {"t": 30, "type": "drop_debris", "scatter": {"count": 6, "near": [x, y], "on_channel": "c0.food", ...}}
 ##
 ## Obstacle shapes:
 ##   {"shape": "polyline", "points": [[x, y], ...], "width": 16, "kind": "wall" | "water"}
+##   {"shape": "polyline", "points": [...], "width": 12, "kind": "bridge"}  (a walkable
+##      strip over walls or water, drawn as a twig; see World.add_bridge)
 ##   {"shape": "polygon", "points": [[x, y], ...]}
 ##   {"shape": "rect", "rect": [x, y, w, h]}
 ##   {"shape": "circle", "center": [x, y], "radius": r}
@@ -32,7 +35,7 @@ static func apply(sim: Simulation, event: Dictionary) -> void:
 		"add_colony":
 			add_colony(sim, event["colony"])
 		"rain":
-			sim.start_rain(event["area"], float(event.get("duration", 5.0)))
+			sim.start_rain(event.get("area", {}), float(event.get("duration", 5.0)), float(event.get("wash_half_life", 0.0)))
 		"drop_debris":
 			for d: Dictionary in event.get("debris", []):
 				Debris.create(sim, d)
@@ -80,8 +83,12 @@ static func scatter_debris(sim: Simulation, s: Dictionary) -> void:
 ## SpeciesDef order so spawn order doesn't depend on JSON key order.
 ## With "release_per_second" the ants start inside the nest (in a shuffled
 ## order) and emerge gradually instead of all at once.
+## "params", "state_params" and "channels" tweak this colony only (see
+## Simulation.add_colony).
 static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
-	var colony := sim.add_colony(col["species"], vec2(col["nest"]), col.get("nest_params", {}))
+	var overrides := {"params": col.get("params", {}), "state_params": col.get("state_params", {}),
+			"channels": col.get("channels", {})}
+	var colony := sim.add_colony(col["species"], vec2(col["nest"]), col.get("nest_params", {}), overrides)
 	var population: Dictionary = col.get("population", {})
 	var castes: PackedInt32Array = []
 	for c in colony.species.castes.size():
@@ -104,6 +111,9 @@ static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
 ## Stamps an obstacle shape into the world. kind_override (a World.Cell value)
 ## replaces the shape's own "kind", e.g. FREE to remove an obstacle.
 static func add_obstacle(world: World, ob: Dictionary, kind_override: int = -1) -> void:
+	if ob.get("kind", "wall") == "bridge" and kind_override < 0:
+		world.add_bridge(points(ob["points"]), float(ob.get("width", 12.0)))
+		return
 	var kind: int = World.Cell.WATER if ob.get("kind", "wall") == "water" else World.Cell.WALL
 	if kind_override >= 0:
 		kind = kind_override

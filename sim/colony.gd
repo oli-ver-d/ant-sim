@@ -40,6 +40,7 @@ var deposit_decay_per_second: float
 var food_check_interval: int
 var carry_mass_slowdown: float
 var clutter_slowdown: float
+var obstacle_memory: float
 var arrive_distance: float
 
 func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
@@ -52,12 +53,21 @@ func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
 
 ## Merges config + species tunables and resolves channel names. Called by the
 ## Simulation after the colony's channels have been registered.
-func build_params(config: SimConfig, state_index: Dictionary[String, int]) -> void:
+## `overrides` are this colony's own tweaks (e.g. from a scenario):
+##   {"params": {"deposit_half_life": 20, ...}, "state_params": {"explore": {...}}}
+## "params" win over config and species tunables; "state_params" are merged
+## over the species' and caste's state params for every caste.
+func build_params(config: SimConfig, state_index: Dictionary[String, int], overrides: Dictionary = {}) -> void:
 	for prop in config.get_property_list():
 		if prop["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE:
 			params[StringName(prop["name"])] = config.get(prop["name"])
 	for key: Variant in species.tunables:
 		params[StringName(str(key))] = species.tunables[key]
+	var param_overrides: Dictionary = overrides.get("params", {})
+	for key: Variant in param_overrides:
+		assert(params.has(StringName(str(key))), "Unknown parameter %s" % key)
+		params[StringName(str(key))] = param_overrides[key]
+	var state_overrides: Dictionary = overrides.get("state_params", {})
 
 	sensor_angle = deg_to_rad(params[&"sensor_angle_deg"])
 	sensor_cos = cos(sensor_angle)
@@ -71,20 +81,23 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int]) -> vo
 	food_check_interval = maxi(1, int(params[&"food_check_interval"]))
 	carry_mass_slowdown = params[&"carry_mass_slowdown"]
 	clutter_slowdown = params[&"clutter_slowdown"]
+	obstacle_memory = params[&"obstacle_memory"]
 	arrive_distance = params[&"arrive_distance"]
 
 	# One params dictionary per (caste, state): the species' state_params with
-	# the caste's own state_params merged over them key by key.
+	# the caste's own state_params, then the colony's overrides, merged over
+	# them key by key.
 	num_states = state_index.size()
 	state_params_by_index.resize(species.castes.size() * num_states)
 	for c in species.castes.size():
-		var overrides := species.castes[c].state_params
+		var caste_overrides := species.castes[c].state_params
 		for state_id: String in state_index:
 			var merged: Dictionary = {}
 			merged.merge(species.state_params.get(state_id, {}), true)
-			merged.merge(overrides.get(state_id, {}), true)
+			merged.merge(caste_overrides.get(state_id, {}), true)
+			merged.merge(state_overrides.get(state_id, {}), true)
 			state_params_by_index[c * num_states + state_index[state_id]] = _resolve_channels(merged)
-		for state_id: Variant in overrides:
+		for state_id: Variant in caste_overrides:
 			assert(state_index.has(str(state_id)), "Caste %s has params for unknown state %s" % [species.castes[c].id, state_id])
 	for state_id: Variant in species.state_params:
 		assert(state_index.has(str(state_id)), "Species %s has params for unknown state %s" % [species.id, state_id])

@@ -36,7 +36,9 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		if follow >= 0:
 			turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony)
 		# Path integration: ants know roughly where home is (see Steering.home_turn).
-		if nest.has_entrance():
+		# Right after steering around an obstacle they trust the trail instead,
+		# which may lead around it (SimConfig.obstacle_memory).
+		if nest.has_entrance() and sim.since_obstacle[i] >= colony.obstacle_memory:
 			turn = Steering.home_turn(at, sim.heading[i], nest.entrance_position(), turn,
 					p.get("home_bias", 0.0), deg_to_rad(p.get("home_cone_deg", 0.0)))
 	Steering.move(sim, i, turn, sim.speed[i], dt)

@@ -1,8 +1,9 @@
 class_name WorldView
 extends Node2D
 ## Builds and owns all renderers for one Simulation, layered bottom to top:
-## ground, obstacles, nests, pheromone glow, food, ground items (debris),
-## ants, carried items, ants riding on carried items, debug.
+## ground, wet ground (rain), obstacles, bridges, nests, pheromone glow, food, ground
+## items (debris), ants, carried items, ants riding on carried items, falling
+## rain, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
 
@@ -13,6 +14,7 @@ var ant_renderer: AntRenderer
 var item_renderer: ItemRenderer
 var ground_item_renderer: ItemRenderer
 var rider_renderer: AntRenderer
+var rain_renderer: RainRenderer
 var debug_view: Overlays.DebugView
 ## Interpolation between the previous and current tick, in [0, 1].
 var alpha: float = 1.0:
@@ -23,6 +25,7 @@ var alpha: float = 1.0:
 			item_renderer.alpha = v
 			ground_item_renderer.alpha = v
 			rider_renderer.alpha = v
+			rain_renderer.alpha = v
 
 var _nest_layer: Node2D
 var _food_layer: Node2D
@@ -44,9 +47,19 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	ground.material = ground_mat
 	add_child(ground)
 
+	# Rain: wet soil goes right on the ground, falling drops on top of everything.
+	var wet_layer := Node2D.new()
+	add_child(wet_layer)
+	rain_renderer = RainRenderer.new()
+	rain_renderer.bind(sim, wet_layer)
+
 	var obstacles := ObstacleRenderer.new()
 	obstacles.bind(sim)
 	add_child(obstacles)
+
+	var bridges := BridgeRenderer.new()
+	bridges.bind(sim)
+	add_child(bridges)
 
 	# Nests sit on the ground, under the glow of the trails leading into them.
 	_nest_layer = Node2D.new()
@@ -78,6 +91,7 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	rider_renderer.riders_only = true
 	rider_renderer.bind(sim)
 	add_child(rider_renderer)
+	add_child(rain_renderer)
 
 	if debug_readout != null:
 		debug_view = Overlays.DebugView.new()

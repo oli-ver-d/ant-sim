@@ -84,6 +84,13 @@ tools/ tests/
   so e.g. soldiers return to patrolling instead of foraging.
 - **Riding**: ants can ride on carried items (`Simulation.mount()`); the core keeps riders
   on their item and makes them get off when it is dropped or delivered.
+- **Obstacles**: ants probe ahead and to both sides near obstacles and turn away; with walls on
+  both sides but a clear way ahead (a bridge, a gap) they keep going. Homing ants combine the
+  home trail with path integration (a sense of where the nest is), but for
+  `obstacle_memory` seconds after steering around an obstacle they trust the trail alone, so
+  they can follow a detour (along a bank to a bridge, sideways to a gap in a wall).
+- **Exploring**: with `avoid_channel` (e.g. their own home trail) explorers that have nothing
+  to follow steer toward the least-walked side, so the search keeps pushing into new ground.
 - **Determinism**: all randomness uses `sim.rng`; `Simulation.state_hash()` fingerprints a run.
 - **Ticks and frames**: the sim runs at 30 ticks/s (`SimConfig.tick_rate`). `SimRunner` spreads
   each tick's ant updates over the frames it spans (identical result to `step()`), and
@@ -112,18 +119,25 @@ func register(registry: Registry) -> void:
 Included: `basic_forage` (core test bed with food piles), `chaos_to_highway` (one leaf,
 trail self-organises), `leaf_strip` (one giant leaf stripped completely, for timelapse),
 `two_species` (a leafcutter and a harvester colony foraging side by side), `trunk_trail`
-(debris falls on an established trail; majors clear it, minims ride fragments).
+(debris falls on an established trail; majors clear it, minims ride fragments), `rain_reset`
+(a downpour washes an established trail away and the colony rebuilds it), `twig_bridge` (a
+leaf across a stream; one fallen twig is the only way over), `maze` (a leaf behind rows of
+stone walls; explorers find the gaps and a trail settles on one route).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
 - `colonies`: species, nest position, population per caste, optional `release_per_second`
   (ants emerge gradually instead of all at once), optional `nest_params`
+  and per-colony tweaks: `params` (SimConfig keys and species tunables), `state_params`
+  (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`)
 - `food`: type + type-specific params
-- `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water
+- `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
+  `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it
 - `events`: timed (simulated seconds): `spawn_food`, `add_obstacle`, `remove_obstacle`,
-  `add_colony`, `rain`, `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
+  `add_colony`, `rain` (`area` rect or circle, whole world if omitted; `wash_half_life` makes
+  trails fade over a moment instead of vanishing), `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
   lands on the strongest spots of a trail, wherever it emerged); see `sim/scenario_events.gd`
 
 Playback (video) settings:
@@ -210,7 +224,14 @@ All drawing lives in `render/` (plus each species' own renderers):
   leg length); see the packing notes at the top of the shader.
 - `pheromone.gdshader`: additive glow (core + halo) per channel, coloured by the channel's
   `color` and scaled by its `render_intensity`.
-- `obstacle.gdshader`: smooth stone walls with rim light and shadow; water with a damp bank.
+- `obstacle.gdshader`: stone walls with rim light and shadow; water with drifting ripples and
+  a damp bank. The 4 px obstacle grid is sampled bicubically with a little noise, so outlines
+  are smooth and natural.
+- `bridge_renderer.gd`: bridges as big twigs (same generator as twig debris) with a shadow on
+  the water.
+- `rain.gdshader` + `rain_renderer.gd`: per shower, wet darkened soil with splash rings under
+  everything, and overcast dimming with falling drops over everything. The ground stays wet
+  and dries slowly after the rain.
 - `overlays.gd`: safe zones and the debug view.
 
 Shaders use a sine-free hash: `sin()`-based hashes show seams on some GPUs.
