@@ -17,7 +17,7 @@ abdomen_scale = 0.85
 mandible_size = 0.25
 leg_length = 1.0
 spawn_ratio = 0.25
-states = PackedStringArray("assign_role", "explore", "follow_trail", "seek_ride", "hitchhike", "linger")
+states = PackedStringArray("assign_role", "explore", "follow_trail", "seek_ride", "hitchhike", "linger", "carry_waste")
 initial_state = "assign_role"
 state_params = {
 "explore": {
@@ -89,15 +89,25 @@ id = &"leafcutter"
 display_name = "Leafcutter ants"
 castes = Array[ExtResource("2_caste")]([SubResource("Caste_minim"), SubResource("Caste_media"), SubResource("Caste_major")])
 channels = Array[ExtResource("3_channel")]([SubResource("Channel_home"), SubResource("Channel_food")])
-nest_type = "basic_nest"
+nest_type = "fungus_nest"
 nest_params = {
-"ant_cost": 3.0,
+"ant_cost": 1.5,
+"brood_rate": 0.004,
+"brood_reserve": 30.0,
+"chamber_capacity": 150.0,
+"digest_rate": 0.02,
+"dump": [120.0, 40.0],
+"fungus_yield": 0.6,
+"initial_fungus": 60.0,
+"max_chambers": 5,
 "max_population": 3000,
 "radius": 14.0,
-"sense_radius": 70.0
+"sense_radius": 70.0,
+"upkeep_per_ant": 0.0002,
+"waste_load": 0.25
 }
 food_source_types = PackedStringArray("leaf", "food_pile")
-item_types = PackedStringArray("leaf_fragment", "crumb")
+item_types = PackedStringArray("leaf_fragment", "crumb", "waste")
 state_params = {
 "assign_role": {
 "hitchhiker": "explore",
@@ -141,8 +151,15 @@ state_params = {
 "on_dismount": "explore"
 },
 "linger": {
+"duration": 8.0,
+"next": "carry_waste",
 "radius": 90.0,
 "speed_factor": 0.4
+},
+"carry_waste": {
+"dump_spread": 18.0,
+"on_done": "linger",
+"on_none": "linger"
 },
 "patrol_trail": {
 "follow_channel": "food",

@@ -10,6 +10,8 @@ extends Node2D
 ## between schedule points are ramped linearly so speed-ups are smooth.
 
 const VIDEO_FPS := 60.0
+## Default cutaway inset placement (screen pixels): top left, below the top safe zone.
+const DEFAULT_CUTAWAY_RECT := [40, 170, 440, 330]
 
 var config: SimConfig = preload("res://sim/default_config.tres")
 var registry: Registry
@@ -18,6 +20,9 @@ var sim: Simulation
 var runner: SimRunner
 var view: WorldView
 var camera: CameraDirector
+## Nest cutaway inset, if the scenario asks for one (or toggled with N).
+var cutaway: CutawayPanel
+var _hud: CanvasLayer
 ## Video seconds played so far.
 var video_time: float = 0.0
 ## Video length from the scenario ("duration"), in seconds.
@@ -46,6 +51,15 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 	var render: Dictionary = data.get("render", {})
 	view.pheromone_renderer.visible = bool(render.get("pheromones", true))
 	view.pheromone_renderer.opacity = float(render.get("pheromone_opacity", view.pheromone_renderer.opacity))
+	# Screen-space layer for insets.
+	_hud = CanvasLayer.new()
+	add_child(_hud)
+	if render.has("cutaway"):
+		var c: Dictionary = render["cutaway"]
+		_add_cutaway(int(c.get("colony", 0)), ScenarioEvents.rect2(c.get("rect", DEFAULT_CUTAWAY_RECT)))
+		if cutaway != null:
+			cutaway.from_time = float(c.get("from", -INF))
+			cutaway.to_time = float(c.get("to", INF))
 
 	camera = CameraDirector.new()
 	add_child(camera)
@@ -60,6 +74,8 @@ func advance(delta: float, speed: float = 1.0) -> void:
 	video_time += delta
 	runner.advance(ticks_per_frame_at(video_time) * VIDEO_FPS * delta * speed)
 	view.alpha = runner.alpha()
+	if cutaway != null:
+		cutaway.update_visibility(video_time)
 	camera.alpha = runner.alpha()
 	camera.update_camera(video_time, delta)
 
@@ -81,3 +97,18 @@ func _parse_tpf(spec: Variant) -> void:
 		_tpf_points.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
 	if _tpf_points.is_empty():
 		_tpf_points.append(Vector2(0.0, float(spec) if (spec is float or spec is int) else config.ticks_per_frame))
+
+## Shows or hides colony 0's nest cutaway (interactive toggle).
+func toggle_cutaway() -> void:
+	if cutaway == null:
+		_add_cutaway(0, ScenarioEvents.rect2(DEFAULT_CUTAWAY_RECT))
+		return
+	var shown := cutaway.visible
+	cutaway.from_time = INF if shown else -INF
+	cutaway.to_time = INF
+	cutaway.update_visibility(video_time)
+
+func _add_cutaway(colony_id: int, rect: Rect2) -> void:
+	cutaway = CutawayPanel.create(sim, registry, colony_id, rect)
+	if cutaway != null:
+		_hud.add_child(cutaway)

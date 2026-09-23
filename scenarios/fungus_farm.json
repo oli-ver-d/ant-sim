@@ -1,0 +1,34 @@
+{
+	"name": "fungus_farm",
+	"description": "A young leafcutter colony farms fungus: leaf goes in, the garden grows chamber by chamber, the colony grows, and waste piles up outside.",
+	"seed": 4,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1250],
+			"population": {"minim": 30, "media": 110, "major": 10},
+			"release_per_second": 30
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [330, 820], "rotation": -30, "length": 300, "width": 140, "shape": "elliptic", "teeth": 26, "seed": 3},
+		{"type": "leaf", "pos": [800, 900], "rotation": 40, "length": 280, "width": 120, "shape": "lanceolate", "teeth": 22, "seed": 8}
+	],
+	"events": [
+		{"t": 300, "type": "spawn_food", "food": {"type": "leaf", "pos": [600, 720], "rotation": 10, "length": 360, "width": 170, "shape": "elliptic", "teeth": 30, "seed": 12}},
+		{"t": 600, "type": "spawn_food", "food": {"type": "leaf", "pos": [260, 1560], "rotation": 70, "length": 320, "width": 150, "shape": "elliptic", "teeth": 28, "seed": 21}},
+		{"t": 800, "type": "spawn_food", "food": {"type": "leaf", "pos": [840, 1500], "rotation": -55, "length": 320, "width": 140, "shape": "lanceolate", "teeth": 24, "seed": 30}}
+	],
+	"warmup": 20,
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 2},
+		{"t": 1.5, "tpf": 2},
+		{"t": 3.5, "tpf": 30},
+		{"t": 20, "tpf": 30}
+	],
+	"camera": [
+		{"t": 0, "pos": [540, 1060], "zoom": 1.0}
+	],
+	"render": {"cutaway": {"colony": 0, "rect": [40, 170, 460, 340]}}
+}

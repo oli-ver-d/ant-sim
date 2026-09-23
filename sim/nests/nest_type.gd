@@ -86,3 +86,31 @@ func pick_caste(sim: Simulation) -> int:
 		if r <= 0.0:
 			return i
 	return castes.size() - 1
+
+# --- Waste ---------------------------------------------------------------------------
+# Nests may produce refuse that workers carry out to a dump (a midden) on the
+# surface; see the core carry_waste behaviour. The base nest makes none.
+
+## Mass of waste carried out and dumped so far.
+var dumped_mass: float = 0.0
+## Number of waste loads dumped so far.
+var dumped_items: int = 0
+
+## True if there is waste ready to be carried out.
+func has_waste() -> bool:
+	return false
+
+## Hands out one load of waste as a new Item (the caller picks it up), or
+## null if there is none.
+func take_waste(_sim: Simulation) -> Item:
+	return null
+
+## Where waste is dumped.
+func dump_position() -> Vector2:
+	return position
+
+## Called when a load of waste is dropped at the dump. The Simulation destroys
+## the item afterwards; the dump keeps only the totals.
+func receive_waste(_sim: Simulation, item: Item) -> void:
+	dumped_mass += item.mass
+	dumped_items += 1

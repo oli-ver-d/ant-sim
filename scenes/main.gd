@@ -12,9 +12,9 @@ extends Node2D
 ##   --probe=1              print FPS and simulation cost every 2 s
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   manual camera (overrides the scenario's)
-##   --safe=1 --debug=1 --pheromones=0   initial overlay state
+##   --safe=1 --debug=1 --pheromones=0 --cutaway=1   initial overlay state
 ##
-## Keys: Space pause, P pheromones, D debug overlay, S safe zones,
+## Keys: Space pause, P pheromones, D debug overlay, S safe zones, N nest cutaway,
 ##       F follow the ant under the cursor (again to stop), C scenario camera,
 ##       1-5 speed (1/2/4/8/16x the scenario's pace),
 ##       mouse wheel zoom, middle-drag pan, Esc quit.
@@ -85,6 +85,8 @@ func _ready() -> void:
 		player.view.pheromone_renderer.visible = false
 	if args.has("debug"):
 		_toggle_debug()
+	if args.has("cutaway") and player.cutaway == null:
+		player.toggle_cutaway()
 	if args.has("probe"):
 		add_child(load("res://tests/frame_probe.gd").new())
 
@@ -134,6 +136,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_toggle_debug()
 			KEY_S:
 				safe_zones.visible = not safe_zones.visible
+			KEY_N:
+				player.toggle_cutaway()
 			KEY_F:
 				if cam.mode == CameraDirector.Mode.FOLLOW:
 					cam.mode = CameraDirector.Mode.MANUAL

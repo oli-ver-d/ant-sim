@@ -1,7 +1,7 @@
 {
 	"name": "twig_bridge",
 	"description": "A leaf across a stream; a single fallen twig is the only way over.",
-	"seed": 2,
+	"seed": 3,
 	"duration": 20,
 	"colonies": [
 		{

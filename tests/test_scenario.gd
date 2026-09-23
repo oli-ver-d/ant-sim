@@ -97,3 +97,12 @@ func test_gradual_release() -> void:
 	_run_seconds(sim, 3.0)
 	check_eq(sim.colonies[0].population, 30, "all out after 3 s")
 	check_eq(sim.colonies[0].population_by_caste[0], 10, "caste counts preserved")
+
+## A fast timelapse must run every tick it asks for; only backlog from earlier
+## frames may be dropped (this used to cap timelapses at ~4 ticks per frame).
+func test_runner_runs_every_requested_tick() -> void:
+	var sim := ScenarioLoader.build(_base_data(), _registry, _config)
+	var runner := SimRunner.new(sim)
+	for f in 10:
+		runner.advance(30.0)
+	check_eq(sim.completed_ticks(), 300, "30 ticks per frame for 10 frames")

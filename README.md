@@ -21,7 +21,7 @@ godot --path . -- --scenario=basic_forage --seed=42
 
 The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
-channel values under the cursor), **S** TikTok/Reels safe zones, **F** follow the ant under
+channel values under the cursor), **S** TikTok/Reels safe zones, **N** nest cutaway inset, **F** follow the ant under
 the cursor (again to stop), **C** back to the scenario camera, **1–5** speed (1/2/4/8/16× the
 scenario's pace), mouse wheel zoom, middle-drag pan, **Esc** quit.
 
@@ -58,7 +58,7 @@ sim/          core engine (no rendering, no species-specific code)
   steering.gd         three-sensor model, obstacle avoidance, movement
   world.gd            obstacle grid (walls, water)
   scenario_loader.gd  JSON scenario -> Simulation
-  behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger
+  behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste
   food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest
 species/<name>/       one folder per species; register.gd is discovered automatically
 render/               WorldView and renderers; they only read simulation state
@@ -82,6 +82,9 @@ tools/ tests/
   trails still grow stronger.
 - **Castes** can override the species' state params per state (`CasteDef.state_params`),
   so e.g. soldiers return to patrolling instead of foraging.
+- **Nests** (`NestType`): receive delivered items, grow the colony in `update()`, and may
+  produce waste that `carry_waste` workers take to `dump_position()`. A nest type can have a
+  surface renderer (`"nest:<type>"`) and a cutaway view (`"cutaway:<type>"`).
 - **Riding**: ants can ride on carried items (`Simulation.mount()`); the core keeps riders
   on their item and makes them get off when it is dropped or delivered.
 - **Obstacles**: ants probe ahead and to both sides near obstacles and turn away; with walls on
@@ -122,7 +125,9 @@ trail self-organises), `leaf_strip` (one giant leaf stripped completely, for tim
 (debris falls on an established trail; majors clear it, minims ride fragments), `rain_reset`
 (a downpour washes an established trail away and the colony rebuilds it), `twig_bridge` (a
 leaf across a stream; one fallen twig is the only way over), `maze` (a leaf behind rows of
-stone walls; explorers find the gaps and a trail settles on one route).
+stone walls; explorers find the gaps and a trail settles on one route),
+`fungus_farm` (a young colony over ~17 minutes: the garden grows chamber by chamber, the
+colony grows from 150 to ~850 ants, waste piles up outside; with the cutaway inset).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
@@ -148,7 +153,10 @@ Playback (video) settings:
 - `camera`: keyframes `{"t", "pos": [x, y], "zoom", "ease"}`; `"follow": {"near": [x, y],
   "state": "carry_home"}` in place of `pos` tracks the nearest matching ant
   (see `render/camera_director.gd`)
-- `render`: `{"pheromones": true, "pheromone_opacity": 0.55}`
+- `render`: `{"pheromones": true, "pheromone_opacity": 0.55, "cutaway": {"colony": 0,
+  "rect": [x, y, w, h], "from": 2, "to": 18}}`. The cutaway is an inset (screen pixels of
+  the 1080×1920 frame) showing the colony's nest from the side, for nest types that have a
+  cutaway view (`render/cutaway_panel.gd`); `from`/`to` are video seconds, faded
 
 ## Recording
 
@@ -197,10 +205,21 @@ _Written in M9, from the experience of adding harvesters._
 - Castes (via `CasteDef.state_params` overrides):
   - **minims** start in `assign_role`: `hitchhiker_fraction` of them go out (`explore` ->
     `seek_ride`) and climb onto fragments leaving the leaf (`hitchhike`, using the core's
-    generic riding); the rest `linger` near the nest.
+    generic riding); the rest `linger` near the nest and take turns at midden work
+    (`carry_waste`: carry a load of waste from the nest to the dump).
   - **medias** cut and carry.
   - **majors** `patrol_trail`: walk the foraging trail, and when debris sits on strong trail
     (`debris_trail_threshold`) `clear_debris` carries it off toward weaker trail.
+- `fungus_nest.gd`: leafcutters farm fungus. Delivered leaf becomes substrate, the garden
+  digests it (faster the bigger it is) into fungus and waste, the colony eats the fungus,
+  and surplus fungus becomes brood: more garden, more ants. Starved, the garden shrinks and
+  growth stops. The garden fills chambers, and a new one is dug when they're nearly full.
+  Waste goes to a dump beside the entrance (`dump` offset). All rates are `nest_params`.
+- `fungus_nest_renderer.gd`: the soil mound (grows with chambers) and the waste dump pile
+  (grows with every load).
+- `fungus_cutaway.gd` + `fungus_garden.gdshader`: the cutaway inset: soil strata, tunnels and
+  chambers (dug as they appear), the garden as soft off-white lumps filling them from the
+  floor up, green flecks of undigested leaf, tiny ants in the tunnels and the colony size.
 
 ## Species: harvester ants
 

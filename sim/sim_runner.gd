@@ -11,8 +11,9 @@ extends RefCounted
 var sim: Simulation
 ## Target progress in ticks (fractional).
 var target: float = 0.0
-## If the sim falls further behind than this many ticks (too slow for the
-## requested speed), skip ahead instead of trying to catch up forever.
+## If the sim is still more than this many ticks behind from earlier frames
+## (too slow for the requested speed), that backlog is dropped instead of
+## caught up forever. The ticks asked for in the current frame always run.
 var max_lag_ticks: float = 4.0
 
 func _init(simulation: Simulation) -> void:
@@ -25,9 +26,7 @@ func progress() -> float:
 
 ## Advances the target by `ticks` and does the work needed to reach it.
 func advance(ticks: float) -> void:
-	target += ticks
-	if target - progress() > max_lag_ticks:
-		target = progress() + max_lag_ticks
+	target = minf(target, progress() + max_lag_ticks) + ticks
 	while progress() < target - 1e-6:
 		if not sim.in_tick():
 			sim.begin_step()
