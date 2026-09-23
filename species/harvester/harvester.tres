@@ -1,0 +1,104 @@
+[gd_resource type="Resource" script_class="SpeciesDef" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://sim/species_def.gd" id="1_species"]
+[ext_resource type="Script" path="res://sim/caste_def.gd" id="2_caste"]
+[ext_resource type="Script" path="res://sim/pheromone_channel_def.gd" id="3_channel"]
+
+[sub_resource type="Resource" id="Caste_minor"]
+script = ExtResource("2_caste")
+id = &"minor"
+size = 8.0
+speed = 42.0
+turn_rate = 5.0
+color = Color(0.14, 0.1, 0.09, 1)
+head_scale = 1.3
+thorax_scale = 0.95
+abdomen_scale = 1.05
+mandible_size = 0.4
+leg_length = 1.0
+spawn_ratio = 0.8
+states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+initial_state = "explore"
+carry_capacity = 1.0
+
+[sub_resource type="Resource" id="Caste_major"]
+script = ExtResource("2_caste")
+id = &"major"
+size = 11.0
+speed = 34.0
+turn_rate = 4.0
+color = Color(0.34, 0.11, 0.06, 1)
+head_scale = 1.85
+thorax_scale = 1.0
+abdomen_scale = 0.95
+mandible_size = 0.7
+leg_length = 1.05
+spawn_ratio = 0.2
+states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+initial_state = "explore"
+carry_capacity = 1.5
+
+[sub_resource type="Resource" id="Channel_home"]
+script = ExtResource("3_channel")
+name = &"home"
+half_life = 30.0
+diffusion = 0.6
+cap = 10.0
+color = Color(0.72, 0.45, 1, 1)
+
+[sub_resource type="Resource" id="Channel_food"]
+script = ExtResource("3_channel")
+name = &"food"
+half_life = 45.0
+diffusion = 0.6
+cap = 10.0
+color = Color(0.3, 0.95, 0.82, 1)
+
+[resource]
+script = ExtResource("1_species")
+id = &"harvester"
+display_name = "Harvester ants"
+castes = Array[ExtResource("2_caste")]([SubResource("Caste_minor"), SubResource("Caste_major")])
+channels = Array[ExtResource("3_channel")]([SubResource("Channel_home"), SubResource("Channel_food")])
+nest_type = "seed_nest"
+nest_params = {
+"ant_cost": 4.0,
+"disc_radius": 70.0,
+"max_population": 3000,
+"radius": 11.0,
+"sense_radius": 70.0
+}
+food_source_types = PackedStringArray("seed_pile")
+item_types = PackedStringArray("seed")
+state_params = {
+"carry_home": {
+"follow_channel": "home",
+"home_bias": 0.3,
+"home_cone_deg": 75.0,
+"lay_channel": "food",
+"on_arrive": "deliver"
+},
+"deliver": {
+"next": "explore"
+},
+"explore": {
+"follow_channel": "food",
+"give_up_after": 30.0,
+"lay_channel": "home",
+"on_food": "go_to_food",
+"on_give_up": "follow_trail"
+},
+"follow_trail": {
+"follow_channel": "home",
+"goal": "nest",
+"home_bias": 0.3,
+"home_cone_deg": 75.0,
+"on_arrive": "explore"
+},
+"go_to_food": {
+"lay_channel": "home",
+"on_pickup": "carry_home",
+"timeout": 20.0
+}
+}
+tunables = {}

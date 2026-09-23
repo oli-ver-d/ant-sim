@@ -99,7 +99,8 @@ func register(registry: Registry) -> void:
 ### Scenarios
 
 Included: `basic_forage` (core test bed with food piles), `chaos_to_highway` (one leaf,
-trail self-organises), `leaf_strip` (one giant leaf stripped completely, for timelapse).
+trail self-organises), `leaf_strip` (one giant leaf stripped completely, for timelapse),
+`two_species` (a leafcutter and a harvester colony foraging side by side).
 
 JSON files in `scenarios/`: seed, colonies (species, nest position, population per
 caste), food sources (type + type-specific params) and obstacles (polyline walls,
@@ -125,3 +126,13 @@ _Written in M9, from the experience of adding harvesters._
 - `leaf.gdshader` + `leaf_renderer.gd`: draw the mask smoothly (linear filtering + threshold)
   with procedural veins; only the small mask texture is re-uploaded per bite.
 - `cut_leaf.gd`: stand at the edge sawing for the caste's cut time, then bite and carry home.
+
+## Species: harvester ants
+
+`species/harvester/`, added without touching the core or the leafcutter module:
+- `harvester.tres`: minors (near-black) and big-headed majors (dark red); violet/teal
+  trails; uses only the core's generic behaviours.
+- `seed_pile.gd` + renderer: a cluster of individual seeds; foragers walk to the nearest
+  one, so the pile thins out seed by seed.
+- `seed_nest.gd` + renderer: a `BasicNest` that counts seeds; drawn as a cleared sandy
+  disc with a growing pile of husks.

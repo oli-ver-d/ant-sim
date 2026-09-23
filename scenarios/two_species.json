@@ -1,0 +1,24 @@
+{
+	"name": "two_species",
+	"description": "A leafcutter colony and a harvester colony foraging side by side.",
+	"seed": 4,
+	"duration": 30,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [300, 1600],
+			"population": {"minim": 60, "media": 220, "major": 30}
+		},
+		{
+			"species": "harvester",
+			"nest": [800, 1300],
+			"population": {"minor": 240, "major": 60}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [280, 780], "rotation": -60, "length": 300, "width": 140, "shape": "elliptic", "teeth": 28, "seed": 21},
+		{"type": "seed_pile", "pos": [820, 520], "radius": 34, "count": 220, "seed": 8},
+		{"type": "seed_pile", "pos": [640, 820], "radius": 24, "count": 120, "seed": 9}
+	],
+	"obstacles": []
+}

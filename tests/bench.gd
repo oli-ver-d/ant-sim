@@ -44,7 +44,7 @@ func _summary(sim: Simulation) -> String:
 	for src in sim.food_sources:
 		remaining += src.remaining_mass()
 		total += src.remaining_mass() + src.taken_mass
-	var delivered := 0
+	var delivered: PackedStringArray = []
 	for colony in sim.colonies:
-		delivered += colony.delivered_items
-	return "delivered %4d  food left %3d%%  %s" % [delivered, roundi(100.0 * remaining / maxf(total, 0.001)), counts]
+		delivered.append("%s %d" % [colony.species.id, colony.delivered_items])
+	return "delivered %s  food left %3d%%  %s" % [", ".join(delivered), roundi(100.0 * remaining / maxf(total, 0.001)), counts]
