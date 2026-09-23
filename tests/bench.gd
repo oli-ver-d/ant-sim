@@ -39,7 +39,12 @@ func _summary(sim: Simulation) -> String:
 		if sim.alive[i] != 0:
 			var s := sim.state_id(i)
 			counts[s] = counts.get(s, 0) + 1
+	var remaining := 0.0
+	var total := 0.0
+	for src in sim.food_sources:
+		remaining += src.remaining_mass()
+		total += src.remaining_mass() + src.taken_mass
 	var delivered := 0
 	for colony in sim.colonies:
 		delivered += colony.delivered_items
-	return "delivered %4d  %s" % [delivered, counts]
+	return "delivered %4d  food left %3d%%  %s" % [delivered, roundi(100.0 * remaining / maxf(total, 0.001)), counts]

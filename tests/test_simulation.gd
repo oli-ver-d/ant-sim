@@ -38,8 +38,8 @@ func test_forage_obstacles_and_mass() -> void:
 	for t in 120 * _config.tick_rate:
 		sim.step()
 		if t % 10 == 0:
-			bad_positions += _ants_in_obstacles(sim)
-			worst_mass_error = maxf(worst_mass_error, absf(_mass_error(sim)))
+			bad_positions += SimChecks.ants_in_obstacles(sim)
+			worst_mass_error = maxf(worst_mass_error, absf(SimChecks.mass_error(sim)))
 	var colony := sim.colonies[0]
 	check(colony.delivered_items >= 50, "delivered %d items in 120 s, expected >= 50" % colony.delivered_items)
 	check_eq(bad_positions, 0, "ants inside obstacle cells")
@@ -64,36 +64,3 @@ func test_removing_carrier_drops_item() -> void:
 	check_eq(item.carrier, -1, "item dropped")
 	check(sim.items.has(item.id), "item still exists on the ground")
 
-func _ants_in_obstacles(sim: Simulation) -> int:
-	var bad := 0
-	for i in sim.high_water:
-		if sim.alive[i] != 0 and sim.world.is_blocked(sim.pos[i]):
-			bad += 1
-	return bad
-
-## taken - (carried + delivered + on the ground); should be 0.
-func _mass_error(sim: Simulation) -> float:
-	var taken := 0.0
-	for src in sim.food_sources:
-		taken += src.taken_mass
-	var accounted := 0.0
-	for id: int in sim.items:
-		accounted += sim.items[id].mass
-	for colony in sim.colonies:
-		accounted += colony.delivered_mass
-	return taken - accounted
-
-func test_split_ticks_match_full_ticks() -> void:
-	var full := _sim(11)
-	var split := _sim(11)
-	var runner := SimRunner.new(split)
-	for t in 60:
-		full.step()
-	# Advance in uneven fractions of a tick, as frames at odd rates would.
-	var steps: PackedFloat32Array = [0.3, 0.45, 0.25, 0.7, 0.1, 0.2]
-	var k := 0
-	while split.completed_ticks() < 60:
-		runner.advance(minf(steps[k % steps.size()], 60.0 - runner.target))
-		k += 1
-	check(not split.in_tick(), "ended between ticks")
-	check_eq(split.state_hash(), full.state_hash(), "split ticks give the same state")

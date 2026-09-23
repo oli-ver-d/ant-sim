@@ -1,12 +1,20 @@
 class_name GoToFoodBehaviour
 extends Behaviour
-## A food source was sensed (its id is in scratch_i): head straight for its
-## nearest access point. On arrival either hand over to `on_arrive` (e.g. a
-## species-specific cutting state) or, if none is set, take an item directly
+## A food source was sensed (its id is in scratch_i): head for its nearest
+## access point. On arrival either hand over to `on_arrive` (e.g. a
+## species-specific handling state) or, if none is set, take an item directly
 ## and switch to `on_pickup`.
 ##
+## The access point is cached in target[i] and re-queried every
+## `retarget_interval` seconds (scratch_f1 counts down), since finding the
+## nearest point on a large source can be expensive and the point moves as the
+## source is used up.
+##
 ## params: lay_channel, on_arrive (""), on_pickup ("carry_home"),
-##         on_lost ("explore"), timeout (s)
+##         on_lost ("explore"), timeout (s), retarget_interval (s, default 0.5)
+
+func enter(sim: Simulation, i: int) -> void:
+	sim.scratch_f1[i] = 0.0
 
 func tick(sim: Simulation, i: int, dt: float) -> String:
 	var colony := sim.colonies[sim.colony_id[i]]
@@ -16,7 +24,12 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		return p.get("on_lost", "explore")
 
 	var at := sim.pos[i]
-	var goal := src.nearest_access_point(at)
+	sim.scratch_f1[i] -= dt
+	if sim.scratch_f1[i] <= 0.0:
+		sim.target[i] = src.nearest_access_point(at)
+		sim.scratch_f1[i] = float(p.get("retarget_interval", 0.5))
+	var goal := sim.target[i]
+
 	if at.distance_to(goal) <= colony.arrive_distance:
 		var arrive: String = p.get("on_arrive", "")
 		if arrive != "":

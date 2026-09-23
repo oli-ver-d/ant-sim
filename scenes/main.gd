@@ -9,6 +9,7 @@ extends Node2D
 ##   --ants=<n>             top each colony up to n ants (stress test)
 ##   --probe=1              print FPS and simulation cost every 2 s
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
+##   --zoom=<z> --center=<x>,<y>   initial camera
 ##
 ## Keys: Space pause, P pheromones, 1-5 speed (1/2/4/8/16x real time),
 ##       mouse wheel zoom, middle-drag pan, Esc quit.
@@ -56,6 +57,10 @@ func _ready() -> void:
 
 	camera = Camera2D.new()
 	camera.position = Vector2(config.world_size) * 0.5
+	if args.has("center"):
+		var c: PackedStringArray = str(args["center"]).split(",")
+		camera.position = Vector2(float(c[0]), float(c[1]))
+	camera.zoom = Vector2.ONE * float(args.get("zoom", 1.0))
 	add_child(camera)
 	camera.make_current()
 

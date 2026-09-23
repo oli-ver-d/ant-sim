@@ -4,7 +4,10 @@ extends Behaviour
 ## `lay_channel` (the food trail), and move slower the heavier the item.
 ## Near the nest the entrance is seen directly; at the nest -> `on_arrive`.
 ##
-## params: follow_channel, lay_channel, on_arrive ("deliver")
+## home_bias / home_cone_deg: path integration, see Steering.home_turn().
+##
+## params: follow_channel, lay_channel, on_arrive ("deliver"), home_bias (0),
+##         home_cone_deg (0 = off)
 
 func tick(sim: Simulation, i: int, dt: float) -> String:
 	var colony := sim.colonies[sim.colony_id[i]]
@@ -22,6 +25,10 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		var follow: int = p.get("follow_channel", -1)
 		if follow >= 0:
 			turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony)
+		# Path integration: ants know roughly where home is (see Steering.home_turn).
+		if nest.has_entrance():
+			turn = Steering.home_turn(at, sim.heading[i], nest.entrance_position(), turn,
+					p.get("home_bias", 0.0), deg_to_rad(p.get("home_cone_deg", 0.0)))
 
 	var item := sim.item_of(i)
 	var mass := item.mass if item != null else 0.0

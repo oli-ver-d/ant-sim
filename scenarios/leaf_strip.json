@@ -1,0 +1,17 @@
+{
+	"name": "leaf_strip",
+	"description": "One giant leaf stripped completely by a large colony (meant for timelapse).",
+	"seed": 2,
+	"duration": 30,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1700],
+			"population": {"minim": 120, "media": 420, "major": 60}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [540, 700], "rotation": -75, "length": 760, "width": 330, "shape": "lanceolate", "teeth": 40, "seed": 5}
+	],
+	"obstacles": []
+}

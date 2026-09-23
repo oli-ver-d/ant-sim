@@ -17,7 +17,7 @@ abdomen_scale = 0.85
 mandible_size = 0.25
 leg_length = 1.0
 spawn_ratio = 0.25
-states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
 initial_state = "explore"
 carry_capacity = 0.5
 
@@ -34,7 +34,7 @@ abdomen_scale = 0.9
 mandible_size = 0.35
 leg_length = 1.1
 spawn_ratio = 0.65
-states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
 initial_state = "explore"
 carry_capacity = 1.0
 
@@ -51,7 +51,7 @@ abdomen_scale = 0.85
 mandible_size = 0.8
 leg_length = 1.2
 spawn_ratio = 0.1
-states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
 initial_state = "explore"
 carry_capacity = 2.0
 
@@ -84,33 +84,52 @@ nest_params = {
 "radius": 14.0,
 "sense_radius": 70.0
 }
-food_source_types = PackedStringArray("food_pile")
-item_types = PackedStringArray("crumb")
+food_source_types = PackedStringArray("leaf", "food_pile")
+item_types = PackedStringArray("leaf_fragment", "crumb")
 state_params = {
 "carry_home": {
+"home_bias": 0.3,
+"home_cone_deg": 75.0,
 "follow_channel": "home",
 "lay_channel": "food",
 "on_arrive": "deliver"
+},
+"cut_leaf": {
+"on_cut": "carry_home",
+"on_lost": "explore",
+"on_missed": "go_to_food"
 },
 "deliver": {
 "next": "explore"
 },
 "explore": {
 "follow_channel": "food",
-"give_up_after": 20.0,
+"give_up_after": 30.0,
 "lay_channel": "home",
 "on_food": "go_to_food",
 "on_give_up": "follow_trail"
 },
 "follow_trail": {
+"home_bias": 0.3,
+"home_cone_deg": 75.0,
 "follow_channel": "home",
 "goal": "nest",
 "on_arrive": "explore"
 },
 "go_to_food": {
+"on_arrive": "cut_leaf",
 "lay_channel": "home",
 "on_pickup": "carry_home",
 "timeout": 20.0
 }
 }
-tunables = {}
+tunables = {
+"bite_radius": 6.0,
+"cut_jitter_angle": 0.22,
+"cut_jitter_hz": 3.0,
+"cut_time": {
+"major": 4.5,
+"media": 3.0,
+"minim": 2.0
+}
+}

@@ -26,7 +26,8 @@ mouse wheel zoom, middle-drag pan, **Esc** quit.
 
 ```bash
 tools/test.sh                                   # headless test suite (filter: tools/test.sh pheromones)
-tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks, save a PNG (opens a window briefly)
+tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
+tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
 godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
 ```
@@ -97,6 +98,9 @@ func register(registry: Registry) -> void:
 
 ### Scenarios
 
+Included: `basic_forage` (core test bed with food piles), `chaos_to_highway` (one leaf,
+trail self-organises), `leaf_strip` (one giant leaf stripped completely, for timelapse).
+
 JSON files in `scenarios/`: seed, colonies (species, nest position, population per
 caste), food sources (type + type-specific params) and obstacles (polyline walls,
 rects, circles, polygons; `"kind": "water"` for water). See `sim/scenario_loader.gd`.
@@ -108,3 +112,16 @@ _Coming in M5._
 ## How to add a new species
 
 _Written in M9, from the experience of adding harvesters._
+
+## Species: leafcutter ants
+
+`species/leafcutter/`:
+- `leafcutter.tres`: castes (minim, media, major), channels, state wiring and tunables
+  (`bite_radius`, `cut_time` per caste).
+- `leaf_source.gd`: procedural leaf (elliptic/lanceolate outline, serrations, veins) stored
+  as a 3 px cell mask. Each bite removes a semicircle at the edge nearest the cutter,
+  sized by the caste's `carry_capacity`, and the removed cells become the carried
+  fragment, so the fragment matches the hole.
+- `leaf.gdshader` + `leaf_renderer.gd`: draw the mask smoothly (linear filtering + threshold)
+  with procedural veins; only the small mask texture is re-uploaded per bite.
+- `cut_leaf.gd`: stand at the edge sawing for the caste's cut time, then bite and carry home.

@@ -1,0 +1,17 @@
+{
+	"name": "chaos_to_highway",
+	"description": "Leafcutters pour out of the nest at random; a clean trail self-organises to a single leaf.",
+	"seed": 1,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1560],
+			"population": {"minim": 80, "media": 280, "major": 40}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [600, 700], "rotation": 18, "length": 340, "width": 150, "shape": "elliptic", "teeth": 30, "seed": 11}
+	],
+	"obstacles": []
+}

@@ -294,13 +294,14 @@ func deliver_item(i: int) -> void:
 
 # --- Queries ---------------------------------------------------------------------
 
-## First food source this colony forages from that the ant at pos senses with
-## a clear line of sight, or null.
+## First food source this colony forages from that the ant at pos senses, with
+## a clear line of sight to the source's centre (sources themselves aren't
+## obstacles, so this only checks walls/water in between), or null.
 func find_sensed_food(at: Vector2, colony: Colony) -> FoodSource:
 	for src in food_sources:
 		if src.is_depleted() or not colony.food_types.has(src.type_id):
 			continue
-		if src.is_sensed_at(at, colony) and world.line_clear(at, src.nearest_access_point(at)):
+		if src.is_sensed_at(at, colony) and world.line_clear(at, src.position):
 			return src
 	return null
 

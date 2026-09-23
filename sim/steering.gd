@@ -123,3 +123,17 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 		sim.pos[i] = next
 	sim.heading[i] = h
 	sim.anim_phase[i] += step_len / maxf(caste.size, 1.0) * TAU * 0.5
+
+## Path integration for homeward ants. Combines a pheromone turn with the ant's
+## sense of where `home` is:
+##   - if the ant's heading is more than `cone` radians off the home direction,
+##     the pheromone is ignored and it turns toward home (it won't follow a
+##     trail leading away from home, and can't get trapped circling a local
+##     peak in the field);
+##   - otherwise `bias` (0-1) of a turn toward home is added to the pheromone turn.
+static func home_turn(at: Vector2, heading_rad: float, home: Vector2, pheromone_turn: float,
+		bias: float, cone: float) -> float:
+	var toward := turn_toward(at, heading_rad, home)
+	if cone > 0.0 and absf(angle_difference(heading_rad, (home - at).angle())) > cone:
+		return toward
+	return clampf(pheromone_turn + bias * toward, -1.0, 1.0)
