@@ -4,16 +4,18 @@ extends RefCounted
 ## the Registry; all per-ant state is kept in the Simulation's packed arrays,
 ## so behaviours must never store per-ant data on themselves.
 ##
-## Transitions happen only through tick()'s return value.
+## Transitions happen only through tick()'s return value. Per-species
+## configuration (which channels to follow/lay, which state comes next) comes
+## from sim.state_params(ant), set in the SpeciesDef's state_params.
 
 ## Called once when an ant switches into this state.
-func enter(_sim: RefCounted, _ant: int) -> void:
+func enter(_sim: Simulation, _ant: int) -> void:
 	pass
 
 ## Advance one ant by dt seconds. Return the next state id, or "" to stay.
-func tick(_sim: RefCounted, _ant: int, _dt: float) -> String:
+func tick(_sim: Simulation, _ant: int, _dt: float) -> String:
 	return ""
 
 ## Called once when an ant leaves this state (before the next state's enter()).
-func exit(_sim: RefCounted, _ant: int) -> void:
+func exit(_sim: Simulation, _ant: int) -> void:
 	pass

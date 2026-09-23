@@ -1,0 +1,44 @@
+class_name ItemRenderer
+extends Node2D
+## Draws items: carried ones held in front of the carrier's head and rotated
+## with it, others where they lie. Procedural items are circles; items with a
+## shape image are drawn as that image.
+
+## How far ahead of the carrier's centre an item is held, in body lengths.
+const HOLD_OFFSET := 0.55
+
+var sim: Simulation
+var _textures: Dictionary[int, ImageTexture] = {}
+
+func bind(simulation: Simulation) -> void:
+	sim = simulation
+
+func _process(_delta: float) -> void:
+	queue_redraw()
+
+func _draw() -> void:
+	if sim == null:
+		return
+	for id: int in sim.items:
+		var item: Item = sim.items[id]
+		var at := item.position
+		var rot := item.rotation
+		if item.carrier >= 0:
+			var i := item.carrier
+			rot = sim.heading[i]
+			at = sim.pos[i] + Vector2.from_angle(rot) * sim.caste_of(i).size * HOLD_OFFSET
+		if item.shape != null:
+			var tex: ImageTexture = _textures.get(id)
+			if tex == null:
+				tex = ImageTexture.create_from_image(item.shape)
+				_textures[id] = tex
+			var size := Vector2(item.shape.get_size()) * item.pixel_size
+			draw_set_transform(at, rot)
+			draw_texture_rect(tex, Rect2(-size * 0.5, size), false)
+			draw_set_transform(Vector2.ZERO)
+		else:
+			draw_circle(at, item.radius, item.color)
+	# Forget textures of destroyed items.
+	for id: int in _textures.keys():
+		if not sim.items.has(id):
+			_textures.erase(id)

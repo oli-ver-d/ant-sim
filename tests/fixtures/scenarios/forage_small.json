@@ -1,0 +1,15 @@
+{
+	"name": "forage_small",
+	"description": "Fast test scenario: food 450 px from the nest behind a short wall, plus a pond.",
+	"seed": 3,
+	"colonies": [
+		{"species": "leafcutter", "nest": [540, 1300], "population": {"minim": 30, "media": 130, "major": 10}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [540, 850], "radius": 26, "amount": 400}
+	],
+	"obstacles": [
+		{"shape": "polyline", "points": [[460, 1080], [640, 1080]], "width": 16, "kind": "wall"},
+		{"shape": "circle", "center": [380, 1200], "radius": 50, "kind": "water"}
+	]
+}

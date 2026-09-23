@@ -1,0 +1,21 @@
+{
+	"name": "basic_forage",
+	"description": "Core-engine test: one colony, two food piles, one wall in between.",
+	"seed": 1,
+	"duration": 60,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1500],
+			"population": {"minim": 50, "media": 250, "major": 20}
+		}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [300, 520], "radius": 28, "amount": 400},
+		{"type": "food_pile", "pos": [820, 800], "radius": 22, "amount": 250}
+	],
+	"obstacles": [
+		{"shape": "polyline", "points": [[360, 1050], [720, 1050]], "width": 16, "kind": "wall"},
+		{"shape": "circle", "center": [220, 1250], "radius": 60, "kind": "water"}
+	]
+}

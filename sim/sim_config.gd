@@ -30,10 +30,20 @@ extends Resource
 @export var wander_strength: float = 2.0
 ## How far ahead (world units) ants look for obstacles and world edges.
 @export var avoid_lookahead: float = 10.0
+## Pheromone below this (real units) is ignored by sensors.
+@export var sense_threshold: float = 0.01
+## Distance at which an ant counts as having reached a target point.
+@export var arrive_distance: float = 3.0
+
+@export_group("Foraging")
+## Explorers check for nearby food sources once every N ticks (staggered per ant).
+@export var food_check_interval: int = 4
+## Carry speed = speed / (1 + mass * carry_mass_slowdown).
+@export var carry_mass_slowdown: float = 0.15
 
 @export_group("Pheromones")
 ## Diffusion (3x3 blur) runs once every N ticks; evaporation runs every tick.
-@export var diffuse_every_n_ticks: int = 4
+@export var diffuse_every_n_ticks: int = 8
 ## Base amount deposited per tick by a laying ant, before decay.
 @export var deposit_base: float = 1.0
 ## Seconds after touching its source (nest/food) at which an ant's deposit has halved.

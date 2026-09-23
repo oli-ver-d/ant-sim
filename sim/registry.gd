@@ -23,8 +23,23 @@ var item_types: Dictionary[String, Script] = {}
 var nest_types: Dictionary[String, Script] = {}
 ## Species definitions (SpeciesDef resources) by species id.
 var species: Dictionary[String, Resource] = {}
+## Renderer scripts keyed by "<kind>:<type id>", e.g. "food:food_pile",
+## "nest:basic_nest", "item:crumb". The simulation never reads these; only
+## the render layer does.
+var renderers: Dictionary[String, Script] = {}
 ## Names of species modules loaded by discover_modules(), in load order.
 var loaded_modules: PackedStringArray = []
+
+## Core registrations plus every species module. Renderers for core types are
+## registered separately by the render layer (CoreRenderers).
+static func create_default() -> Registry:
+	var registry := Registry.new()
+	CoreModule.register(registry)
+	registry.discover_modules()
+	return registry
+
+func register_renderer(key: String, script: Script) -> bool:
+	return _add(renderers, "renderer", key, script)
 
 func register_behaviour(id: String, behaviour: Behaviour) -> bool:
 	return _add(behaviours, "behaviour", id, behaviour)
