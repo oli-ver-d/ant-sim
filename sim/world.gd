@@ -30,6 +30,7 @@ func _init(world_size: Vector2i, cell: int) -> void:
 	@warning_ignore("integer_division")
 	height = world_size.y / cell
 	obstacles.resize(width * height)
+	clutter.resize(width * height)
 
 ## Flat cell index, or -1 outside the world.
 func cell_at(pos: Vector2) -> int:
@@ -139,6 +140,22 @@ func draw_polyline(points: PackedVector2Array, thickness: float, kind: int) -> v
 	if points.size() == 1:
 		_stamp(points[0], r, kind)
 	version += 1
+
+## Ground clutter (debris lying on the ground): number of clutter items
+## covering each cell. Ants crossing cluttered cells are slowed.
+var clutter: PackedByteArray = []
+
+## Adds (delta = +1) or removes (-1) a clutter footprint.
+func add_clutter(center: Vector2, radius: float, delta: int) -> void:
+	if clutter.is_empty():
+		clutter.resize(width * height)
+	var r2 := radius * radius
+	for cy in range(maxi(0, int((center.y - radius) * _inv_cell)), mini(height, int((center.y + radius) * _inv_cell) + 1)):
+		for cx in range(maxi(0, int((center.x - radius) * _inv_cell)), mini(width, int((center.x + radius) * _inv_cell) + 1)):
+			var c := Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size)
+			if c.distance_squared_to(center) <= r2:
+				var i := cy * width + cx
+				clutter[i] = clampi(clutter[i] + delta, 0, 255)
 
 func clear_all() -> void:
 	obstacles.fill(Cell.FREE)

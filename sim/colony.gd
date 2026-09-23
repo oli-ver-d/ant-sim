@@ -18,8 +18,10 @@ var delivered_mass: float = 0.0
 var channels: Dictionary[StringName, int] = {}
 ## SimConfig values overlaid with species tunables.
 var params: Dictionary = {}
-## Global state index -> that state's params, with *_channel names resolved to indices.
+## Params per (caste, state), at index caste * num_states + state, with
+## *_channel names resolved to field indices. Use params_for().
 var state_params_by_index: Array[Dictionary] = []
+var num_states: int = 0
 ## Set of FoodSource type ids this colony forages from.
 var food_types: Dictionary[String, bool] = {}
 ## Global state index of each caste's initial state.
@@ -37,6 +39,7 @@ var deposit_base: float
 var deposit_decay_per_second: float
 var food_check_interval: int
 var carry_mass_slowdown: float
+var clutter_slowdown: float
 var arrive_distance: float
 
 func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
@@ -67,23 +70,24 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int]) -> vo
 	deposit_decay_per_second = log(2.0) / maxf(params[&"deposit_half_life"], 0.001)
 	food_check_interval = maxi(1, int(params[&"food_check_interval"]))
 	carry_mass_slowdown = params[&"carry_mass_slowdown"]
+	clutter_slowdown = params[&"clutter_slowdown"]
 	arrive_distance = params[&"arrive_distance"]
 
-	state_params_by_index.resize(state_index.size())
-	for i in state_params_by_index.size():
-		state_params_by_index[i] = {}
+	# One params dictionary per (caste, state): the species' state_params with
+	# the caste's own state_params merged over them key by key.
+	num_states = state_index.size()
+	state_params_by_index.resize(species.castes.size() * num_states)
+	for c in species.castes.size():
+		var overrides := species.castes[c].state_params
+		for state_id: String in state_index:
+			var merged: Dictionary = {}
+			merged.merge(species.state_params.get(state_id, {}), true)
+			merged.merge(overrides.get(state_id, {}), true)
+			state_params_by_index[c * num_states + state_index[state_id]] = _resolve_channels(merged)
+		for state_id: Variant in overrides:
+			assert(state_index.has(str(state_id)), "Caste %s has params for unknown state %s" % [species.castes[c].id, state_id])
 	for state_id: Variant in species.state_params:
-		var idx: int = state_index.get(str(state_id), -1)
-		assert(idx >= 0, "Species %s has params for unknown state %s" % [species.id, state_id])
-		var resolved: Dictionary = {}
-		var raw: Dictionary = species.state_params[state_id]
-		for key: Variant in raw:
-			var value: Variant = raw[key]
-			if str(key).ends_with("_channel") and value is String:
-				assert(channels.has(StringName(value)), "Unknown channel %s" % value)
-				value = channels[StringName(value)]
-			resolved[str(key)] = value
-		state_params_by_index[idx] = resolved
+		assert(state_index.has(str(state_id)), "Species %s has params for unknown state %s" % [species.id, state_id])
 
 	caste_initial_state.resize(species.castes.size())
 	for c in species.castes.size():
@@ -93,3 +97,18 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int]) -> vo
 
 func param(key: StringName) -> Variant:
 	return params[key]
+
+## Params the species (and caste override) set for a caste in a state.
+func params_for(caste: int, state: int) -> Dictionary:
+	return state_params_by_index[caste * num_states + state]
+
+## Replaces "*_channel" channel names with PheromoneField channel indices.
+func _resolve_channels(raw: Dictionary) -> Dictionary:
+	var resolved: Dictionary = {}
+	for key: Variant in raw:
+		var value: Variant = raw[key]
+		if str(key).ends_with("_channel") and value is String:
+			assert(channels.has(StringName(value)), "Unknown channel %s" % value)
+			value = channels[StringName(value)]
+		resolved[str(key)] = value
+	return resolved

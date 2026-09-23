@@ -42,6 +42,8 @@ var caste_id: PackedByteArray = []
 var state: PackedByteArray = []
 ## Carried item id, or -1.
 var carried: PackedInt32Array = []
+## Id of the item this ant is riding on, or -1 (see mount()).
+var riding: PackedInt32Array = []
 ## Seconds spent in the current state (reset on every transition).
 var timer: PackedFloat32Array = []
 ## Seconds since this ant last touched a trail source (nest or food);
@@ -71,6 +73,8 @@ var _tick_ants: int = 0
 var _free_slots: PackedInt32Array = []
 var _next_item_id: int = 0
 var _next_food_id: int = 0
+## Ids of obstructing items (debris) lying on the ground.
+var _ground_clutter: PackedInt32Array = []
 ## Obstacle cells, cleared from pheromones once per diffusion cycle.
 var _blocked_cells: PackedInt32Array = []
 var _blocked_version: int = -1
@@ -122,6 +126,8 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	prev_heading.resize(capacity)
 	carried.resize(capacity)
 	carried.fill(-1)
+	riding.resize(capacity)
+	riding.fill(-1)
 	scratch_i.resize(capacity)
 
 # --- Setup ---------------------------------------------------------------------
@@ -177,6 +183,7 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float) -> i
 		return -1
 	var caste_def := colony.species.castes[caste]
 	alive[i] = 1
+	riding[i] = -1
 	pos[i] = at
 	shown_pos[i] = at
 	prev_pos[i] = at
@@ -207,6 +214,7 @@ func remove_ant(i: int) -> void:
 	behaviours[state[i]].exit(self, i)
 	if carried[i] >= 0:
 		drop_item(i)
+	dismount(i)
 	var colony := colonies[colony_id[i]]
 	colony.population -= 1
 	colony.population_by_caste[caste_id[i]] -= 1
@@ -220,9 +228,9 @@ func colony_of(i: int) -> Colony:
 func caste_of(i: int) -> CasteDef:
 	return colonies[colony_id[i]].species.castes[caste_id[i]]
 
-## Params the colony's species set for the ant's current state.
+## Params for the ant's current state (species params + caste overrides).
 func state_params(i: int) -> Dictionary:
-	return colonies[colony_id[i]].state_params_by_index[state[i]]
+	return colonies[colony_id[i]].params_for(caste_id[i], state[i])
 
 func state_id(i: int) -> String:
 	return behaviour_ids[state[i]]
@@ -273,10 +281,12 @@ func item_of(i: int) -> Item:
 
 func pick_up(i: int, item: Item) -> void:
 	assert(carried[i] < 0, "Ant %d already carries an item" % i)
+	if item.carrier < 0:
+		_set_on_ground(item, false)
 	carried[i] = item.id
 	item.carrier = i
 
-## Puts the carried item on the ground at the ant's position.
+## Puts the carried item on the ground at the ant's position. Riders get off.
 func drop_item(i: int) -> Item:
 	var item := item_of(i)
 	carried[i] = -1
@@ -284,9 +294,19 @@ func drop_item(i: int) -> Item:
 		item.carrier = -1
 		item.position = pos[i]
 		item.rotation = heading[i]
+		_dismount_all(item)
+		_set_on_ground(item, true)
 	return item
 
+## Places a new item on the ground (e.g. debris from a scenario).
+func place_on_ground(item: Item, at: Vector2, rotation_rad: float) -> void:
+	item.carrier = -1
+	item.position = at
+	item.rotation = rotation_rad
+	_set_on_ground(item, true)
+
 ## Hands the carried item to the ant's nest and records the delivery.
+## Riders get off at the nest.
 func deliver_item(i: int) -> void:
 	var item := item_of(i)
 	if item == null:
@@ -294,10 +314,72 @@ func deliver_item(i: int) -> void:
 	var colony := colonies[colony_id[i]]
 	carried[i] = -1
 	item.carrier = -1
+	_dismount_all(item)
 	colony.nest.receive_item(self, item)
 	colony.delivered_items += 1
 	colony.delivered_mass += item.mass
 	destroy_item(item.id)
+
+## Ids of obstructing items lying on the ground (debris), in placement order.
+func ground_clutter() -> PackedInt32Array:
+	return _ground_clutter
+
+func _set_on_ground(item: Item, on_ground: bool) -> void:
+	if not item.obstructs:
+		return
+	var k := _ground_clutter.find(item.id)
+	if on_ground and k < 0:
+		_ground_clutter.append(item.id)
+		world.add_clutter(item.position, item.footprint, 1)
+	elif not on_ground and k >= 0:
+		_ground_clutter.remove_at(k)
+		world.add_clutter(item.position, item.footprint, -1)
+
+# --- Riding ------------------------------------------------------------------------
+# Generic mechanism for ants riding on a carried item (e.g. hitchhikers).
+# A rider's position/heading are set from its item's carrier at the end of
+# every tick (after all ants have moved), so riders stay glued to the item.
+# Behaviours decide when to mount; the core makes riders dismount when the
+# item is dropped or delivered (riding[i] becomes -1).
+
+## Puts ant i on `item` at `offset` (item frame: x along the carrier's heading).
+func mount(i: int, item: Item, offset: Vector2) -> void:
+	dismount(i)
+	riding[i] = item.id
+	item.riders.append(i)
+	item.rider_offsets.append(offset)
+
+func dismount(i: int) -> void:
+	var item: Item = items.get(riding[i]) if riding[i] >= 0 else null
+	riding[i] = -1
+	if item == null:
+		return
+	var k := item.riders.find(i)
+	if k >= 0:
+		item.riders.remove_at(k)
+		item.rider_offsets.remove_at(k)
+
+func _dismount_all(item: Item) -> void:
+	for r in item.riders:
+		riding[r] = -1
+	item.riders.clear()
+	item.rider_offsets.clear()
+
+## Moves every rider onto its item (called at the end of each tick).
+func _sync_riders() -> void:
+	for id: int in items:
+		var item: Item = items[id]
+		if item.riders.is_empty() or item.carrier < 0:
+			continue
+		var c := item.carrier
+		var h := heading[c]
+		var fwd := Vector2.from_angle(h)
+		var centre := pos[c] + fwd * caste_of(c).size * Item.HOLD_OFFSET
+		for k in item.riders.size():
+			var r := item.riders[k]
+			var o := item.rider_offsets[k]
+			pos[r] = centre + fwd * o.x + fwd.orthogonal() * o.y
+			heading[r] = h
 
 # --- Queries ---------------------------------------------------------------------
 
@@ -398,6 +480,7 @@ func end_step() -> void:
 		pheromones.clear_cells(_blocked_cells)
 	profile_usec["pheromones"] += Time.get_ticks_usec() - t2
 
+	_sync_riders()
 	prev_pos = shown_pos
 	prev_heading = shown_heading
 	shown_pos = pos
@@ -414,6 +497,7 @@ func state_hash() -> String:
 	ctx.update(pos.slice(0, high_water).to_byte_array())
 	ctx.update(heading.slice(0, high_water).to_byte_array())
 	ctx.update(carried.slice(0, high_water).to_byte_array())
+	ctx.update(riding.slice(0, high_water).to_byte_array())
 	ctx.update(pheromones.values.to_byte_array())
 	ctx.update(pheromones.scale.to_byte_array())
 	for colony in colonies:

@@ -1,7 +1,8 @@
 class_name WorldView
 extends Node2D
 ## Builds and owns all renderers for one Simulation, layered bottom to top:
-## ground, obstacles, nests, pheromone glow, food, ants, carried items, debug.
+## ground, obstacles, nests, pheromone glow, food, ground items (debris),
+## ants, carried items, ants riding on carried items, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
 
@@ -10,6 +11,8 @@ var registry: Registry
 var pheromone_renderer: PheromoneRenderer
 var ant_renderer: AntRenderer
 var item_renderer: ItemRenderer
+var ground_item_renderer: ItemRenderer
+var rider_renderer: AntRenderer
 var debug_view: Overlays.DebugView
 ## Interpolation between the previous and current tick, in [0, 1].
 var alpha: float = 1.0:
@@ -18,6 +21,8 @@ var alpha: float = 1.0:
 		if ant_renderer != null:
 			ant_renderer.alpha = v
 			item_renderer.alpha = v
+			ground_item_renderer.alpha = v
+			rider_renderer.alpha = v
 
 var _nest_layer: Node2D
 var _food_layer: Node2D
@@ -54,6 +59,12 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	_food_layer = Node2D.new()
 	add_child(_food_layer)
 
+	# Items on the ground sit under the ants walking over them.
+	ground_item_renderer = ItemRenderer.new()
+	ground_item_renderer.ground_layer = true
+	ground_item_renderer.bind(sim)
+	add_child(ground_item_renderer)
+
 	ant_renderer = AntRenderer.new()
 	ant_renderer.bind(sim)
 	add_child(ant_renderer)
@@ -61,6 +72,12 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	item_renderer = ItemRenderer.new()
 	item_renderer.bind(sim)
 	add_child(item_renderer)
+
+	# Ants riding on carried items are drawn on top of them.
+	rider_renderer = AntRenderer.new()
+	rider_renderer.riders_only = true
+	rider_renderer.bind(sim)
+	add_child(rider_renderer)
 
 	if debug_readout != null:
 		debug_view = Overlays.DebugView.new()

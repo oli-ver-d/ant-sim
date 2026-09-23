@@ -19,6 +19,8 @@ const HEADING_STEPS := 1023.0
 var sim: Simulation
 ## Fraction of the way from the previous tick to the current one (set by WorldView).
 var alpha: float = 1.0
+## True for the layer that draws only ants riding on items (above the items).
+var riders_only: bool = false
 var _buffer: PackedFloat32Array = []
 # Per [colony][caste] look data, flattened: index = colony_base[colony] + caste.
 var _colony_base: PackedInt32Array = []
@@ -69,7 +71,10 @@ func _process(_delta: float) -> void:
 		return
 	if _colony_base.size() != sim.colonies.size():
 		_cache_looks()
-	var n := sim.high_water
+	# The main layer draws every ant except riders; the rider layer (drawn
+	# above carried items) draws only ants riding on items.
+	var list: PackedInt32Array = _collect_riders() if riders_only else PackedInt32Array()
+	var n := list.size() if riders_only else sim.high_water
 	if n > multimesh.instance_count:
 		# Grow in chunks; changing instance_count discards the old buffer.
 		multimesh.instance_count = maxi(maxi(n, multimesh.instance_count * 2), 256)
@@ -78,6 +83,7 @@ func _process(_delta: float) -> void:
 	multimesh.visible_instance_count = n
 
 	var alive := sim.alive
+	var riding := sim.riding
 	var pos := sim.shown_pos
 	var prev_pos := sim.prev_pos
 	var heading := sim.shown_heading
@@ -87,8 +93,9 @@ func _process(_delta: float) -> void:
 	var phase := sim.anim_phase
 	var a := alpha
 	var o := 0
-	for i in n:
-		if alive[i] == 0:
+	for k in n:
+		var i := list[k] if riders_only else k
+		if alive[i] == 0 or (not riders_only and riding[i] >= 0):
 			# Zero-scale transform hides the slot.
 			_buffer[o] = 0.0
 			_buffer[o + 5] = 0.0
@@ -121,3 +128,9 @@ func _process(_delta: float) -> void:
 		_buffer[o + 15] = hq + fposmod(phase[i], TAU) / TAU * 0.999
 		o += STRIDE
 	multimesh.buffer = _buffer
+
+func _collect_riders() -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	for id: int in sim.items:
+		out.append_array(sim.items[id].riders)
+	return out

@@ -7,6 +7,7 @@ extends RefCounted
 ##   "colonies":  [{"species": "...", "nest": [x, y], "nest_params": {}, "population": {"<caste>": n}}],
 ##   "food":      [{"type": "food_pile", "pos": [x, y], ...type params}],
 ##   "obstacles": [shape, ...]              (see ScenarioEvents for shapes)
+##   "debris":    [{"type": "twig" | "pebble", "pos": [x, y], ...}]  (see Debris)
 ##   "events":    [{"t": seconds, "type": ..., ...}]   (see ScenarioEvents)
 ##
 ## Playback settings (used by ScenarioPlayer, not the simulation):
@@ -39,6 +40,8 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 		ScenarioEvents.add_obstacle(sim.world, ob)
 	for food: Dictionary in data.get("food", []):
 		sim.add_food_source(food["type"], food)
+	for d: Dictionary in data.get("debris", []):
+		Debris.create(sim, d)
 	for col: Dictionary in data.get("colonies", []):
 		ScenarioEvents.add_colony(sim, col)
 	var events: Array[Dictionary] = []

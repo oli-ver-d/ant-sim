@@ -17,6 +17,8 @@ static func mass_error(sim: Simulation) -> float:
 		taken += src.taken_mass
 	var accounted := 0.0
 	for id: int in sim.items:
+		if sim.items[id].source_id < 0:
+			continue  # debris etc.: not food
 		accounted += sim.items[id].mass
 	for colony in sim.colonies:
 		accounted += colony.delivered_mass

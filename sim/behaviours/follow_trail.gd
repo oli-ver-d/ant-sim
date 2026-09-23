@@ -18,7 +18,7 @@ func enter(sim: Simulation, i: int) -> void:
 
 func tick(sim: Simulation, i: int, dt: float) -> String:
 	var colony := sim.colonies[sim.colony_id[i]]
-	var p := colony.state_params_by_index[sim.state[i]]
+	var p := colony.params_for(sim.caste_id[i], sim.state[i])
 	var at := sim.pos[i]
 	var nest := colony.nest
 

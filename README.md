@@ -58,8 +58,8 @@ sim/          core engine (no rendering, no species-specific code)
   steering.gd         three-sensor model, obstacle avoidance, movement
   world.gd            obstacle grid (walls, water)
   scenario_loader.gd  JSON scenario -> Simulation
-  behaviours/         explore, follow_trail, go_to_food, carry_home, deliver
-  food/ items/ nests/ FoodSource + FoodPile, Item, NestType + BasicNest
+  behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger
+  food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest
 species/<name>/       one folder per species; register.gd is discovered automatically
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
@@ -80,6 +80,10 @@ tools/ tests/
   halves every `deposit_half_life` seconds since the ant last touched its source (nest or
   food). That makes each trail a clean gradient pointing back to its source, while busy
   trails still grow stronger.
+- **Castes** can override the species' state params per state (`CasteDef.state_params`),
+  so e.g. soldiers return to patrolling instead of foraging.
+- **Riding**: ants can ride on carried items (`Simulation.mount()`); the core keeps riders
+  on their item and makes them get off when it is dropped or delivered.
 - **Determinism**: all randomness uses `sim.rng`; `Simulation.state_hash()` fingerprints a run.
 - **Ticks and frames**: the sim runs at 30 ticks/s (`SimConfig.tick_rate`). `SimRunner` spreads
   each tick's ant updates over the frames it spans (identical result to `step()`), and
@@ -107,7 +111,8 @@ func register(registry: Registry) -> void:
 
 Included: `basic_forage` (core test bed with food piles), `chaos_to_highway` (one leaf,
 trail self-organises), `leaf_strip` (one giant leaf stripped completely, for timelapse),
-`two_species` (a leafcutter and a harvester colony foraging side by side).
+`two_species` (a leafcutter and a harvester colony foraging side by side), `trunk_trail`
+(debris falls on an established trail; majors clear it, minims ride fragments).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
@@ -115,8 +120,11 @@ JSON files in `scenarios/`. Simulation content:
   (ants emerge gradually instead of all at once), optional `nest_params`
 - `food`: type + type-specific params
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water
+- `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
+  debris are slowed (`clutter_slowdown`) until something moves it
 - `events`: timed (simulated seconds): `spawn_food`, `add_obstacle`, `remove_obstacle`,
-  `add_colony`, `rain` (see `sim/scenario_events.gd`)
+  `add_colony`, `rain`, `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
+  lands on the strongest spots of a trail, wherever it emerged); see `sim/scenario_events.gd`
 
 Playback (video) settings:
 - `duration`: video length in seconds
@@ -172,6 +180,13 @@ _Written in M9, from the experience of adding harvesters._
 - `leaf.gdshader` + `leaf_renderer.gd`: draw the mask smoothly (linear filtering + threshold)
   with procedural veins; only the small mask texture is re-uploaded per bite.
 - `cut_leaf.gd`: stand at the edge sawing for the caste's cut time, then bite and carry home.
+- Castes (via `CasteDef.state_params` overrides):
+  - **minims** start in `assign_role`: `hitchhiker_fraction` of them go out (`explore` ->
+    `seek_ride`) and climb onto fragments leaving the leaf (`hitchhike`, using the core's
+    generic riding); the rest `linger` near the nest.
+  - **medias** cut and carry.
+  - **majors** `patrol_trail`: walk the foraging trail, and when debris sits on strong trail
+    (`debris_trail_threshold`) `clear_debris` carries it off toward weaker trail.
 
 ## Species: harvester ants
 

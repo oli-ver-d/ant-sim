@@ -11,6 +11,8 @@ extends RefCounted
 ##   {"t": 30, "type": "remove_obstacle", "obstacle": {shape...}}   (clears those cells)
 ##   {"t": 30, "type": "add_colony",      "colony": {colony...}}
 ##   {"t": 30, "type": "rain", "duration": 6, "area": {"center": [x, y], "radius": r} | {"rect": [x, y, w, h]}}
+##   {"t": 30, "type": "drop_debris", "debris": [{"type": "twig", "pos": [x, y], ...}, ...]}  (see Debris)
+##   {"t": 30, "type": "drop_debris", "scatter": {"count": 6, "near": [x, y], "on_channel": "c0.food", ...}}
 ##
 ## Obstacle shapes:
 ##   {"shape": "polyline", "points": [[x, y], ...], "width": 16, "kind": "wall" | "water"}
@@ -31,8 +33,48 @@ static func apply(sim: Simulation, event: Dictionary) -> void:
 			add_colony(sim, event["colony"])
 		"rain":
 			sim.start_rain(event["area"], float(event.get("duration", 5.0)))
+		"drop_debris":
+			for d: Dictionary in event.get("debris", []):
+				Debris.create(sim, d)
+			if event.has("scatter"):
+				scatter_debris(sim, event["scatter"])
 		var other:
 			push_error("Unknown scenario event type '%s'" % other)
+
+## Drops `count` random debris pieces near a point. With "on_channel" (a
+## pheromone channel name such as "c0.food") they land on the strongest spots
+## of that channel - e.g. right on an emergent trail wherever it formed.
+##   {"count": 6, "near": [x, y], "radius": 150, "on_channel": "c0.food",
+##    "min_spacing": 25, "types": ["twig", "pebble"]}
+static func scatter_debris(sim: Simulation, s: Dictionary) -> void:
+	var count := int(s.get("count", 5))
+	var near := vec2(s["near"])
+	var radius := float(s.get("radius", 150.0))
+	var spacing := float(s.get("min_spacing", 25.0))
+	var types: Array = s.get("types", ["twig", "pebble"])
+	var channel := sim.pheromones.channel_index(StringName(str(s.get("on_channel", ""))))
+	# Candidate points, scored by channel strength (or random order without a channel).
+	var candidates: Array[Vector3] = []
+	for n in 400:
+		var p := near + Vector2.from_angle(sim.rng.randf() * TAU) * radius * sqrt(sim.rng.randf())
+		if sim.world.is_blocked(p):
+			continue
+		var score := sim.pheromones.sample(channel, p) if channel >= 0 else sim.rng.randf()
+		candidates.append(Vector3(p.x, p.y, score))
+	candidates.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.z > b.z)
+	var placed: PackedVector2Array = []
+	for c in candidates:
+		if placed.size() >= count:
+			break
+		var p := Vector2(c.x, c.y)
+		var ok := true
+		for q in placed:
+			if q.distance_to(p) < spacing:
+				ok = false
+				break
+		if ok:
+			placed.append(p)
+			Debris.create(sim, {"type": types[sim.rng.randi() % types.size()], "pos": [p.x, p.y]})
 
 ## Creates a colony and its starting population. Castes are taken in
 ## SpeciesDef order so spawn order doesn't depend on JSON key order.

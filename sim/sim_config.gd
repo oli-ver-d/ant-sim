@@ -43,6 +43,8 @@ extends Resource
 @export var food_check_interval: int = 4
 ## Carry speed = speed / (1 + mass * carry_mass_slowdown).
 @export var carry_mass_slowdown: float = 0.15
+## Speed multiplier for ants crossing ground clutter (debris).
+@export var clutter_slowdown: float = 0.35
 
 @export_group("Pheromones")
 ## Diffusion (3x3 blur) runs once every N ticks; evaporation runs every tick.

@@ -25,5 +25,8 @@ extends Resource
 ## Behaviour state ids this caste may be in.
 @export var states: PackedStringArray = []
 @export var initial_state: String = "explore"
+## Per-state param overrides for this caste, merged over SpeciesDef.state_params
+## (e.g. {"follow_trail": {"on_arrive": "patrol_trail"}}).
+@export var state_params: Dictionary = {}
 ## Max mass this caste can take from a food source in one go (used by food sources).
 @export var carry_capacity: float = 1.0

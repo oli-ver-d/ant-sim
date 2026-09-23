@@ -1,0 +1,39 @@
+{
+	"name": "trunk_trail",
+	"description": "Debris falls across an established leafcutter trunk trail; majors clear it while minims hitchhike on fragments.",
+	"seed": 3,
+	"duration": 20,
+	"warmup": 100,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1420],
+			"population": {"minim": 90, "media": 300, "major": 40},
+			"release_per_second": 60
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [600, 560], "rotation": 18, "length": 360, "width": 160, "shape": "elliptic", "teeth": 30, "seed": 7}
+	],
+	"debris": [
+		{"type": "pebble", "pos": [300, 1100]},
+		{"type": "twig", "pos": [820, 900]},
+		{"type": "pebble", "pos": [760, 1250]}
+	],
+	"events": [
+		{"t": 104, "type": "drop_debris", "scatter": {"count": 9, "near": [575, 1030], "radius": 200, "on_channel": "c0.food", "min_spacing": 40}}
+	],
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 0.5},
+		{"t": 2, "tpf": 0.5},
+		{"t": 3.5, "tpf": 1.0},
+		{"t": 20, "tpf": 1.0}
+	],
+	"camera": [
+		{"t": 0, "pos": [570, 1060], "zoom": 2.2},
+		{"t": 3.5, "pos": [570, 1050], "zoom": 2.6, "ease": "in_out"},
+		{"t": 12, "pos": [575, 1030], "zoom": 2.8, "ease": "linear"},
+		{"t": 15.5, "pos": [585, 760], "zoom": 3.4, "ease": "in_out"},
+		{"t": 20, "pos": [590, 740], "zoom": 3.6, "ease": "linear"}
+	]
+}

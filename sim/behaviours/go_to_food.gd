@@ -18,7 +18,7 @@ func enter(sim: Simulation, i: int) -> void:
 
 func tick(sim: Simulation, i: int, dt: float) -> String:
 	var colony := sim.colonies[sim.colony_id[i]]
-	var p := colony.state_params_by_index[sim.state[i]]
+	var p := colony.params_for(sim.caste_id[i], sim.state[i])
 	var src := sim.food_by_id(sim.scratch_i[i])
 	if src == null or src.is_depleted() or sim.timer[i] > float(p.get("timeout", 20.0)):
 		return p.get("on_lost", "explore")

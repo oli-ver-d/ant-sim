@@ -109,6 +109,9 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 	h = wrapf(h + turn * dt, -PI, PI)
 
 	var step_len := move_speed * dt
+	# Ground clutter (debris) slows ants down.
+	if world.clutter[cell] != 0:
+		step_len *= colony.clutter_slowdown
 	var next := Vector2(at.x + cos(h) * step_len, at.y + sin(h) * step_len)
 	# Away from obstacles (not near_blocked) a single step can't reach a blocked cell.
 	var blocked := false

@@ -17,8 +17,13 @@ abdomen_scale = 0.85
 mandible_size = 0.25
 leg_length = 1.0
 spawn_ratio = 0.25
-states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
-initial_state = "explore"
+states = PackedStringArray("assign_role", "explore", "follow_trail", "seek_ride", "hitchhike", "linger")
+initial_state = "assign_role"
+state_params = {
+"explore": {
+"on_food": "seek_ride"
+}
+}
 carry_capacity = 0.5
 
 [sub_resource type="Resource" id="Caste_media"]
@@ -51,8 +56,13 @@ abdomen_scale = 0.85
 mandible_size = 0.8
 leg_length = 1.2
 spawn_ratio = 0.1
-states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
-initial_state = "explore"
+states = PackedStringArray("patrol_trail", "clear_debris", "follow_trail")
+initial_state = "patrol_trail"
+state_params = {
+"follow_trail": {
+"on_arrive": "patrol_trail"
+}
+}
 carry_capacity = 2.0
 
 [sub_resource type="Resource" id="Channel_home"]
@@ -88,6 +98,10 @@ nest_params = {
 food_source_types = PackedStringArray("leaf", "food_pile")
 item_types = PackedStringArray("leaf_fragment", "crumb")
 state_params = {
+"assign_role": {
+"hitchhiker": "explore",
+"stayer": "linger"
+},
 "carry_home": {
 "home_bias": 0.3,
 "home_cone_deg": 75.0,
@@ -99,6 +113,11 @@ state_params = {
 "on_cut": "carry_home",
 "on_lost": "explore",
 "on_missed": "go_to_food"
+},
+"clear_debris": {
+"next": "patrol_trail",
+"timeout": 30.0,
+"trail_channel": "food"
 },
 "deliver": {
 "next": "explore"
@@ -117,6 +136,26 @@ state_params = {
 "goal": "nest",
 "on_arrive": "explore"
 },
+"hitchhike": {
+"on_dismount": "explore"
+},
+"linger": {
+"radius": 90.0,
+"speed_factor": 0.4
+},
+"patrol_trail": {
+"follow_channel": "food",
+"give_up_after": 45.0,
+"on_debris": "clear_debris",
+"on_give_up": "follow_trail",
+"speed_factor": 0.7
+},
+"seek_ride": {
+"on_lost": "explore",
+"on_ride": "hitchhike",
+"on_timeout": "follow_trail",
+"timeout": 40.0
+},
 "go_to_food": {
 "on_arrive": "cut_leaf",
 "lay_channel": "home",
@@ -126,6 +165,14 @@ state_params = {
 }
 tunables = {
 "bite_radius": 6.0,
+"debris_carry_distance": 55.0,
+"debris_scan_interval": 6,
+"debris_sense_radius": 45.0,
+"debris_trail_threshold": 0.35,
+"hitchhiker_fraction": 0.5,
+"max_riders": 1,
+"ride_item_type": "leaf_fragment",
+"seek_ride_reach": 8.0,
 "cut_jitter_angle": 0.22,
 "cut_jitter_hz": 3.0,
 "cut_time": {
