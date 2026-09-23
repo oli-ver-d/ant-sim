@@ -1,0 +1,5 @@
+# Godot cache / imports
+.godot/
+
+# Recording output (frames and encoded videos)
+/renders/
