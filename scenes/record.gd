@@ -2,7 +2,10 @@ extends Node
 ## Recording entry point, meant to run under Movie Maker:
 ##
 ##   godot --path . --write-movie out/frame.png --fixed-fps 60 res://scenes/record.tscn \
-##         -- --scenario=<name> [--seed=<n>] [--duration=<s>]
+##         -- --scenario=<name> [--seed=<n>] [--duration=<s>] [--layout=split|normal] [--at=<s>]
+##
+## --at fast-forwards to that video time before the first frame (for drafts
+## and stills of a later moment).
 ##
 ## tools/record.sh does this and encodes the result. Movie Maker records at the
 ## window size fixed at startup, so record.sh also writes a temporary
@@ -26,8 +29,11 @@ func _ready() -> void:
 	var scenario: String = args.get("scenario", "chaos_to_highway")
 	player = ScenarioPlayer.new()
 	add_child(player)
-	player.setup(scenario, int(args.get("seed", -1)))
-	var duration := float(args.get("duration", player.duration))
+	player.setup(scenario, int(args.get("seed", -1)), 0, null, str(args.get("layout", "")))
+	var at := float(args.get("at", 0.0))
+	while player.video_time < at - 1e-6:
+		player.advance(1.0 / ScenarioPlayer.VIDEO_FPS)
+	var duration := float(args.get("duration", player.duration - at))
 	_frames_total = roundi(duration * ScenarioPlayer.VIDEO_FPS)
 	print("Recording %s: %d frames (%.1f s), seed %d, viewport %s" % [scenario, _frames_total, duration,
 			player.sim.rng.seed, get_viewport().get_visible_rect().size])

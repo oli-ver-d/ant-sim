@@ -13,8 +13,11 @@ extends Node2D
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   manual camera (overrides the scenario's)
 ##   --safe=1 --debug=1 --pheromones=0 --cutaway=1 --tuning=1   initial overlay state
+##   --layout=split|normal  split surface/underground view, or full screen
+##                          (overrides the scenario's render.layout)
 ##
 ## Keys: Space pause, P pheromones, D debug overlay, S safe zones, N nest cutaway,
+##       L split surface/underground layout,
 ##       T tuning panel, F follow the ant under the cursor (again to stop),
 ##       C scenario camera, 1-5 speed (1/2/4/8/16x the scenario's pace), Esc quit.
 ## Mouse: left-drag draws walls (Shift+left-drag erases), right-click places
@@ -73,8 +76,10 @@ func _ready() -> void:
 
 	player = ScenarioPlayer.new()
 	add_child(player)
-	player.setup(args.get("scenario", "basic_forage"), int(args.get("seed", -1)), int(args.get("ticks", 0)), debug_readout)
+	player.setup(args.get("scenario", "basic_forage"), int(args.get("seed", -1)), int(args.get("ticks", 0)),
+			debug_readout, str(args.get("layout", "")))
 	sim = player.sim
+	player.view.debug_view.mouse_world = _mouse_world
 
 	tuning = TuningPanel.new()
 	tuning.setup(sim, player.registry)
@@ -167,13 +172,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				safe_zones.visible = not safe_zones.visible
 			KEY_N:
 				player.toggle_cutaway()
+			KEY_L:
+				player.toggle_layout()
 			KEY_T:
 				tuning.visible = not tuning.visible
 			KEY_F:
 				if cam.mode == CameraDirector.Mode.FOLLOW:
 					cam.mode = CameraDirector.Mode.MANUAL
-				else:
-					var ant := cam.nearest_ant(get_global_mouse_position())
+				elif player.shows_world_at(get_viewport().get_mouse_position()):
+					var ant := cam.nearest_ant(_mouse_world())
 					if ant >= 0:
 						cam.follow(ant)
 			KEY_C:
@@ -184,6 +191,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					speed = SPEEDS[key - KEY_1]
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		# In the split layout the mouse only acts on the surface part.
+		if mb.pressed and not player.shows_world_at(mb.position):
+			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			_drawing = mb.pressed
 			if mb.pressed:
@@ -204,9 +214,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_stamp_wall(_draw_last, at, (event as InputEventMouseMotion).shift_pressed)
 		_draw_last = at
 
-## World position under a point in viewport coordinates (as mouse events give).
+## World position under a point in viewport coordinates (as mouse events give),
+## on whichever part of the screen shows the world.
 func _world_at(screen: Vector2) -> Vector2:
-	return get_viewport().get_canvas_transform().affine_inverse() * screen
+	return player.screen_to_world(screen)
+
+func _mouse_world() -> Vector2:
+	return _world_at(get_viewport().get_mouse_position())
 
 ## Left-drag: draws a wall segment (or erases with Shift). Ants caught under a
 ## new wall are moved out, so none ever ends up inside an obstacle.

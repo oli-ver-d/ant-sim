@@ -22,6 +22,7 @@ godot --path . -- --scenario=basic_forage --seed=42
 The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
 channel values under the cursor), **S** TikTok/Reels safe zones, **N** nest cutaway inset,
+**L** split layout (surface on top, the nest underground below; see `render.layout`),
 **T** tuning panel, **F** follow the ant under the cursor (again to stop), **C** back to the
 scenario camera, **1–5** speed (1/2/4/8/16× the scenario's pace), **Esc** quit.
 
@@ -39,6 +40,10 @@ Scenario per-colony overrides still take precedence over the sliders.
 `--at=12.5` fast-forwards to a video time, e.g. to check a camera move:
 `godot --path . -- --scenario=chaos_to_highway --at=12.5`
 
+`--layout=split` (or `--layout=normal`) overrides the scenario's layout:
+`godot --path . -- --scenario=fungus_farm --layout=split`. In the split layout the mouse
+(walls, food, zoom, **F**, the debug readout) works on the surface part.
+
 ## Tools
 
 ```bash
@@ -46,6 +51,7 @@ tools/test.sh                                   # headless test suite (filter: t
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
 tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
 tools/screenshot.sh two_species 2400 out.png -1 --safe=1 --debug=1 --pheromones=0    # overlays
+tools/screenshot.sh nest_life 0 out.png -1 --layout=split --at=3    # split layout, 3 s in
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
 godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
 ```
@@ -138,7 +144,9 @@ trail self-organises), `leaf_strip` (one giant leaf stripped completely, for tim
 leaf across a stream; one fallen twig is the only way over), `maze` (a leaf behind rows of
 stone walls; explorers find the gaps and a trail settles on one route),
 `fungus_farm` (a young colony over ~17 minutes: the garden grows chamber by chamber, the
-colony grows from 150 to ~850 ants, waste piles up outside; with the cutaway inset).
+colony grows from 150 to ~850 ants, waste piles up outside; with the cutaway inset),
+`nest_life` (split view, 30 s: foraging on top; underground the queen lays, brood grows from
+egg to pupa in timelapse, and at the end a young worker climbs out and joins the trail).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
@@ -164,6 +172,12 @@ Playback (video) settings:
 - `camera`: keyframes `{"t", "pos": [x, y], "zoom", "ease"}`; `"follow": {"near": [x, y],
   "state": "carry_home"}` in place of `pos` tracks the nearest matching ant
   (see `render/camera_director.gd`)
+- `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45,
+  "view": {"intro_spotlight": 5}}` splits the frame: the surface (the world, in a
+  1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
+  that part) and, full width below it, the colony's nest cutaway (`"cutaway:<type>"`).
+  `"view"` sets properties the cutaway view declares. Nests without a cutaway play full
+  screen. See `render/split_layout.gd`
 - `render`: `{"pheromones": true, "pheromone_opacity": 0.55, "cutaway": {"colony": 0,
   "rect": [x, y, w, h], "from": 2, "to": 18}}`. The cutaway is an inset (screen pixels of
   the 1080×1920 frame) showing the colony's nest from the side, for nest types that have a
@@ -340,9 +354,45 @@ in `/sim` or `/render`.
   Waste goes to a dump beside the entrance (`dump` offset). All rates are `nest_params`.
 - `fungus_nest_renderer.gd`: the soil mound (grows with chambers) and the waste dump pile
   (grows with every load).
-- `fungus_cutaway.gd` + `fungus_garden.gdshader`: the cutaway inset: soil strata, tunnels and
+- `leafcutter_brood.gd`: the optional brood model (`nest_params.brood`). Without it new
+  workers appear at the entrance at once, as before. With it the queen lays eggs that develop
+  egg → larva → pupa → callow → worker:
+  ```json
+  "brood": {"lay_interval": 4, "egg": 40, "larva": 90, "pupa": 60, "callow": 8,
+            "initial": {"egg": 6, "larva": 8, "pupa": 5}, "max_brood": 80}
+  ```
+  Stage durations are simulated seconds, tuned for video (real development takes weeks).
+  The queen lays at most one egg every `lay_interval` seconds, paced by the same budget as
+  before (`brood_rate` × fungus), while fungus is above `brood_reserve`, population + brood
+  is under `max_population` and brood under `max_brood`. Eggs cost nothing; each larva eats
+  `ant_cost` fungus over its stage. With fungus at or below the reserve, larvae stop growing
+  (none die) and the queen stops laying. A callow ends with a real ant of the caste chosen
+  at laying, spawned at the entrance, so `population` and `ants_raised` only rise at
+  emergence. Records are packed arrays (id, stage, age, chamber, slot, growth, caste): eggs
+  in the royal chamber 0, larvae in chamber 1 and pupae in chamber 2 (each spilling into 3
+  and 4 when full). Laying and emergence are logged with their ticks (ring buffers), and
+  the brood is part of `state_hash()` (runs without it keep their old hashes).
+- `fungus_nest_renderer.gd`: the soil mound (grows with chambers) and the waste dump pile
+  (grows with every load).
+- `fungus_cutaway.gd` + `fungus_garden.gdshader`: the cutaway: soil strata, tunnels and
   chambers (dug as they appear), the garden as soft off-white lumps filling them from the
-  floor up, green flecks of undigested leaf, tiny ants in the tunnels and the colony size.
+  floor up, green flecks of undigested leaf and the colony size. Its detail depends on its
+  size. As a small inset: tiny ants walk the tunnels. From 700 px wide (the underground half
+  of the split layout): bigger chambers with room above the garden, the entrance lined up
+  under the surface nest, labels inside the safe zone, and `nest_life_view.gd` draws:
+  - the queen (side view, swollen gaster) on the garden of the royal chamber; each egg the
+    simulation lays appears at her abdomen tip at that moment and a nurse carries it to the
+    egg pile;
+  - the brood at its chamber and slot: larvae (white grubs growing as nurses bring them
+    fungus), pupae in rows (pale, legs folded, darkening, eyes first), callows (pale young
+    workers) that a nurse helps out of the casing and that then walk up the tunnels timed by
+    their age, so they leave the view on the tick the simulation spawns them on the surface
+    (where the split layout rings them);
+  - one leaf carrier coming down per fragment delivered (`leaf_items`), dropping it on the
+    garden.
+  Nurses and carriers (`nest_worker.gd`) are render-only agents given tasks from the brood
+  state; they hurry in timelapse, and brood no nurse reaches in time fades to its place.
+  `"view": {"intro_spotlight": 5}` dims everything but the queen for the first seconds.
 
 ## Species: harvester ants
 
@@ -374,6 +424,11 @@ All drawing lives in `render/` (plus each species' own renderers):
 - `rain.gdshader` + `rain_renderer.gd`: per shower, wet darkened soil with splash rings under
   everything, and overcast dimming with falling drops over everything. The ground stays wet
   and dries slowly after the rain.
+- `side_ant.gdshader` + `side_ant_renderer.gd`: ants seen from the side, for cutaway views:
+  lit segments with a dark rim, raised-knee legs in a tripod gait, antennae; legs toward
+  whichever side is ground (floors, walls, ceilings); `fold` tucks legs and antennae in.
+- `split_layout.gd`: the split surface/underground layout (see `render.layout`), with a
+  thin seam between the parts and a ring on a surface ant the cutaway names (a new worker).
 - `overlays.gd`: safe zones and the debug view.
 
 Shaders use a sine-free hash: `sin()`-based hashes show seams on some GPUs.

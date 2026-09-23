@@ -1,0 +1,9 @@
+{
+	"name": "split_no_cutaway",
+	"description": "Asks for the split layout for a nest type without a cutaway view (falls back to full screen).",
+	"seed": 1,
+	"colonies": [
+		{"species": "harvester", "nest": [540, 1300], "population": {"minor": 10}}
+	],
+	"render": {"layout": {"mode": "split", "colony": 0}}
+}

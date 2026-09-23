@@ -10,7 +10,9 @@ extends NestType
 ##   the colony eats upkeep_per_ant * population fungus per second
 ##   brood: the garden feeds brood_rate * fungus new ants per second (a
 ##       bigger garden raises more brood), each costing ant_cost fungus,
-##       while fungus stays above brood_reserve, up to max_population
+##       while fungus stays above brood_reserve, up to max_population.
+##       By default new ants appear at once; with nest_params "brood" the
+##       queen lays eggs that develop into workers (see LeafcutterBrood)
 ##
 ## So growth is limited by the garden, which is limited by leaf supply: a
 ## colony cut off from leaves stops growing and its garden slowly shrinks.
@@ -21,7 +23,8 @@ extends NestType
 ##
 ## params: radius, sense_radius, initial_fungus, digest_rate, fungus_yield,
 ##         upkeep_per_ant, ant_cost, brood_reserve, brood_rate,
-##         max_population, chamber_capacity, max_chambers, waste_load, dump
+##         max_population, chamber_capacity, max_chambers, waste_load, dump,
+##         brood (optional, see LeafcutterBrood)
 
 var fungus: float = 60.0
 var substrate: float = 0.0
@@ -29,6 +32,8 @@ var waste: float = 0.0
 var chambers: int = 1
 ## Totals, for stats and tests.
 var leaf_received: float = 0.0
+## Leaf fragments delivered (views play one carrier going down per delivery).
+var leaf_items: int = 0
 var fungus_grown: float = 0.0
 var ants_raised: int = 0
 
@@ -45,6 +50,8 @@ var waste_load: float = 0.25
 var dump_offset: Vector2 = Vector2(120, 40)
 
 var _brood_budget: float = 0.0
+## Egg-to-worker brood model, or null for the instant-spawn path.
+var brood: LeafcutterBrood
 
 func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	super.setup(sim, owner_colony, params)
@@ -62,10 +69,14 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	if params.has("dump"):
 		dump_offset = ScenarioEvents.vec2(params["dump"])
 	_fit_chambers()
+	if params.has("brood"):
+		brood = LeafcutterBrood.new()
+		brood.setup(sim, self, owner_colony.species, params["brood"])
 
 func receive_item(_sim: Simulation, item: Item) -> void:
 	substrate += item.mass
 	leaf_received += item.mass
+	leaf_items += 1
 
 func update(sim: Simulation, dt: float) -> void:
 	var colony := sim.colonies[colony_id]
@@ -77,6 +88,10 @@ func update(sim: Simulation, dt: float) -> void:
 	waste += digested * (1.0 - fungus_yield)
 	# The colony eats from it.
 	fungus = maxf(0.0, fungus - upkeep_per_ant * colony.population * dt)
+	if brood != null:
+		brood.update(sim, self, dt)
+		_fit_chambers()
+		return
 	# Brood: spend surplus fungus on new workers.
 	_brood_budget = minf(_brood_budget + brood_rate * fungus * dt, 1.0)
 	if _brood_budget >= 1.0 and fungus - ant_cost >= brood_reserve and colony.population < max_population:
@@ -105,3 +120,8 @@ func take_waste(sim: Simulation) -> Item:
 
 func dump_position() -> Vector2:
 	return position + dump_offset
+
+func hash_state(ctx: HashingContext) -> void:
+	# Only the brood model is hashed, so runs without it keep their old hashes.
+	if brood != null:
+		brood.hash_into(ctx)

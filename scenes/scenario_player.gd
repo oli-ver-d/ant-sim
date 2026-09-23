@@ -22,6 +22,11 @@ var view: WorldView
 var camera: CameraDirector
 ## Nest cutaway inset, if the scenario asks for one (or toggled with N).
 var cutaway: CutawayPanel
+## Split surface/underground layout (render.layout, or toggled with L); null
+## until first used, and while unused the world is drawn full screen.
+var layout: SplitLayout
+var _layout_spec: Dictionary = {"mode": "split", "colony": 0}
+var _layout_layer: CanvasLayer
 var _hud: CanvasLayer
 ## Video seconds played so far.
 var video_time: float = 0.0
@@ -31,9 +36,10 @@ var duration: float = 20.0
 var _tpf_points: Array[Vector2] = []  # (video time, ticks per frame)
 
 ## seed_value < 0 uses the scenario's seed. extra_ticks run after the
-## scenario's own warmup, before the first frame.
+## scenario's own warmup, before the first frame. layout_mode ("split" or
+## "normal") overrides the scenario's render.layout mode.
 func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
-		debug_readout: RichTextLabel = null) -> void:
+		debug_readout: RichTextLabel = null, layout_mode: String = "") -> void:
 	registry = Registry.create_default()
 	CoreRenderers.register(registry)
 	data = ScenarioLoader.load_data(scenario_name)
@@ -51,7 +57,10 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 	var render: Dictionary = data.get("render", {})
 	view.pheromone_renderer.visible = bool(render.get("pheromones", true))
 	view.pheromone_renderer.opacity = float(render.get("pheromone_opacity", view.pheromone_renderer.opacity))
-	# Screen-space layer for insets.
+	# Split layout (under everything else), then a screen-space layer for insets.
+	_layout_layer = CanvasLayer.new()
+	_layout_layer.layer = -1
+	add_child(_layout_layer)
 	_hud = CanvasLayer.new()
 	add_child(_hud)
 	if render.has("cutaway"):
@@ -65,6 +74,13 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 	add_child(camera)
 	camera.setup(sim, data.get("camera", []))
 	camera.make_current()
+	if render.has("layout"):
+		_layout_spec.merge(render["layout"], true)
+	var mode := str(_layout_spec.get("mode", "split")) if render.has("layout") else "normal"
+	if layout_mode != "":
+		mode = layout_mode
+	if mode == "split":
+		set_split(true)
 
 	_parse_tpf(data.get("ticks_per_frame", config.ticks_per_frame))
 
@@ -112,3 +128,43 @@ func _add_cutaway(colony_id: int, rect: Rect2) -> void:
 	cutaway = CutawayPanel.create(sim, registry, colony_id, rect)
 	if cutaway != null:
 		_hud.add_child(cutaway)
+
+## Switches between the split surface/underground layout and the normal
+## full-screen one. Returns false (and stays full screen) if the colony's nest
+## has no cutaway view.
+func set_split(on: bool) -> bool:
+	if on and layout == null:
+		layout = SplitLayout.create(sim, registry, _layout_spec)
+		if layout == null:
+			return false
+		_layout_layer.add_child(layout)
+	if layout == null:
+		return not on
+	var parent: Node = layout.surface_viewport if on else self
+	if view.get_parent() != parent:
+		view.reparent(parent, false)
+		camera.reparent(parent, false)
+		# Keep the world under the insets when drawn full screen.
+		if not on:
+			move_child(view, 0)
+			move_child(camera, 1)
+		camera.make_current()
+	layout.visible = on
+	return true
+
+func is_split() -> bool:
+	return layout != null and layout.visible
+
+## Interactive toggle (L).
+func toggle_layout() -> void:
+	set_split(not is_split())
+
+## True if a screen point (1080x1920 frame pixels) shows the world.
+func shows_world_at(screen: Vector2) -> bool:
+	return not is_split() or layout.is_on_surface(screen)
+
+## World position under a screen point (1080x1920 frame pixels).
+func screen_to_world(screen: Vector2) -> Vector2:
+	if is_split():
+		return layout.screen_to_world(screen)
+	return get_viewport().get_canvas_transform().affine_inverse() * screen

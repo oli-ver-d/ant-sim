@@ -9,6 +9,8 @@ shader_type canvas_item;
 
 uniform vec2 view_size = vec2(440.0, 330.0);
 uniform float surface_y = 40.0;            // ground line (pixels from the top)
+uniform float entrance_x = 220.0;          // x of the entrance (the mound is centred on it)
+uniform bool detailed = false;             // large view: lighter cavities, surface litter above ground
 uniform float mound_height = 10.0;
 uniform vec4 chambers[5];                  // centre xy, radii xy (0 = not dug)
 uniform int chamber_count = 1;
@@ -69,7 +71,7 @@ void fragment() {
 	vec2 p = UV * view_size;
 
 	// Ground line with the entrance mound (a soft bump) over the entrance.
-	float cx = view_size.x * 0.5;
+	float cx = entrance_x;
 	float bump = exp(-pow((p.x - cx) / (view_size.x * 0.14), 2.0));
 	float ground = surface_y - mound_height * bump + (noise(vec2(p.x * 0.08, 0.0)) - 0.5) * 3.0;
 
@@ -91,10 +93,17 @@ void fragment() {
 
 	vec3 col;
 	if (p.y < ground - 0.5) {
-		// Above ground: dark backdrop, a touch lighter toward the top.
+		// Above ground: dark backdrop, a touch lighter toward the top. The
+		// detailed view has only a thin strip here, under the surface view:
+		// dark leaf litter.
 		col = air.rgb * (1.1 - 0.2 * UV.y);
+		if (detailed) {
+			col = topsoil.rgb * (0.55 + 0.35 * fbm(p * 0.15));
+		}
 	} else if (hollow < 0.0) {
-		col = cavity.rgb;
+		// The detailed view lights its cavities a little, like a lit nest box,
+		// so ants read against them.
+		col = detailed ? cavity.rgb * 2.4 + vec3(0.03, 0.02, 0.01) : cavity.rgb;
 		// Garden: metaballs of the lumps, clipped to the chambers.
 		float field = 0.0;
 		// The lump contributing most here, and where p sits on it (-1 top, 1 bottom).

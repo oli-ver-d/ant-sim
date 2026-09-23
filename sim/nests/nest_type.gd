@@ -41,6 +41,10 @@ func receive_item(_sim: Simulation, _item: Item) -> void:
 func update(_sim: Simulation, _dt: float) -> void:
 	pass
 
+## Adds any nest state that affects the simulation to a state_hash() fingerprint.
+func hash_state(_ctx: HashingContext) -> void:
+	pass
+
 # --- Gradual release ---------------------------------------------------------------
 # Ants can start "inside" the nest and emerge over time instead of all at once
 # (scenario colony option "release_per_second"). The Simulation calls
@@ -74,9 +78,10 @@ func spawn_ants(sim: Simulation, count: int) -> void:
 		var heading := sim.rng.randf_range(-PI, PI)
 		sim.spawn_ant(sim.colonies[colony_id], caste, entrance_position(), heading)
 
-## Weighted random caste index by CasteDef.spawn_ratio.
-func pick_caste(sim: Simulation) -> int:
-	var castes := sim.colonies[colony_id].species.castes
+## Weighted random caste index by CasteDef.spawn_ratio. Pass the species
+## during setup(), before the colony is in sim.colonies.
+func pick_caste(sim: Simulation, species: SpeciesDef = null) -> int:
+	var castes := (species if species != null else sim.colonies[colony_id].species).castes
 	var total := 0.0
 	for c in castes:
 		total += c.spawn_ratio

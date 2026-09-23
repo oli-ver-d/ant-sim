@@ -558,6 +558,7 @@ func state_hash() -> String:
 	ctx.update(pheromones.scale.to_byte_array())
 	for colony in colonies:
 		ctx.update(PackedFloat64Array([colony.delivered_items, colony.delivered_mass, colony.population]).to_byte_array())
+		colony.nest.hash_state(ctx)
 	return ctx.finish().hex_encode()
 
 static func _vec2(v: Variant) -> Vector2:

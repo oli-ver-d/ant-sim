@@ -37,6 +37,9 @@ class DebugView extends Node2D:
 	const SENSOR_RADIUS := 60.0
 	var sim: Simulation
 	var readout: RichTextLabel
+	## Returns the world position under the mouse; set it when the world is
+	## drawn in a SubViewport (split layout). Unset: the mouse in this canvas.
+	var mouse_world: Callable
 	var _state_colors: PackedColorArray = []
 
 	func bind(simulation: Simulation, label: RichTextLabel) -> void:
@@ -50,8 +53,11 @@ class DebugView extends Node2D:
 			queue_redraw()
 			_update_readout()
 
+	func _mouse() -> Vector2:
+		return mouse_world.call() if mouse_world.is_valid() else get_global_mouse_position()
+
 	func _draw() -> void:
-		var mouse := get_global_mouse_position()
+		var mouse := _mouse()
 		var font := ThemeDB.fallback_font
 		for i in sim.high_water:
 			if sim.alive[i] == 0:
@@ -68,7 +74,7 @@ class DebugView extends Node2D:
 				draw_string(font, p + Vector2(6, -6), sim.state_id(i), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
 
 	func _update_readout() -> void:
-		var mouse := get_global_mouse_position()
+		var mouse := _mouse()
 		var lines: PackedStringArray = ["cursor (%d, %d)" % [mouse.x, mouse.y]]
 		for c in sim.pheromones.channel_count():
 			lines.append("%s: %.3f" % [sim.pheromones.names[c], sim.pheromones.sample(c, mouse)])

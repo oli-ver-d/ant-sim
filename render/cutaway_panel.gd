@@ -20,24 +20,33 @@ var to_time: float = INF
 ## Builds a panel for the colony's nest, or returns null if its nest type has
 ## no cutaway renderer.
 static func create(sim: Simulation, registry: Registry, colony_id: int, rect: Rect2) -> CutawayPanel:
+	var view := create_view(sim, registry, colony_id,
+			Rect2(Vector2(BORDER, BORDER), rect.size - Vector2(BORDER, BORDER) * 2.0))
+	if view == null:
+		return null
+	var panel := CutawayPanel.new()
+	panel.position = rect.position
+	panel.size = rect.size
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(view)
+	return panel
+
+## Builds just the bound cutaway view (no frame) at `rect`, or null if the
+## colony's nest type has none. Also used full width by SplitLayout.
+static func create_view(sim: Simulation, registry: Registry, colony_id: int, rect: Rect2) -> Control:
 	if colony_id < 0 or colony_id >= sim.colonies.size():
 		return null
 	var nest := sim.colonies[colony_id].nest
 	var script: Script = registry.renderers.get("cutaway:" + nest.type_id)
 	if script == null:
 		return null
-	var panel := CutawayPanel.new()
-	panel.position = rect.position
-	panel.size = rect.size
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var view: Control = script.new()
-	view.position = Vector2(BORDER, BORDER)
-	view.size = rect.size - Vector2(BORDER, BORDER) * 2.0
+	view.position = rect.position
+	view.size = rect.size
 	view.clip_contents = true
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(view)
 	view.call("bind", sim, nest)
-	return panel
+	return view
 
 ## Shows the panel according to its from/to times at video time `t`.
 func update_visibility(t: float) -> void:
