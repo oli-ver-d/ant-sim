@@ -82,3 +82,18 @@ func _mass_error(sim: Simulation) -> float:
 	for colony in sim.colonies:
 		accounted += colony.delivered_mass
 	return taken - accounted
+
+func test_split_ticks_match_full_ticks() -> void:
+	var full := _sim(11)
+	var split := _sim(11)
+	var runner := SimRunner.new(split)
+	for t in 60:
+		full.step()
+	# Advance in uneven fractions of a tick, as frames at odd rates would.
+	var steps: PackedFloat32Array = [0.3, 0.45, 0.25, 0.7, 0.1, 0.2]
+	var k := 0
+	while split.completed_ticks() < 60:
+		runner.advance(minf(steps[k % steps.size()], 60.0 - runner.target))
+		k += 1
+	check(not split.in_tick(), "ended between ticks")
+	check_eq(split.state_hash(), full.state_hash(), "split ticks give the same state")

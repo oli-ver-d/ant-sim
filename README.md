@@ -27,7 +27,8 @@ mouse wheel zoom, middle-drag pan, **Esc** quit.
 ```bash
 tools/test.sh                                   # headless test suite (filter: tools/test.sh pheromones)
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks, save a PNG (opens a window briefly)
-godot --headless --path . -s res://tests/bench.gd -- basic_forage 1200 3000   # timing: scenario, ticks, ants
+godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
+godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
 ```
 
 Tests are scripts in `tests/` named `test_*.gd` that `extend TestCase` and have
@@ -72,6 +73,9 @@ tools/ tests/
   food). That makes each trail a clean gradient pointing back to its source, while busy
   trails still grow stronger.
 - **Determinism**: all randomness uses `sim.rng`; `Simulation.state_hash()` fingerprints a run.
+- **Ticks and frames**: the sim runs at 30 ticks/s (`SimConfig.tick_rate`). `SimRunner` spreads
+  each tick's ant updates over the frames it spans (identical result to `step()`), and
+  renderers interpolate between the last two completed ticks (`prev_pos` -> `shown_pos`).
 
 ### Core vs species
 

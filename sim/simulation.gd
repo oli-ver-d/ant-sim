@@ -54,11 +54,19 @@ var scratch_i: PackedInt32Array = []
 var target: PackedVector2Array = []
 ## Walk-cycle phase for rendering (advances with distance travelled).
 var anim_phase: PackedFloat32Array = []
-## Position and heading at the start of the current tick, so renderers can
-## interpolate between ticks. Snapshotting is cheap: assigning a packed array
-## shares it, and the first write in the tick makes the one copy.
+## Snapshots for rendering: positions/headings after the last two *completed*
+## ticks. Renderers interpolate prev -> shown, so they never see a tick that is
+## half processed (see begin_step()/step_ants()). Snapshotting is cheap:
+## assigning a packed array shares it; the next write to pos makes one copy.
+var shown_pos: PackedVector2Array = []
+var shown_heading: PackedFloat32Array = []
 var prev_pos: PackedVector2Array = []
 var prev_heading: PackedFloat32Array = []
+
+## Index of the next ant to update in the tick in progress, or -1 between ticks.
+var _cursor: int = -1
+## Number of ant slots the tick in progress covers (high_water at its start).
+var _tick_ants: int = 0
 
 var _free_slots: PackedInt32Array = []
 var _next_item_id: int = 0
@@ -102,6 +110,8 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	scratch_f1.resize(capacity)
 	anim_phase.resize(capacity)
 	prev_pos.resize(capacity)
+	shown_pos.resize(capacity)
+	shown_heading.resize(capacity)
 	prev_heading.resize(capacity)
 	carried.resize(capacity)
 	carried.fill(-1)
@@ -161,8 +171,10 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float) -> i
 	var caste_def := colony.species.castes[caste]
 	alive[i] = 1
 	pos[i] = at
+	shown_pos[i] = at
 	prev_pos[i] = at
 	heading[i] = heading_rad
+	shown_heading[i] = heading_rad
 	prev_heading[i] = heading_rad
 	speed[i] = caste_def.speed * rng.randf_range(0.9, 1.1)
 	colony_id[i] = colony.id
@@ -295,23 +307,61 @@ func find_sensed_food(at: Vector2, colony: Colony) -> FoodSource:
 # --- Tick ------------------------------------------------------------------------
 
 ## Advances the simulation by exactly one fixed tick of `dt` seconds.
+## Same as begin_step() + step_ants(all) + end_step().
 func step() -> void:
+	if not in_tick():
+		begin_step()
+	step_ants(capacity)
+	end_step()
+
+# A tick can be split across several rendered frames so a heavy tick doesn't
+# cause one slow frame: begin_step(), then step_ants(n) as many times as
+# needed until it returns true, then end_step(). Ants are processed in the
+# same order with the same random numbers either way, so the result is
+# identical to step().
+
+func in_tick() -> bool:
+	return _cursor >= 0
+
+## Ticks fully completed so far (excludes a tick in progress).
+func completed_ticks() -> int:
+	return tick_count - 1 if in_tick() else tick_count
+
+## Fraction of the ants already updated in the tick in progress (0 between ticks).
+func tick_fraction() -> float:
+	if not in_tick() or _tick_ants == 0:
+		return 0.0
+	return float(_cursor) / _tick_ants
+
+## Next ant slot to update in the tick in progress.
+func tick_cursor() -> int:
+	return maxi(_cursor, 0)
+
+## Number of ant slots the tick in progress covers.
+func tick_ant_slots() -> int:
+	return _tick_ants
+
+func begin_step() -> void:
+	assert(not in_tick(), "begin_step() called twice")
 	tick_count += 1
-	prev_pos = pos
-	prev_heading = heading
 	var t0 := Time.get_ticks_usec()
 	for colony in colonies:
 		colony.nest.update(self, dt)
-	var t1 := Time.get_ticks_usec()
-
 	var lookahead := 0.0
 	for colony in colonies:
 		lookahead = maxf(lookahead, colony.avoid_lookahead)
 	world.ensure_near_blocked(lookahead)
+	# Ants spawned during this tick get their first update next tick.
+	_tick_ants = high_water
+	_cursor = 0
+	profile_usec["nests"] += Time.get_ticks_usec() - t0
 
-	# Ants spawned during this loop get their first tick next step.
-	var n := high_water
-	for i in n:
+## Updates up to `count` more ants of the tick in progress. Returns true when
+## every ant has been updated (then call end_step()).
+func step_ants(count: int) -> bool:
+	var t0 := Time.get_ticks_usec()
+	var end := mini(_tick_ants, _cursor + count)
+	for i in range(_cursor, end):
 		if alive[i] == 0:
 			continue
 		timer[i] += dt
@@ -319,8 +369,14 @@ func step() -> void:
 		var next := behaviours[state[i]].tick(self, i, dt)
 		if next != "":
 			change_state(i, next)
-	var t2 := Time.get_ticks_usec()
+	_cursor = end
+	profile_usec["ants"] += Time.get_ticks_usec() - t0
+	return _cursor >= _tick_ants
 
+## Finishes the tick in progress: pheromone update and render snapshots.
+func end_step() -> void:
+	assert(in_tick() and _cursor >= _tick_ants, "end_step() before all ants were updated")
+	var t2 := Time.get_ticks_usec()
 	pheromones.update()
 	# Keep trails from soaking through walls: clear obstacle cells once per
 	# diffusion cycle (diffusion is the only way pheromone can get there).
@@ -329,10 +385,13 @@ func step() -> void:
 			_blocked_cells = world.blocked_cells()
 			_blocked_version = world.version
 		pheromones.clear_cells(_blocked_cells)
-	var t3 := Time.get_ticks_usec()
-	profile_usec["nests"] += t1 - t0
-	profile_usec["ants"] += t2 - t1
-	profile_usec["pheromones"] += t3 - t2
+	profile_usec["pheromones"] += Time.get_ticks_usec() - t2
+
+	prev_pos = shown_pos
+	prev_heading = shown_heading
+	shown_pos = pos
+	shown_heading = heading
+	_cursor = -1
 
 ## Hash of the full simulation state, for determinism checks.
 func state_hash() -> String:

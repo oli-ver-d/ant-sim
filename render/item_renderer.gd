@@ -27,8 +27,8 @@ func _draw() -> void:
 		var rot := item.rotation
 		if item.carrier >= 0:
 			var i := item.carrier
-			rot = lerp_angle(sim.prev_heading[i], sim.heading[i], alpha)
-			at = sim.prev_pos[i].lerp(sim.pos[i], alpha) + Vector2.from_angle(rot) * sim.caste_of(i).size * HOLD_OFFSET
+			rot = lerp_angle(sim.prev_heading[i], sim.shown_heading[i], alpha)
+			at = sim.prev_pos[i].lerp(sim.shown_pos[i], alpha) + Vector2.from_angle(rot) * sim.caste_of(i).size * HOLD_OFFSET
 		if item.shape != null:
 			var tex: ImageTexture = _textures.get(id)
 			if tex == null:

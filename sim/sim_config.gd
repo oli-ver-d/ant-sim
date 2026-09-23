@@ -46,7 +46,7 @@ extends Resource
 
 @export_group("Pheromones")
 ## Diffusion (3x3 blur) runs once every N ticks; evaporation runs every tick.
-@export var diffuse_every_n_ticks: int = 8
+@export var diffuse_every_n_ticks: int = 16
 ## Base amount deposited per tick by a laying ant, before decay.
 @export var deposit_base: float = 1.0
 ## Seconds after touching its source (nest/food) at which an ant's deposit has halved.

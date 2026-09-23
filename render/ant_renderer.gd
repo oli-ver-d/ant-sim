@@ -57,11 +57,11 @@ func _process(_delta: float) -> void:
 	multimesh.visible_instance_count = n
 
 	var alive := sim.alive
-	var pos := sim.pos
+	var pos := sim.shown_pos
 	var prev_pos := sim.prev_pos
 	var prev_heading := sim.prev_heading
 	var a := alpha
-	var heading := sim.heading
+	var heading := sim.shown_heading
 	var colony_id := sim.colony_id
 	var caste_id := sim.caste_id
 	var phase := sim.anim_phase

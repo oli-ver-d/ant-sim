@@ -6,14 +6,14 @@ extends Node2D
 ##   --scenario=<name>      scenario in res://scenarios (default basic_forage)
 ##   --seed=<n>             override the scenario seed
 ##   --ticks=<n>            run n ticks before the first frame
+##   --ants=<n>             top each colony up to n ants (stress test)
+##   --probe=1              print FPS and simulation cost every 2 s
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##
 ## Keys: Space pause, P pheromones, 1-5 speed (1/2/4/8/16x real time),
 ##       mouse wheel zoom, middle-drag pan, Esc quit.
 
 const SPEEDS: PackedInt32Array = [1, 2, 4, 8, 16]
-## Cap on ticks per frame so a slow frame can't snowball.
-const MAX_TICKS_PER_FRAME := 32
 
 var config: SimConfig = preload("res://sim/default_config.tres")
 var registry: Registry
@@ -22,12 +22,14 @@ var view: WorldView
 var camera: Camera2D
 var hud: Label
 
+var runner: SimRunner
+
 var paused := false
 var speed := 1
-var _accumulator := 0.0
 var _screenshot_path := ""
 var _frames_until_shot := -1
-var _last_step_ms := 0.0
+## Smoothed milliseconds of simulation work per rendered frame.
+var _sim_ms := 0.0
 
 func _ready() -> void:
 	var args := _parse_args()
@@ -36,8 +38,17 @@ func _ready() -> void:
 	sim = ScenarioLoader.load_simulation(args.get("scenario", "basic_forage"), registry, config,
 			int(args.get("seed", -1)))
 
+	# Optional stress test: top every colony up to --ants=N.
+	var ants := int(args.get("ants", 0))
+	for colony in sim.colonies:
+		if ants > colony.population:
+			colony.nest.spawn_ants(sim, ants - colony.population)
+
 	for t in int(args.get("ticks", 0)):
 		sim.step()
+	runner = SimRunner.new(sim)
+	if args.has("probe"):
+		add_child(load("res://tests/frame_probe.gd").new())
 
 	view = WorldView.new()
 	view.setup(sim, registry)
@@ -74,27 +85,19 @@ func _process(delta: float) -> void:
 		return
 
 	if not paused:
-		# Fixed-step accumulator: the sim always advances in whole ticks of
-		# sim.dt, `speed` times faster than real time.
-		_accumulator += delta * speed
-		var ticks := 0
+		# Advance `speed` times real time. The runner spreads each tick's
+		# work over the frames it spans, and renderers interpolate between
+		# the last two completed ticks.
 		var t0 := Time.get_ticks_usec()
-		while _accumulator >= sim.dt and ticks < MAX_TICKS_PER_FRAME:
-			sim.step()
-			_accumulator -= sim.dt
-			ticks += 1
-		if ticks == MAX_TICKS_PER_FRAME:
-			_accumulator = 0.0
-		if ticks > 0:
-			_last_step_ms = (Time.get_ticks_usec() - t0) / 1000.0 / ticks
-		# Draw ants part-way between the last two ticks for smooth motion.
-		view.alpha = clampf(_accumulator / sim.dt, 0.0, 1.0)
+		runner.advance(delta * speed / sim.dt)
+		_sim_ms = lerpf(_sim_ms, (Time.get_ticks_usec() - t0) / 1000.0, 0.1)
+		view.alpha = runner.alpha()
 	_update_hud()
 
 func _update_hud() -> void:
 	var lines: PackedStringArray = []
-	lines.append("FPS %d   tick %d   %.1f ms/tick   x%d%s" % [Engine.get_frames_per_second(),
-			sim.tick_count, _last_step_ms, speed, "   PAUSED" if paused else ""])
+	lines.append("FPS %d   tick %d   sim %.1f ms/frame   x%d%s" % [Engine.get_frames_per_second(),
+			sim.tick_count, _sim_ms, speed, "   PAUSED" if paused else ""])
 	for colony in sim.colonies:
 		lines.append("%s #%d: %d ants, %d delivered" % [colony.species.display_name, colony.id,
 				colony.population, colony.delivered_items])
