@@ -20,7 +20,14 @@ var layer_b: int = 1
 var pos_b: Vector2
 ## Distance from an end at which an ant can enter.
 var radius: float = 10.0
-var open: bool = true
+## Closed: can't be used from either side. Setting it counts in `changes`.
+var open: bool = true:
+	set(value):
+		open = value
+		changes += 1
+## Incremented whenever any portal opens or closes (the native ant kernel
+## caches which nests have an open entrance, see NativeAnts).
+static var changes: int = 0
 var transit_time: float = 0.5
 ## Nav field id of the "portal:<id>" field on layer b.
 var nav_field: int = -1

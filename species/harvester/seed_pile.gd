@@ -48,6 +48,9 @@ func setup(sim: Simulation, params: Dictionary) -> void:
 func is_sensed_at(pos: Vector2, _colony: Colony) -> bool:
 	return seeds_left > 0 and pos.distance_to(position) <= radius + sense_radius
 
+func sense_bound() -> float:
+	return radius + sense_radius + 1.0
+
 ## Position of the remaining seed nearest to pos.
 func nearest_access_point(pos: Vector2) -> Vector2:
 	var s := _nearest_seed(pos, INF)

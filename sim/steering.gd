@@ -10,6 +10,9 @@ extends RefCounted
 ## These run for every ant every tick, so they are written for GDScript speed:
 ## few function calls, grid lookups inlined, packed arrays read via locals
 ## (reading a local copy of a packed array is free; only writes would copy).
+## With the native ant kernel (see NativeAnts) move, move_to, sense_turn and
+## sense_away hand over to its versions, which give exactly the same results;
+## a change here must be made in native/src/ant_kernel.cpp too.
 
 ## Angle of the side probes used for obstacle avoidance.
 const AVOID_PROBE_ANGLE := 0.7
@@ -22,6 +25,8 @@ const AVOID_WIDE_ANGLE := 1.4
 ##   -1  to turn left, +1 to turn right, toward the stronger side.
 ## Raw values are compared, since scaling a whole channel doesn't change the order.
 static func sense_turn(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony, on_layer: int = 0) -> float:
+	if sim.native_bound:
+		return sim.kernel.sense_turn(c, at, heading_rad, colony.id, on_layer)
 	var field := sim.pheromones if on_layer == 0 else sim.layers[on_layer].pheromones
 	var values := field.values
 	var off := c * field.cell_count
@@ -61,6 +66,8 @@ static func sense_turn(sim: Simulation, c: int, at: Vector2, heading_rad: float,
 ## channel c (0 if the centre is weakest or nothing is sensed). Explorers use
 ## it on their own home trail to push into ground nobody has walked yet.
 static func sense_away(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony, on_layer: int = 0) -> float:
+	if sim.native_bound:
+		return sim.kernel.sense_away(c, at, heading_rad, colony.id, on_layer)
 	var field := sim.pheromones if on_layer == 0 else sim.layers[on_layer].pheromones
 	var fwd := Vector2(cos(heading_rad), sin(heading_rad)) * colony.sensor_distance
 	var centre := _sample_open(sim, c, at + fwd, on_layer)
@@ -121,6 +128,9 @@ static func avoid_turn(world: World, at: Vector2, heading_rad: float, lookahead:
 ##      which case the ant stays put and keeps turning (never enters a blocked cell);
 ##   3. advance the walk-cycle phase by distance travelled.
 static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float, dt: float) -> void:
+	if sim.native_bound:
+		sim.kernel.move(i, desired_turn, move_speed, dt)
+		return
 	var colony := sim.colonies[sim.colony_id[i]]
 	var c := sim.caste_id[i]
 	var world := sim.layers[sim.layer[i]].world if sim.multi_layer else sim.world
@@ -166,6 +176,9 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 ## step is blocked. Never enters a blocked cell. Used with navigation fields
 ## (see Travel), which already route around walls.
 static func move_to(sim: Simulation, i: int, goal: Vector2, move_speed: float, dt: float) -> void:
+	if sim.native_bound:
+		sim.kernel.move_to(i, goal, move_speed, dt)
+		return
 	var colony := sim.colonies[sim.colony_id[i]]
 	var c := sim.caste_id[i]
 	var world := sim.layers[sim.layer[i]].world

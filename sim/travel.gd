@@ -37,7 +37,11 @@ static func go(sim: Simulation, i: int, goal_layer: int, goal: Vector2, field: i
 		return false
 	var aim := goal
 	var nav := sim.layers[li].nav_grid
-	if nav != null and nav.distance(field, at) > direct_within:
+	if nav != null and sim.native_bound:
+		var f: NavGrid.Field = nav.fields.get(field)
+		if f != null:
+			aim = sim.kernel.nav_aim(f.dist, li, at, goal, direct_within)
+	elif nav != null and nav.distance(field, at) > direct_within:
 		aim = nav.downhill(field, at)
 		if aim == at:
 			aim = goal
@@ -58,7 +62,11 @@ static func to_portal(sim: Simulation, i: int, p: Portal, move_speed: float, dt:
 		Steering.move_to(sim, i, end + Vector2.from_angle(sim.heading[i] + 1.0) * p.radius, move_speed * 0.3, dt)
 		return false
 	if li == p.layer_b and p.nav_field >= 0:
-		var aim := sim.layers[li].nav_grid.downhill(p.nav_field, at)
+		var nav := sim.layers[li].nav_grid
+		if sim.native_bound:
+			Steering.move_to(sim, i, sim.kernel.nav_aim(nav.fields[p.nav_field].dist, li, at, end, -INF), move_speed, dt)
+			return false
+		var aim := nav.downhill(p.nav_field, at)
 		Steering.move_to(sim, i, end if aim == at else aim, move_speed, dt)
 	else:
 		Steering.move(sim, i, Steering.turn_toward(at, sim.heading[i], end), move_speed, dt)

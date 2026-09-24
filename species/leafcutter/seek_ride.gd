@@ -53,17 +53,28 @@ func _find_ride(sim: Simulation, i: int, colony: Colony) -> Item:
 	var max_riders: int = int(params.get(&"max_riders", 1))
 	var ride_type: String = params.get(&"ride_item_type", "")
 	var at := sim.pos[i]
+	# Carried items (with the native kernel, only those whose carrier is
+	# within reach need looking at).
+	var ids: PackedInt32Array = []
+	if sim.native_bound:
+		for c: int in sim.kernel.carriers_near(at, reach, colony.id, sim.high_water):
+			ids.append(sim.carried[c])
+	else:
+		ids = PackedInt32Array(sim.carried_items.keys())
+	# The nearest; of equally near ones the oldest item (lowest id).
 	var best: Item = null
 	var best_d := reach * reach
-	for id: int in sim.items:
-		var item: Item = sim.items[id]
+	for id in ids:
+		var item: Item = sim.items.get(id)
+		if item == null:
+			continue
 		var c := item.carrier
 		if c < 0 or item.riders.size() >= max_riders or sim.colony_id[c] != colony.id:
 			continue
 		if ride_type != "" and item.type_id != ride_type:
 			continue
 		var d := sim.pos[c].distance_squared_to(at)
-		if d < best_d:
+		if d < best_d or (d == best_d and best != null and id < best.id):
 			best_d = d
 			best = item
 	return best

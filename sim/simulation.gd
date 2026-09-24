@@ -12,6 +12,12 @@ extends RefCounted
 ## PheromoneField). A nest may add an underground layer (add_layer) linked to
 ## the surface by a Portal. Each ant is on one layer (`layer[i]`) and moves,
 ## senses and lays pheromone there; positions are in its layer's coordinates.
+##
+## Native ant kernel: when the ant_native GDExtension is built, `native`
+## (NativeAnts) updates ants in the core behaviours in native code and speeds
+## up steering for the rest, with exactly the same results. It writes these
+## arrays in place during a tick, so nothing may replace or resize them while
+## a tick is in progress (element writes are fine).
 
 var config: SimConfig
 var registry: Registry
@@ -26,6 +32,10 @@ var multi_layer: bool = false
 var colonies: Array[Colony] = []
 var food_sources: Array[FoodSource] = []
 var items: Dictionary[int, Item] = {}
+## Ids of the items being carried, in pick-up order: for behaviours looking
+## for a carried item, there being far fewer of those than items.
+var carried_items: Dictionary[int, bool] = {}
+var _food_index: Dictionary[int, FoodSource] = {}
 
 var tick_count: int = 0
 ## Seconds per tick (1 / tick_rate).
@@ -114,6 +124,17 @@ var profile_usec: Dictionary[String, int] = {"nests": 0, "ants": 0, "pheromones"
 var profile_layer_usec: PackedInt64Array = []
 var profile_layer_ant_ticks: PackedInt64Array = []
 
+## The native ant kernel's driver (see NativeAnts), or null when the
+## extension isn't built or is switched off: then every ant runs in GDScript.
+var native: NativeAnts = null
+## Its AntKernel, for the steering helpers to call (untyped: the class only
+## exists with the extension). Only valid while native_bound.
+var kernel: Variant = null
+## True during a tick while the kernel holds this tick's arrays.
+var native_bound: bool = false
+## Mass of the item each ant picked up (the kernel reads it for carry_home).
+var carry_mass: PackedFloat64Array = []
+
 func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> void:
 	config = sim_config
 	registry = sim_registry
@@ -163,6 +184,10 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	transit_portal.resize(capacity)
 	arrive_tick.resize(capacity)
 	arrive_tick.fill(NEVER_ARRIVED)
+	carry_mass.resize(capacity)
+	if NativeAnts.available():
+		native = NativeAnts.new(self)
+		kernel = native.kernel
 
 ## arrive_tick of an ant that never came through a portal.
 const NEVER_ARRIVED := -(1 << 30)
@@ -290,6 +315,8 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	if colony.nest.underground_layer >= 0:
 		colony.build_params(config, behaviour_index, overrides)
 	colonies.append(colony)
+	if native != null:
+		native.push_colony(colony)
 	return colony
 
 ## Moves ants standing on blocked cells (e.g. after a wall was drawn over
@@ -315,6 +342,8 @@ func evict_ants_from_obstacles() -> int:
 func refresh_params() -> void:
 	for colony in colonies:
 		colony.build_params(config, behaviour_index, colony.overrides)
+		if native != null:
+			native.push_colony(colony)
 		for ch in colony.species.channels:
 			for l in layers:
 				l.pheromones.configure_channel(colony.channels[ch.name], _channel_def(ch, colony.overrides))
@@ -342,13 +371,14 @@ func add_food_source(type_id: String, params: Dictionary) -> FoodSource:
 	src.rotation = deg_to_rad(params.get("rotation", 0.0))
 	src.setup(self, params)
 	food_sources.append(src)
+	_food_index[src.id] = src
+	# Added during a tick (e.g. with the mouse): the kernel's food checks see it at once.
+	if native_bound:
+		native.push_food()
 	return src
 
 func food_by_id(food_id: int) -> FoodSource:
-	for src in food_sources:
-		if src.id == food_id:
-			return src
-	return null
+	return _food_index.get(food_id)
 
 # --- Ants ------------------------------------------------------------------------
 
@@ -439,6 +469,9 @@ func change_state(i: int, next_state: String) -> void:
 ## Lays pheromone on channel c at the ant's position. Strength decays
 ## exponentially with the time since the ant last touched its source.
 func lay(i: int, c: int) -> void:
+	if native_bound:
+		kernel.lay(i, c)
+		return
 	var colony := colonies[colony_id[i]]
 	var amount := colony.deposit_base * exp(-source_age[i] * colony.deposit_decay_per_second)
 	# Inlined PheromoneField.deposit() (max + reinforce); ants are always inside the world.
@@ -466,6 +499,7 @@ func create_item(type_id: String, mass: float) -> Item:
 	return item
 
 func destroy_item(item_id: int) -> void:
+	carried_items.erase(item_id)
 	items.erase(item_id)
 	items_version += 1
 
@@ -477,6 +511,8 @@ func pick_up(i: int, item: Item) -> void:
 	if item.carrier < 0:
 		_set_on_ground(item, false)
 	carried[i] = item.id
+	carry_mass[i] = item.mass
+	carried_items[item.id] = true
 	item.carrier = i
 	items_version += 1
 
@@ -486,6 +522,7 @@ func drop_item(i: int) -> Item:
 	carried[i] = -1
 	if item != null:
 		item.carrier = -1
+		carried_items.erase(item.id)
 		item.position = pos[i]
 		item.rotation = heading[i]
 		item.layer = layer[i]
@@ -497,6 +534,7 @@ func drop_item(i: int) -> Item:
 ## Places a new item on the ground (e.g. debris from a scenario).
 func place_on_ground(item: Item, at: Vector2, rotation_rad: float, on_layer: int = 0) -> void:
 	item.carrier = -1
+	carried_items.erase(item.id)
 	item.position = at
 	item.rotation = rotation_rad
 	item.layer = on_layer
@@ -654,6 +692,12 @@ func begin_step() -> void:
 	# Ants spawned during this tick get their first update next tick.
 	_tick_ants = high_water
 	_cursor = 0
+	if native != null:
+		if layers.size() > 1 and profile_layer_usec.size() != layers.size():
+			profile_layer_usec.resize(layers.size())
+			profile_layer_ant_ticks.resize(layers.size())
+		native.begin_tick()
+		native_bound = true
 	profile_usec["nests"] += Time.get_ticks_usec() - t0
 
 ## Updates up to `count` more ants of the tick in progress. Returns true when
@@ -661,7 +705,9 @@ func begin_step() -> void:
 func step_ants(count: int) -> bool:
 	var t0 := Time.get_ticks_usec()
 	var end := mini(_tick_ants, _cursor + count)
-	if layers.size() > 1:
+	if native_bound:
+		_step_ants_native(_cursor, end)
+	elif layers.size() > 1:
 		_step_ants_layered(_cursor, end)
 	else:
 		for i in range(_cursor, end):
@@ -676,6 +722,27 @@ func step_ants(count: int) -> bool:
 	_cursor = end
 	profile_usec["ants"] += Time.get_ticks_usec() - t0
 	return _cursor >= _tick_ants
+
+## step_ants() with the native kernel: it updates ants in order until one
+## needs GDScript (see NativeAnts), which is updated here as usual.
+func _step_ants_native(from: int, end: int) -> void:
+	var i := from
+	var layered := layers.size() > 1
+	while i < end:
+		i = kernel.run(i, end, tick_count)
+		if i >= end:
+			return
+		if layered:
+			_step_ants_layered(i, i + 1)
+		else:
+			timer[i] += dt
+			source_age[i] += dt
+			since_obstacle[i] += dt
+			var next := behaviours[state[i]].tick(self, i, dt)
+			if next != "":
+				change_state(i, next)
+		native.sync()
+		i += 1
 
 ## step_ants() with several layers: ants going through a portal are moved by
 ## the core, and time is profiled per layer (profile_layer_usec).
@@ -703,6 +770,11 @@ func _step_ants_layered(from: int, end: int) -> void:
 ## Finishes the tick in progress: pheromone update and render snapshots.
 func end_step() -> void:
 	assert(in_tick() and _cursor >= _tick_ants, "end_step() before all ants were updated")
+	if native_bound:
+		native_bound = false
+		if not native.end_tick():
+			native = null
+			kernel = null
 	var t2 := Time.get_ticks_usec()
 	# Keeps trails from soaking through walls on the surface (see SimLayer).
 	for l in layers:

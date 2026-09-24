@@ -40,7 +40,12 @@ func _process(_delta: float) -> bool:
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
-	var name_filter: String = args[0] if args.size() > 0 else ""
+	# Flags (e.g. --no-native, see NativeAnts) aren't filters.
+	var name_filter := ""
+	for a in args:
+		if not a.begins_with("--"):
+			name_filter = a
+			break
 	var passed := 0
 	var failed := 0
 	var files := DirAccess.get_files_at(TEST_DIR)

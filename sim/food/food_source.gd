@@ -23,6 +23,11 @@ func setup(_sim: Simulation, params: Dictionary) -> void:
 func is_sensed_at(pos: Vector2, _colony: Colony) -> bool:
 	return pos.distance_to(nearest_access_point(pos)) <= sense_radius
 
+## Distance from `position` beyond which is_sensed_at() is always false, with
+## a little to spare (lets callers skip sources quickly). INF if unknown.
+func sense_bound() -> float:
+	return INF
+
 ## Closest point an ant can stand at to take from the source.
 func nearest_access_point(_pos: Vector2) -> Vector2:
 	return position

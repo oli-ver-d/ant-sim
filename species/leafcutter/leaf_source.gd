@@ -154,6 +154,10 @@ func is_sensed_at(pos: Vector2, _colony: Colony) -> bool:
 	var b := width * 0.5 + sense_radius
 	return (p.x * p.x) / (a * a) + (p.y * p.y) / (b * b) <= 1.0
 
+## The sensing ellipse fits in a circle of its larger semi-axis.
+func sense_bound() -> float:
+	return maxf(length, width) * 0.5 + sense_radius + 1.0
+
 ## World centre of the edge cell closest to pos (or the leaf centre if none).
 func nearest_access_point(pos: Vector2) -> Vector2:
 	var cell := _nearest_edge_cell(to_local(pos))
@@ -246,25 +250,15 @@ func _fragment_image(cells: PackedInt32Array) -> Image:
 func _nearest_edge_cell(local: Vector2) -> int:
 	if _edges_dirty:
 		_rebuild_edges()
-	var best := -1
-	var best_d := INF
-	for k in _edges.size():
-		var d := _edge_pos[k].distance_squared_to(local)
-		if d < best_d:
-			best_d = d
-			best = _edges[k]
-	return best
+	var k := NativeAnts.nearest_point(_edge_pos, local)
+	return _edges[k] if k >= 0 else -1
 
 func _tissue(cx: int, cy: int) -> bool:
 	return cx >= 0 and cy >= 0 and cx < nx and cy < ny and mask[cy * nx + cx] == TISSUE
 
 func _rebuild_edges() -> void:
-	_edges.clear()
-	_edge_pos.clear()
-	for cy in ny:
-		for cx in nx:
-			if mask[cy * nx + cx] == TISSUE and not (_tissue(cx - 1, cy) and _tissue(cx + 1, cy)
-					and _tissue(cx, cy - 1) and _tissue(cx, cy + 1)):
-				_edges.append(cy * nx + cx)
-				_edge_pos.append(_cell_local(cx, cy))
+	_edges = NativeAnts.mask_edges(mask, nx, ny, TISSUE)
+	_edge_pos.resize(_edges.size())
+	for k in _edges.size():
+		_edge_pos[k] = _cell_local(_edges[k] % nx, _edges[k] / nx)
 	_edges_dirty = false

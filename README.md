@@ -9,6 +9,11 @@ agent rules (pheromone trails, foraging, cutting, carrying).
 - Godot 4.7 (4.3+ should work) with `godot` on PATH, or set `GODOT=/path/to/godot.exe`.
 - ffmpeg on PATH (for encoding recordings).
 - Git Bash to run the scripts in `tools/` on Windows.
+- Optional, for the native ant kernel (several times faster, same results; see "Native ant
+  kernel" below): CMake, Ninja, Python 3 and a C++17 compiler, then `tools/build_native.sh`
+  (it fetches the `native/godot-cpp` submodule if needed). On Windows use MinGW-w64 GCC,
+  which Godot's own Windows builds use: `winget install BrechtSanders.WinLibs.POSIX.MSVCRT`
+  (includes CMake and Ninja) and `winget install Python.Python.3.13`.
 
 ## Running
 
@@ -49,6 +54,7 @@ ant of a colony, including its abstract population (see "Scale" below).
 ## Tools
 
 ```bash
+tools/build_native.sh                           # build the native ant kernel (tools/build_native.sh clean removes it)
 tools/test.sh                                   # headless test suite (filter: tools/test.sh pheromones)
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
 tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
@@ -57,6 +63,7 @@ tools/screenshot.sh nest_life 0 out.png -1 --layout=split --at=3    # split layo
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
 godot --headless --path . -s res://tests/bench.gd -- res://tests/fixtures/scenarios/nest_bench.json 900   # per layer
 godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
+godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000 -1 --no-native   # GDScript ants only
 ```
 
 Tests are scripts in `tests/` named `test_*.gd` that `extend TestCase` and have
@@ -86,6 +93,8 @@ sim/          core engine (no rendering, no species-specific code)
                       dig, carry_spoil, go_up
   food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest,
                       ExcavationPlan (digging jobs)
+  native_ants.gd      drives the native ant kernel (optional; see "Native ant kernel")
+native/       the native ant kernel (GDExtension, C++): src/ant_kernel.cpp, godot-cpp submodule
 species/<name>/       one folder per species; register.gd is discovered automatically
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
@@ -166,6 +175,42 @@ tools/ tests/
   into layers with room (`NestType.spawn_from_pool`), and swaps a few so the agents stay a
   representative sample of the castes. Abstract ants count in the colony's size, upkeep and
   the HUD; the agents do the work. Renderers draw filler ants in proportion (render-only).
+
+### Native ant kernel (GDExtension)
+
+The per-ant hot path also exists in C++ (`native/`, class `AntKernel`, built by
+`tools/build_native.sh`). It is optional: without the built extension (or with `--no-native`
+after `--`) everything runs in GDScript, and **either way a run is identical**, state hash for
+state hash. `tests/test_native.gd` runs every scenario and test fixture both ways and compares
+their hashes.
+
+- **What runs natively**: whole ticks of the core behaviours `explore`, `follow_trail`,
+  `carry_home` and `linger`, plus the pieces every other behaviour uses: `Steering.move`,
+  `move_to`, `sense_turn`, `sense_away`, `Simulation.lay`, the nav-field step in `Travel`, and a
+  few generic queries (`carriers_near`, `NativeAnts.mask_edges`, `NativeAnts.nearest_point`).
+  Like `/sim`, the kernel knows no species.
+- **How ticks are shared**: `Simulation.step_ants` calls `kernel.run(i, end)`, which updates ants
+  in index order until it reaches one it can't handle: a state that isn't native, an ant in a
+  portal, or a tick that needs GDScript. A tick needs GDScript when the ant changes state, when
+  explore's food check might find food (it is inside some source's `FoodSource.sense_bound()`),
+  or when it arrives at the nest. That ant runs its GDScript behaviour, then the kernel carries
+  on. The order of ants, and of every random number, is exactly the GDScript order.
+- **Same maths**: GDScript floats are doubles and `Vector2` is float32; the kernel repeats the
+  engine's own code at the same precision for each step (`from_angle` and `angle()` in float,
+  `cos`, `wrapf` and `angle_difference` in double...). Random numbers come from the Simulation's
+  own `RandomNumberGenerator`. It is built with the compiler family Godot's Windows builds use
+  (MinGW-w64 GCC), so the libm functions return the same bits.
+- **Shared arrays**: the kernel owns no data. Each tick `NativeAnts.begin_tick()` hands it the
+  Simulation's packed arrays (and each layer's grids) and it reads and writes their buffers in
+  place. Packed arrays are copy-on-write, so first every array gets a buffer of its own (the
+  render snapshots `shown_pos = pos` share one until written). During a tick no code may replace
+  or resize those arrays; `end_tick()` checks, and if one moved it reports which and switches
+  that Simulation to GDScript.
+- **Keeping it in step**: a change to one of the native behaviours or to `Steering` must be made
+  in `native/src/ant_kernel.cpp` too; `tests/test_native.gd` fails until both agree. Nest
+  entrances (`Portal.open`), food sources added mid-tick and live tuning are sent to the kernel
+  as they change.
+
 ### Core vs species
 
 `/sim` and `/render` must contain no species-specific code. `tests/test_core_generic.gd`
@@ -289,17 +334,26 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
 | A nest that digs, ~1,500 ants (`bench.gd res://tests/fixtures/scenarios/nest_bench.json 900`) | 24.9 ms per tick: surface ants 14.4 ms (752 agents, 16.5 µs each), underground ants 7.6 ms (721 agents, 12.8 µs each), nest (gardens, brood, roles) 1.4 ms, pheromones 1.1 ms |
 | `colony_founding`, headless | about 2 ms per tick at 100 ants, 10 ms at 650, 16 ms at 1,000, 22–26 ms at the 1,600 agent cap (the rest abstract) |
 | `FORMAT=avi tools/record.sh colony_founding` | 79 min for the 80 s video (4,800 frames, ~7,200 simulated seconds, ~215,000 ticks; most of it the last 50 s at 70–80 ticks per frame with 1,600 agents); ends at ~3,500 ants |
+| **Native ant kernel** (M12, same machine) | |
+| 3,000 ants, real time, interactive, busy foraging | 60 fps; the simulation takes ~2.5 ms per frame (GDScript: ~27 fps) |
+| `bench.gd basic_forage 600 3000` | 2.5 ms per tick (GDScript: 24.0) |
+| `bench.gd basic_forage 300 15000` | 12.8 ms per tick (GDScript: 135) |
+| nest that digs, ~1,500 ants (`nest_bench.json 900`) | 9.1 ms per tick: surface 2.2 ms (2.5 µs per ant), underground 3.7 ms (6.2 µs per ant) (GDScript: 20.9) |
+| `colony_founding` headless, whole run (216,000 ticks) | 30 min; 13–15 ms per tick at the 1,600 agent cap (GDScript: 22–26), ends at the same 3,529 ants |
 
 - At 30 ticks/s and 60 fps each frame runs half a tick, so 3,000 ants need about 12.5 ms of
   every 16.7 ms frame for the simulation alone. That fits while ants explore, but busy
   foraging (more states, carried items to draw) tips it over. The ant logic is the limit, not
-  pheromones or rendering. Getting to a steady 60 fps at 3,000+ ants needs the ant update in
-  native code (GDExtension), which hasn't been done.
+  pheromones or rendering. With the native ant kernel (M12) 3,000 ants run at a steady 60 fps.
 - If a frame runs long, the interactive app advances at most 1/30 s per frame, so a heavy
   scene runs slower rather than spiralling into ever longer frames. Recordings always advance
   exactly 1/60 s per frame and are unaffected.
 - Recording is offline, so timelapses and large colonies are fine; they only take longer to
   record.
+- With the kernel, what is left is behaviours that are still GDScript: species states
+  (leafcutter gardening, nursing, cutting, carrying down) cost 5–12 µs per ant per tick, the core
+  ones well under 1 µs. In `colony_founding` most agents underground are in species states, so
+  it gains less (about 1.7×) than scenarios of core behaviours (up to 10×).
 - Underground ants cost less than busy surface ants (no pheromone sensing; they follow nav
   fields) but share the same GDScript limit. The agent caps (`max_agents`) bound the cost of a
   big colony: beyond them the colony grows as an abstract population. The garden grid updates a

@@ -75,12 +75,52 @@ func dug_count() -> int:
 			n += 1
 	return n
 
-## The chamber containing `at` (within its radius), or -1.
+## The chamber containing `at` (within its radius), or -1. Called for most
+## steps underground, so it only tests the chambers that reach into `at`'s
+## cell of a coarse grid (in list order, so the answer is the same).
 func chamber_at(at: Vector2) -> int:
-	for c in list:
+	if _grid_count != list.size():
+		_build_grid()
+	var gx := int(at.x / GRID)
+	var gy := int(at.y / GRID)
+	if at.x < 0.0 or at.y < 0.0 or gx >= _grid_w or gy >= _grid_h:
+		for c in list:
+			if at.distance_squared_to(c.centre) <= c.radius * c.radius:
+				return c.index
+		return -1
+	for k in _grid[gy * _grid_w + gx]:
+		var c := list[k]
 		if at.distance_squared_to(c.centre) <= c.radius * c.radius:
 			return c.index
 	return -1
+
+## Grid cell size (world units) for chamber_at().
+const GRID := 32.0
+## Per grid cell, the list positions of the chambers whose circle reaches into it.
+var _grid: Array[PackedInt32Array] = []
+var _grid_w: int = 0
+var _grid_h: int = 0
+## list.size() when _grid was built.
+var _grid_count: int = -1
+
+func _build_grid() -> void:
+	_grid_count = list.size()
+	_grid_w = ceili(layer_size.x / GRID)
+	_grid_h = ceili(layer_size.y / GRID)
+	_grid.resize(_grid_w * _grid_h)
+	for g in _grid.size():
+		_grid[g] = PackedInt32Array()
+	for k in list.size():
+		var c := list[k]
+		# Every cell whose nearest point is within the radius (a unit to spare).
+		var r := c.radius + 1.0
+		for gy in range(maxi(0, int((c.centre.y - r) / GRID)), mini(_grid_h, int((c.centre.y + r) / GRID) + 1)):
+			for gx in range(maxi(0, int((c.centre.x - r) / GRID)), mini(_grid_w, int((c.centre.x + r) / GRID) + 1)):
+				var nearest := Vector2(clampf(c.centre.x, gx * GRID, (gx + 1) * GRID), clampf(c.centre.y, gy * GRID, (gy + 1) * GRID))
+				if nearest.distance_to(c.centre) <= r:
+					var cell := _grid[gy * _grid_w + gx]
+					cell.append(k)
+					_grid[gy * _grid_w + gx] = cell
 
 ## Picks a place for a new garden chamber and returns it (not yet planned),
 ## or null if nothing fits.

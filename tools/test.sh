@@ -2,6 +2,7 @@
 # Runs the headless test suite.
 #   tools/test.sh               run everything
 #   tools/test.sh determinism   run only tests whose "file::method" contains the filter
+#   tools/test.sh --no-native   everything with GDScript ants only (no native kernel)
 # Set GODOT to override the Godot executable (default: godot on PATH).
 set -euo pipefail
 cd "$(dirname "$0")/.."

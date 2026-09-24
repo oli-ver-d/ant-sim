@@ -25,6 +25,10 @@ func current_radius() -> float:
 		return 0.0
 	return radius * sqrt(float(amount) / initial_amount)
 
+## Sensed within sense_radius of the rim (see is_sensed_at()).
+func sense_bound() -> float:
+	return radius + sense_radius + 1.0
+
 func nearest_access_point(pos: Vector2) -> Vector2:
 	var offset := pos - position
 	if offset.length_squared() < 0.0001:
