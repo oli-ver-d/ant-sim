@@ -1,0 +1,87 @@
+{
+	"name": "colony_founding",
+	"description": "From a queen and a handful of minims sealed in a founding chamber to a sprawling nest of thousands: the first dig up to the surface, foraging, brood care, gardens filling chamber after chamber and a growing heap of dug soil. Split view, several hours in about 80 s.",
+	"seed": 7,
+	"duration": 80,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1060],
+			"population": {"queen": 1, "minim": 4},
+			"nest_params": {
+				"initial_fungus": 12,
+				"queen_reserve": 60,
+				"open_entrance_at": 4,
+				"chamber_capacity": 90,
+				"max_chambers": 30,
+				"max_population": 6000,
+				"brood_rate": 0.003, "digest_rate": 0.03, "garden_reserve": 0,
+				"brood_reserve": 8,
+				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 40, "garden_life": 1500},
+				"brood": {"lay_interval": 1.2, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 700,
+					"first_workers": 6, "brood_per_worker": 1.2, "initial": {"egg": 3, "larva": 3, "pupa": 2}}
+			}
+		}
+	],
+	"max_agents": {"surface": 900, "nest": 700},
+	"food": [
+		{"type": "leaf", "pos": [380, 820], "rotation": -30, "length": 260, "width": 120, "shape": "elliptic", "teeth": 24, "seed": 3},
+		{"type": "leaf", "pos": [760, 880], "rotation": 40, "length": 240, "width": 110, "shape": "lanceolate", "teeth": 22, "seed": 8}
+	],
+	"events": [
+		{"t": 700, "type": "spawn_food", "food": {"type": "leaf", "pos": [560, 640], "rotation": 10, "length": 320, "width": 160, "shape": "elliptic", "teeth": 30, "seed": 12}},
+		{"t": 1300, "type": "spawn_food", "food": {"type": "leaf", "pos": [240, 1320], "rotation": 70, "length": 320, "width": 150, "shape": "elliptic", "teeth": 28, "seed": 21}},
+		{"t": 1300, "type": "spawn_food", "food": {"type": "leaf", "pos": [860, 1360], "rotation": -55, "length": 320, "width": 140, "shape": "lanceolate", "teeth": 24, "seed": 30}},
+		{"t": 2000, "type": "spawn_food", "food": {"type": "leaf", "pos": [200, 560], "rotation": -20, "length": 360, "width": 170, "shape": "elliptic", "teeth": 30, "seed": 41}},
+		{"t": 2000, "type": "spawn_food", "food": {"type": "leaf", "pos": [880, 500], "rotation": 25, "length": 360, "width": 160, "shape": "elliptic", "teeth": 30, "seed": 44}},
+		{"t": 2800, "type": "spawn_food", "food": {"type": "leaf", "pos": [540, 1620], "rotation": 90, "length": 380, "width": 170, "shape": "elliptic", "teeth": 32, "seed": 52}},
+		{"t": 2800, "type": "spawn_food", "food": {"type": "leaf", "pos": [520, 300], "rotation": 0, "length": 380, "width": 180, "shape": "elliptic", "teeth": 32, "seed": 57}},
+		{"t": 3600, "type": "spawn_food", "food": {"type": "leaf", "pos": [180, 1720], "rotation": 40, "length": 380, "width": 170, "shape": "lanceolate", "teeth": 30, "seed": 63}},
+		{"t": 3600, "type": "spawn_food", "food": {"type": "leaf", "pos": [900, 1700], "rotation": -40, "length": 380, "width": 170, "shape": "elliptic", "teeth": 30, "seed": 66}},
+		{"t": 4400, "type": "spawn_food", "food": {"type": "leaf", "pos": [180, 180], "rotation": 30, "length": 400, "width": 180, "shape": "elliptic", "teeth": 32, "seed": 71}},
+		{"t": 4400, "type": "spawn_food", "food": {"type": "leaf", "pos": [880, 200], "rotation": -30, "length": 400, "width": 180, "shape": "elliptic", "teeth": 32, "seed": 74}},
+		{"t": 5200, "type": "spawn_food", "food": {"type": "leaf", "pos": [540, 1850], "rotation": 90, "length": 400, "width": 180, "shape": "lanceolate", "teeth": 32, "seed": 81}},
+		{"t": 5200, "type": "spawn_food", "food": {"type": "leaf", "pos": [120, 1000], "rotation": 90, "length": 400, "width": 170, "shape": "elliptic", "teeth": 32, "seed": 84}},
+		{"t": 5200, "type": "spawn_food", "food": {"type": "leaf", "pos": [960, 1050], "rotation": 90, "length": 400, "width": 170, "shape": "elliptic", "teeth": 32, "seed": 87}},
+		{"t": 3000, "type": "spawn_food", "food": {"type": "leaf", "pos": [330, 780], "rotation": -40, "length": 380, "width": 180, "shape": "elliptic", "teeth": 30, "seed": 91}},
+		{"t": 3000, "type": "spawn_food", "food": {"type": "leaf", "pos": [780, 1320], "rotation": 35, "length": 380, "width": 180, "shape": "elliptic", "teeth": 30, "seed": 93}},
+		{"t": 4000, "type": "spawn_food", "food": {"type": "leaf", "pos": [800, 760], "rotation": 50, "length": 400, "width": 190, "shape": "elliptic", "teeth": 32, "seed": 95}},
+		{"t": 4000, "type": "spawn_food", "food": {"type": "leaf", "pos": [290, 1340], "rotation": -50, "length": 400, "width": 190, "shape": "lanceolate", "teeth": 32, "seed": 97}},
+		{"t": 4800, "type": "spawn_food", "food": {"type": "leaf", "pos": [540, 780], "rotation": 0, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 99}},
+		{"t": 4800, "type": "spawn_food", "food": {"type": "leaf", "pos": [540, 1360], "rotation": 0, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 101}},
+		{"t": 5600, "type": "spawn_food", "food": {"type": "leaf", "pos": [300, 900], "rotation": 60, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 103}},
+		{"t": 5600, "type": "spawn_food", "food": {"type": "leaf", "pos": [800, 1200], "rotation": -60, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 105}},
+		{"t": 6200, "type": "spawn_food", "food": {"type": "leaf", "pos": [780, 880], "rotation": 20, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 107}},
+		{"t": 6200, "type": "spawn_food", "food": {"type": "leaf", "pos": [300, 1240], "rotation": -20, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 109}}
+	],
+	"warmup": 0,
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 0.5},
+		{"t": 7, "tpf": 0.5},
+		{"t": 12, "tpf": 4},
+		{"t": 20, "tpf": 30},
+		{"t": 30, "tpf": 70},
+		{"t": 66, "tpf": 80},
+		{"t": 71, "tpf": 3},
+		{"t": 80, "tpf": 2}
+	],
+	"camera": {
+		"surface": [
+			{"t": 0, "pos": [540, 1060], "zoom": 2.6},
+			{"t": 16, "pos": [540, 1060], "zoom": 2.6},
+			{"t": 32, "pos": [540, 1040], "zoom": 1.4},
+			{"t": 60, "pos": [540, 1000], "zoom": 1.0}
+		],
+		"nest": [
+			{"t": 0, "pos": [690, 700], "zoom": 7.5},
+			{"t": 9, "pos": [690, 700], "zoom": 6.0},
+			{"t": 16, "pos": [700, 690], "zoom": 3.2},
+			{"t": 26, "fit": "excavation", "margin": 70, "max_zoom": 2.6}
+		]
+	},
+	"render": {
+		"pheromone_opacity": 0.35,
+		"layout": {"mode": "split", "colony": 0, "surface": "top", "ratio": 0.42,
+			"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]}
+	}
+}

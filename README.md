@@ -22,7 +22,8 @@ godot --path . -- --scenario=basic_forage --seed=42
 The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
 channel values under the cursor), **S** TikTok/Reels safe zones, **N** nest cutaway inset,
-**L** split layout (surface on top, the nest underground below; see `render.layout`),
+**L** layout: cycles surface / split (surface on top, the nest underground below) / nest
+(the underground full screen, for nests that dig their own; see `render.layout`),
 **T** tuning panel, **F** follow the ant under the cursor (again to stop), **C** back to the
 scenario camera, **1–5** speed (1/2/4/8/16× the scenario's pace), **Esc** quit.
 
@@ -40,9 +41,10 @@ Scenario per-colony overrides still take precedence over the sliders.
 `--at=12.5` fast-forwards to a video time, e.g. to check a camera move:
 `godot --path . -- --scenario=chaos_to_highway --at=12.5`
 
-`--layout=split` (or `--layout=normal`) overrides the scenario's layout:
+`--layout=split` (or `normal`, or `nest`) overrides the scenario's layout:
 `godot --path . -- --scenario=fungus_farm --layout=split`. In the split layout the mouse
-(walls, food, zoom, **F**, the debug readout) works on the surface part.
+(walls, food, zoom, **F**, the debug readout) works on the surface part. The HUD counts every
+ant of a colony, including its abstract population (see "Scale" below).
 
 ## Tools
 
@@ -53,6 +55,7 @@ tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740
 tools/screenshot.sh two_species 2400 out.png -1 --safe=1 --debug=1 --pheromones=0    # overlays
 tools/screenshot.sh nest_life 0 out.png -1 --layout=split --at=3    # split layout, 3 s in
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
+godot --headless --path . -s res://tests/bench.gd -- res://tests/fixtures/scenarios/nest_bench.json 900   # per layer
 godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
 ```
 
@@ -72,11 +75,17 @@ sim/          core engine (no rendering, no species-specific code)
   registry.gd         string id -> behaviours, food/item/nest types, species, renderers
   core_module.gd      registers the generic pieces below
   pheromone_field.gd  named channels, lazy evaporation, banded diffusion
-  steering.gd         three-sensor model, obstacle avoidance, movement
-  world.gd            obstacle grid (walls, water)
+  steering.gd         three-sensor model, obstacle avoidance, movement (and move_to for tunnels)
+  world.gd            obstacle grid (walls, water, diggable soil)
+  layer.gd            SimLayer: one layer's World, PheromoneField and NavGrid
+  portal.gd           a way between two layers (a nest entrance and its shaft)
+  nav_grid.gd         distance fields over free cells toward named targets
+  travel.gd           getting to a point on any layer (portals, nav fields)
   scenario_loader.gd  JSON scenario -> Simulation
-  behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste
-  food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest
+  behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
+                      dig, carry_spoil, go_up
+  food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest,
+                      ExcavationPlan (digging jobs)
 species/<name>/       one folder per species; register.gd is discovered automatically
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
@@ -112,10 +121,51 @@ tools/ tests/
 - **Exploring**: with `avoid_channel` (e.g. their own home trail) explorers that have nothing
   to follow steer toward the least-walked side, so the search keeps pushing into new ground.
 - **Determinism**: all randomness uses `sim.rng`; `Simulation.state_hash()` fingerprints a run.
+  States are hashed by their rank among the states the sim's colonies can use, so registering
+  a new behaviour doesn't change the hashes of existing runs; runs with one layer hash exactly
+  as they did before layers existed (`tests/test_layers.gd` checks every scenario).
 - **Ticks and frames**: the sim runs at 30 ticks/s (`SimConfig.tick_rate`). `SimRunner` spreads
   each tick's ant updates over the frames it spans (identical result to `step()`), and
   renderers interpolate between the last two completed ticks (`prev_pos` -> `shown_pos`).
 
+
+### Layers, portals and digging
+
+- **Layers** (`SimLayer`): layer 0 is the surface (`sim.world`, `sim.pheromones`); a nest may add
+  its own underground (`nest_params.underground`, see below). Each layer has its own `World`,
+  `PheromoneField` (the same channels at the same indices), size and cell size. Every ant is on
+  one layer (`sim.layer[i]`) and moves, senses and lays pheromone there, in that layer's
+  coordinates. Food sources are on the surface.
+- **Portals** (`Portal`) link two layers: an ant at one end calls `sim.enter_portal()`, walks into
+  the hole for `transit_time` and comes out at the other end; renderers fade it out and in
+  (`sim.portal_fade()`). A closed portal (a sealed founding nest, `has_entrance()` false) can't
+  be used from either side. `Travel.go()` gets an ant to a point on any layer, through portals.
+- **Diggable soil**: `World.Cell.SOIL` cells hold the work left in them and block movement until
+  `World.dig()` frees them. Digging only frees cells, so caches follow it incrementally through
+  `World.dig_log` (renderers upload just the touched cells, nav fields relax just around them);
+  any other change bumps `World.edit_version` and rebuilds.
+- **Navigation fields** (`NavGrid`): underground, pheromone trails are unreliable in narrow
+  tunnels (the maze lesson), so ants follow distance fields over free cells toward named
+  targets (the shaft `portal:<id>`, each chamber, each digging job). `Steering.move_to` follows
+  them downhill and slides along walls instead of probing.
+- **Digging** (`ExcavationPlan`, `NestType.excavation_plan()`): the nest plans jobs, each a
+  tunnel or round chamber to dig out from a point in space already open. Diggers (`dig`) take
+  the open job with the lowest priority that has room, walk to it and then to its face, and bite
+  (`dig_time`), clearing `cells_per_bite` cells of the face; the soil comes out as a pellet they
+  carry up (`carry_spoil`) to `NestType.spoil_position()`, where it builds the spoil heap. While
+  the nest is sealed the soil is pressed into the walls instead. A job can open a portal when it
+  is finished (the entrance shaft).
+- **Castes and params for nests that dig**: `CasteDef.underground_states` are extra states a
+  caste may use only when its nest has an underground, and `SpeciesDef.underground_state_params`
+  are merged over the state wiring only then, so the same species plays exactly as before in
+  scenarios without one.
+- **Scale**: `"max_agents": {"surface": n, "nest": n}` caps how many ants a layer simulates one by
+  one. Beyond it a colony grows as an **abstract population** (`Colony.abstract_by_caste`): brood
+  emerging into a full layer joins it, and every second `Simulation.balance_pools()` moves idle
+  agents (the species' `pool_states`) out of layers over their cap, brings abstract ants back
+  into layers with room (`NestType.spawn_from_pool`), and swaps a few so the agents stay a
+  representative sample of the castes. Abstract ants count in the colony's size, upkeep and
+  the HUD; the agents do the work. Renderers draw filler ants in proportion (render-only).
 ### Core vs species
 
 `/sim` and `/render` must contain no species-specific code. `tests/test_core_generic.gd`
@@ -146,7 +196,11 @@ stone walls; explorers find the gaps and a trail settles on one route),
 `fungus_farm` (a young colony over ~17 minutes: the garden grows chamber by chamber, the
 colony grows from 150 to ~850 ants, waste piles up outside; with the cutaway inset),
 `nest_life` (split view, 30 s: foraging on top; underground the queen lays, brood grows from
-egg to pupa in timelapse, and at the end a young worker climbs out and joins the trail).
+egg to pupa in timelapse, and at the end a young worker climbs out and joins the trail),
+`colony_founding` (about 80 s, split view over a nest that digs its own underground: a queen
+and four minims sealed in a founding chamber dig up to the surface, foraging begins, and over
+about two simulated hours the colony grows to thousands, gardens filling chamber
+after chamber and a heap of dug soil growing on the surface).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
@@ -159,6 +213,8 @@ JSON files in `scenarios/`. Simulation content:
   `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it
+- `max_agents`: `{"surface": n, "nest": n}` agents per layer, beyond which colonies grow as
+  an abstract population (see "Layers, portals and digging")
 - `events`: timed (simulated seconds): `spawn_food`, `add_obstacle`, `remove_obstacle`,
   `add_colony`, `rain` (`area` rect or circle, whole world if omitted; `wash_half_life` makes
   trails fade over a moment instead of vanishing), `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
@@ -170,14 +226,19 @@ Playback (video) settings:
 - `ticks_per_frame`: a number, or `[{"t": video s, "tpf": n}, ...]` ramped linearly.
   0.5 = real time (30 ticks/s at 60 fps); 5 = 10× timelapse
 - `camera`: keyframes `{"t", "pos": [x, y], "zoom", "ease"}`; `"follow": {"near": [x, y],
-  "state": "carry_home"}` in place of `pos` tracks the nearest matching ant
-  (see `render/camera_director.gd`)
+  "state": "carry_home"}` in place of `pos` tracks the nearest matching ant;
+  `"fit": "excavation"` (with `margin`, `min_zoom`, `max_zoom`) frames everything dug so far,
+  easing as the nest grows. For a nest that digs, `"camera": {"surface": [...], "nest": [...]}`
+  gives each part of the layout its own keyframes (see `render/camera_director.gd`)
 - `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45,
   "view": {"intro_spotlight": 5}}` splits the frame: the surface (the world, in a
   1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
-  that part) and, full width below it, the colony's nest cutaway (`"cutaway:<type>"`).
-  `"view"` sets properties the cutaway view declares. Nests without a cutaway play full
-  screen. See `render/split_layout.gd`
+  that part) and, full width below it, the colony's nest: its underground layer, top-down and
+  fully simulated, with its own camera, for a nest that digs (the nest's size and brood are
+  shown top left); otherwise its side cutaway (`"cutaway:<type>"`). `"view"` sets properties the
+  cutaway view declares. `"mode": "nest"` shows the underground full screen, and
+  `"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]` switches mode at video
+  times. Nests with neither view play full screen. See `render/split_layout.gd`
 - `render`: `{"pheromones": true, "pheromone_opacity": 0.55, "cutaway": {"colony": 0,
   "rect": [x, y, w, h], "from": 2, "to": 18}}`. The cutaway is an inset (screen pixels of
   the 1080×1920 frame) showing the colony's nest from the side, for nest types that have a
@@ -224,6 +285,10 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
 | Pheromones (2 channels) | 0.4–1.7 ms per tick (only rows holding pheromone are diffused) |
 | GPU | 7–12 ms per frame at 3,000 ants |
 | 15,000 ants offline (`bench.gd basic_forage 300 15000`) | 135 ms per tick; recording works at any speed |
+| M11, one layer (`bench.gd basic_forage 300 3000`) | 26.4 ms per tick (M10 on the same run: 24.0; the layer checks cost up to ~10%) |
+| A nest that digs, ~1,500 ants (`bench.gd res://tests/fixtures/scenarios/nest_bench.json 900`) | 24.9 ms per tick: surface ants 14.4 ms (752 agents, 16.5 µs each), underground ants 7.6 ms (721 agents, 12.8 µs each), nest (gardens, brood, roles) 1.4 ms, pheromones 1.1 ms |
+| `colony_founding`, headless | about 2 ms per tick at 100 ants, 10 ms at 650, 16 ms at 1,000, 22–26 ms at the 1,600 agent cap (the rest abstract) |
+| `FORMAT=avi tools/record.sh colony_founding` | 79 min for the 80 s video (4,800 frames, ~7,200 simulated seconds, ~215,000 ticks; most of it the last 50 s at 70–80 ticks per frame with 1,600 agents); ends at ~3,500 ants |
 
 - At 30 ticks/s and 60 fps each frame runs half a tick, so 3,000 ants need about 12.5 ms of
   every 16.7 ms frame for the simulation alone. That fits while ants explore, but busy
@@ -235,6 +300,11 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
   exactly 1/60 s per frame and are unaffected.
 - Recording is offline, so timelapses and large colonies are fine; they only take longer to
   record.
+- Underground ants cost less than busy surface ants (no pheromone sensing; they follow nav
+  fields) but share the same GDScript limit. The agent caps (`max_agents`) bound the cost of a
+  big colony: beyond them the colony grows as an abstract population. The garden grid updates a
+  slice of cells per tick, and nav fields and the soil texture follow digging cell by cell, so
+  a sprawling nest adds little per tick.
 
 ## How to add a new species
 
@@ -394,6 +464,59 @@ in `/sim` or `/render`.
   state; they hurry in timelapse, and brood no nurse reaches in time fades to its place.
   `"view": {"intro_spotlight": 5}` dims everything but the queen for the first seconds.
 
+
+### Leafcutter nests that dig their own underground
+
+With `nest_params.underground` a `FungusNest` is a fully simulated underground, seen from above
+in the split layout's nest part (or full screen). Every ant there is an agent doing real work:
+- **Chambers** (`fungus_chambers.gd`): the royal chamber in the middle, then garden chambers
+  planned procedurally from the seed (a parent chamber, more often a recent one, a direction
+  away from the middle, a tunnel length; clear of other chambers and the layer's edge). The first
+  chambers are small, later ones larger. Each is two digging jobs: the tunnel from its parent's
+  rim, then the chamber. The shaft comes down beside the royal chamber.
+- **The queen** (caste `queen`, only in these nests): a real ant resting at her spot in the royal
+  chamber, laying each egg at the tip of her abdomen. Her retinue (`tend_queen`) grooms her; left
+  ungroomed she lays at half pace. Laying is paced by the garden (as in M10) and limited to what
+  the workers can care for (`brood_per_worker`).
+- **Brood that needs care** (`leafcutter_brood.gd`, care mode): each egg, larva, pupa and callow
+  lies somewhere (a pile, or carried) and gets dirty; neglected brood stops developing, larvae
+  get hungry and only grow when fed, and starve after `starve_time`. Nurses (`nurse`, the shared
+  `BroodCare` tasks) carry eggs from the queen to the egg pile, larvae into the garden and pupae
+  to a drier spot, fetch gongylidia from the garden to feed larvae, groom, and free callows,
+  which become real workers where they lie and take a role or walk up. Brood needs (dirt,
+  hunger) are data the brood renderer shows.
+- **Founding** (`"open": false`): the queen starts sealed in with a pellet of fungus, manures her
+  garden from her reserves (`queen_reserve`) until the first leaf arrives, and tends her first
+  brood herself (all minims: `first_caste`, `first_workers`). Once there are `open_entrance_at`
+  workers they dig up to the surface (the extra-hard shaft job opens the entrance), and foraging
+  begins.
+- **Roles** (`nest_role`): workers take the role most short of hands relative to its need
+  (weighted: nurses first, then the retinue, digging, gardening); idle nurses and gardeners move
+  on when another role is short; surplus minims garden, and medias go out to forage. Diggers get
+  more hands the fuller the gardens are.
+- **Gardens cell by cell** (`garden_grid.gd`): a 2-unit grid (the nav grid is 4) over the gardens.
+  Each cell has fungus, fresh pulp, spent material, age, gongylidia and mould. It is the M8 model:
+  the gardens digest their pulp at `digest_rate` × fungus, each cell by its share of the pulp,
+  the new fungus growing where the pulp was (spilling into a neighbour when a cell is full), so
+  `FungusNest.fungus/substrate/waste` are the grid's totals. Old or mouldy cells turn spent; the
+  colony's upkeep eats from every cell alike. A chamber's garden fills to its capacity, and when
+  the gardens and the pulp waiting on them near capacity a new chamber is planned. New gardens
+  are seeded with a little fungus carried from the fullest one.
+- **The leaf line**: medias bring fragments down (`carry_down`) and drop them at the edge of the
+  garden where fungus grows with room to spare; gardeners (`garden`) cut them into pulp a bite at
+  a time (the fragment shrinks), plant it on the garden, weed spent material and mould, and carry
+  it out to the dump beside the entrance (`carry_spent`). A delivery counts when a fragment
+  arrives underground; leaf mass counts as delivered as it is planted (food mass stays conserved).
+- nest params for this: `underground` (NestType's, plus `royal_radius`, `chamber_min_radius`,
+  `chamber_max_radius`, `tunnel_radius`, `shaft_distance`, `shaft_hardness`, `garden_life`,
+  `mould_rate`), `initial_chambers`, `open_entrance_at`, `queen_reserve`, `queen_feed_rate`,
+  `brood_per_nurse`, `retinue_max`, `dig_fraction`, `inside_share`, `queen_groom_time`,
+  `garden_reserve` (0: use `brood_reserve`; else a share of garden capacity); in `brood`:
+  `dirt_rate`, `hunger_rate`, `starve_time`, `brood_per_worker`, `first_caste`, `first_workers`.
+- Rendering: `FungusUnderground` ("underground:fungus_nest") draws the gardens
+  (`garden.gdshader`) and the brood (`brood.gdshader`); `CarriedBroodRenderer`
+  ("underground_top:fungus_nest") the brood in nurses' jaws. The M10 side cutaway still serves
+  nests without an underground (`nest_life`, `fungus_farm`).
 ## Species: harvester ants
 
 `species/harvester/`, added without touching the core or the leafcutter module:
@@ -429,6 +552,19 @@ All drawing lives in `render/` (plus each species' own renderers):
   whichever side is ground (floors, walls, ceilings); `fold` tucks legs and antennae in.
 - `split_layout.gd`: the split surface/underground layout (see `render.layout`), with a
   thin seam between the parts and a ring on a surface ant the cutaway names (a new worker).
+- `soil.gdshader` + `soil_renderer.gd`: an underground layer from above: undug soil as a lit,
+  raised mass (warped strata, grain, round grit, pebbles, fine roots, crumbly micro-relief) and
+  the dug space as a paler packed floor with ambient occlusion near the walls, a shadow under
+  the soil's rim and loose crumbs at the digging face. Static; only dug cells are re-uploaded.
+- `portal_renderer.gd`: the bottom of a shaft (daylight falling in), or a soil plug while sealed;
+  `spoil_heap_renderer.gd`: the heap of dug soil beside an entrance, crumb by crumb.
+- Ants going through a portal fade out and in (`ant.gdshader`); filler ants stand in for an
+  abstract population.
+- Leafcutter: `garden.gdshader` (a raised spongy mass: cellular bumps and pores, strands,
+  self-shadowing, a lumpy cottony edge with a floor shadow, green pulp flecks, browning with
+  age and mould, gongylidia bead clusters; fine detail fades with zoom), `brood.gdshader`
+  (glossy eggs, curled segmented larvae, pupae with folded legs whose eyes darken first,
+  callows in split casings, dirt as a grey fuzz).
 - `overlays.gd`: safe zones and the debug view.
 
 Shaders use a sine-free hash: `sin()`-based hashes show seams on some GPUs.

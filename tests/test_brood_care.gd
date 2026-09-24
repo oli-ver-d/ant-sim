@@ -56,12 +56,12 @@ func test_queen_is_a_real_ant_in_the_royal_chamber() -> void:
 ## and pupae stall and larvae starve; with nurses they develop.
 func test_care_is_required() -> void:
 	var initial := {"initial": {"egg": 4, "larva": 4, "pupa": 3}}
-	var sim := _sim({"queen": 1}, {}, initial.merged({"starve_time": 40, "egg": 200, "pupa": 200}))
+	var sim := _sim({"queen": 1}, {}, initial.merged({"starve_time": 40, "egg": 200, "larva": 200, "pupa": 200}))
 	var nest := _nest(sim)
 	sim.remove_ant(nest.queen_ant)  # no queen, no workers: nobody cares
 	var brood := nest.brood
-	# Clean at first, they develop a little; once dirty (45 s) nothing moves.
-	_run_seconds(sim, 60.0)
+	# Clean at first, they develop a little; once dirty (90 s) nothing moves.
+	_run_seconds(sim, 100.0)
 	var stages := brood.stage.duplicate()
 	var ages := {}
 	for k in brood.count():
@@ -69,7 +69,7 @@ func test_care_is_required() -> void:
 	var larvae := brood.count_stage(Stage.LARVA)
 	var deaths := brood.deaths
 	_run_seconds(sim, 90.0)
-	check(brood.count_stage(Stage.EGG) >= 3 and brood.count_stage(Stage.PUPA) >= 3, "eggs and pupae still there")
+	check(brood.count_stage(Stage.EGG) + brood.count_stage(Stage.PUPA) + brood.count_stage(Stage.CALLOW) >= 6, "eggs and pupae still there")
 	check_eq(brood.count_stage(Stage.LARVA), 0, "larvae starved")
 	check_eq(brood.deaths, deaths + larvae, "every hungry larva died")
 	check(brood.deaths >= 3, "starvation (%d)" % brood.deaths)
@@ -165,7 +165,7 @@ func test_founding_sequence_opens_the_entrance() -> void:
 
 ## Every callow becomes exactly one ant; population counts every agent.
 func test_emergence_and_population_accounting() -> void:
-	var sim := _sim({"queen": 1, "minim": 8}, {}, {"initial": {"pupa": 6}})
+	var sim := _sim({"queen": 1, "minim": 8}, {}, {"initial": {"pupa": 6}, "first_caste": 1, "first_workers": 100})
 	var nest := _nest(sim)
 	var brood := nest.brood
 	_run_seconds(sim, 60.0)
@@ -179,7 +179,7 @@ func test_emergence_and_population_accounting() -> void:
 	check_eq(alive, 1 + 8 + nest.ants_raised, "queen + starting workers + raised")
 	var ant := brood.emerge_ants[0]
 	check(ant >= 0 and sim.alive[ant] != 0, "the logged ant exists")
-	check_eq(sim.caste_of(ant).id, &"minim", "the first workers are minims")
+	check_eq(sim.caste_of(ant).id, &"media", "first_caste sets the first workers' caste")
 	# New workers who come up are pointed out on the surface.
 	var highlighted := false
 	for t in 120 * _config.tick_rate:

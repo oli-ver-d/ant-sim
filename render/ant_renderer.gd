@@ -77,12 +77,20 @@ func _process(_delta: float) -> void:
 	# above carried items) draws only ants riding on items.
 	var list: PackedInt32Array = _collect_riders() if riders_only else PackedInt32Array()
 	var n := list.size() if riders_only else sim.high_water
-	if n > multimesh.instance_count:
+	# Filler ants stand in for a colony's abstract population (see _fillers()).
+	var fill := PackedFloat32Array()
+	var fill_total := 0
+	if not riders_only:
+		fill = _fill_ratios()
+		for r in fill:
+			fill_total = maxi(fill_total, ceili(r))
+	var slots := n * (1 + fill_total)
+	if slots > multimesh.instance_count:
 		# Grow in chunks; changing instance_count discards the old buffer.
-		multimesh.instance_count = maxi(maxi(n, multimesh.instance_count * 2), 256)
+		multimesh.instance_count = maxi(maxi(slots, multimesh.instance_count * 2), 256)
 		_buffer.resize(multimesh.instance_count * STRIDE)
 		_buffer.fill(0.0)
-	multimesh.visible_instance_count = n
+	var shown := n
 
 	var alive := sim.alive
 	var riding := sim.riding
@@ -137,6 +145,12 @@ func _process(_delta: float) -> void:
 			hq += 1024.0 * roundf((1.0 - sim.portal_fade(i)) * 15.0)
 		_buffer[o + 15] = hq + fposmod(phase[i], TAU) / TAU * 0.999
 		o += STRIDE
+	if fill_total > 0:
+		shown = _fillers(n, fill, o)
+	# The canvas item only picks up a resized MultiMesh when redrawn.
+	if shown != multimesh.visible_instance_count:
+		queue_redraw()
+	multimesh.visible_instance_count = shown
 	multimesh.buffer = _buffer
 
 func _collect_riders() -> PackedInt32Array:
@@ -144,3 +158,57 @@ func _collect_riders() -> PackedInt32Array:
 	for id: int in sim.items:
 		out.append_array(sim.items[id].riders)
 	return out
+
+## Filler ants per real ant, per colony: its abstract population per agent
+## (up to MAX_FILL), so busy trails and tunnels look as busy as the whole
+## colony would make them. Render-only; the simulation never sees them.
+const MAX_FILL := 3.0
+
+func _fill_ratios() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for colony in sim.colonies:
+		out.append(minf(MAX_FILL, float(colony.abstract) / maxf(1.0, colony.population)))
+	return out
+
+## Appends filler instances after the n real ones (starting at buffer
+## offset o): each moving ant gets floor(ratio) followers, plus one more for
+## a share of ants, trailing a little behind and beside it. Returns the
+## instance count.
+func _fillers(n: int, fill: PackedFloat32Array, o: int) -> int:
+	var count := n
+	var colony_id := sim.colony_id
+	var caste_id := sim.caste_id
+	var layers := sim.layer
+	var layered := sim.layers.size() > 1
+	for i in n:
+		if sim.alive[i] == 0 or sim.riding[i] >= 0 or (layered and layers[i] != layer):
+			continue
+		var r := fill[colony_id[i]]
+		var extra := int(r)
+		if float((i * 2654435761) & 0xFFFF) / 65536.0 < r - extra:
+			extra += 1
+		if extra == 0 or sim.caste_of(i).spawn_ratio <= 0.0:
+			continue
+		var look := _colony_base[colony_id[i]] + caste_id[i]
+		var s := _look_size[look]
+		var base := i * STRIDE
+		var h := wrapf(_heading_of(i), -PI, PI)
+		var fwd := Vector2.from_angle(h)
+		var size := sim.caste_of(i).size
+		for j in extra:
+			var jitter := float(((i + 7 * j) * 40503) & 0xFF) / 255.0 - 0.5
+			var p := Vector2(_buffer[base + 3], _buffer[base + 7]) - fwd * size * (1.7 + 1.5 * j) + fwd.orthogonal() * size * jitter * 1.4
+			for k in STRIDE:
+				_buffer[o + k] = _buffer[base + k]
+			_buffer[o] = s
+			_buffer[o + 5] = s
+			_buffer[o + 3] = p.x
+			_buffer[o + 7] = p.y
+			# Out of step with its leader.
+			_buffer[o + 15] = floorf(_buffer[base + 15]) + fposmod(_buffer[base + 15] + 0.37 * (j + 1), 1.0) * 0.999
+			o += STRIDE
+			count += 1
+	return count
+
+func _heading_of(i: int) -> float:
+	return lerp_angle(sim.prev_heading[i], sim.shown_heading[i], alpha)

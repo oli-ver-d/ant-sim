@@ -287,16 +287,19 @@ func _brood_caste(sim: Simulation, nest: FungusNest, species: SpeciesDef) -> int
 # With nobody to care for them brood stalls: eggs and pupae get dirty,
 # larvae starve. Tasks are claimed by one ant at a time (claimed).
 #
-# params: care, dirt_rate, hunger_rate, starve_time, first_caste, first_workers
+# params: care, dirt_rate, hunger_rate, starve_time, first_caste, first_workers,
+#         brood_per_worker (the queen lays up to this per worker)
 
 enum Pile { QUEEN, EGGS, LARVAE, PUPAE, CARRIED, LOOSE }
 ## Distance within which brood counts as lying in its pile (grows with the slot).
 const PILE_REACH := 14.0
 
 var care: bool = false
-var dirt_rate: float = 1.0 / 45.0
-var hunger_rate: float = 1.0 / 22.0
+var dirt_rate: float = 1.0 / 90.0
+var hunger_rate: float = 1.0 / 40.0
 var starve_time: float = 120.0
+## Brood the queen keeps up to per worker (see care_limit()).
+var brood_per_worker: float = 2.5
 ## Caste index of the first workers (-1 = any), until first_workers are raised.
 var first_caste: int = -1
 var first_workers: int = 0
@@ -318,6 +321,7 @@ func _setup_care(params: Dictionary) -> void:
 	dirt_rate = float(params.get("dirt_rate", dirt_rate))
 	hunger_rate = float(params.get("hunger_rate", hunger_rate))
 	starve_time = float(params.get("starve_time", starve_time))
+	brood_per_worker = float(params.get("brood_per_worker", brood_per_worker))
 	first_caste = int(params.get("first_caste", first_caste))
 	first_workers = int(params.get("first_workers", first_workers))
 
@@ -391,9 +395,10 @@ func put_down(k: int, at: Vector2, nest: FungusNest) -> void:
 	pos[k] = at
 	slot[k] = 0
 
-## A nurse feeds larva k (the fungus was taken from the garden already).
-func feed(k: int) -> void:
-	hunger[k] = maxf(0.0, hunger[k] - 1.0)
+## A nurse feeds larva k `share` of a full feed (feed_mass(); the fungus
+## was taken from the garden already).
+func feed(k: int, share: float = 1.0) -> void:
+	hunger[k] = maxf(0.0, hunger[k] - share)
 	hungry_for[k] = 0.0
 
 func groom(k: int) -> void:
@@ -443,7 +448,8 @@ func _update_care(sim: Simulation, nest: FungusNest, dt: float) -> void:
 	var queen := nest.queen_ant
 	if (queen >= 0 and sim.alive[queen] != 0 and _budget >= 1.0
 			and _since_lay >= nest.lay_interval_now(sim, lay_interval) - 1e-6
-			and not starving and count() < max_brood and colony.population + count() < nest.max_population):
+			and not starving and count() < mini(max_brood, care_limit(sim, nest))
+			and colony.total_population() + count() < nest.max_population):
 		_budget -= 1.0
 		_since_lay = 0.0
 		var n := _add(Stage.EGG, _brood_caste(sim, nest, null), nest)
@@ -461,7 +467,12 @@ func _update_care(sim: Simulation, nest: FungusNest, dt: float) -> void:
 ## an emergence, as without care. Returns the ant (-1 if the sim is full).
 func free_callow(sim: Simulation, nest: FungusNest, k: int, state_id: String) -> int:
 	var colony := sim.colonies[nest.colony_id]
-	var ant := sim.spawn_ant(colony, caste[k], pos[k], sim.rng.randf_range(-PI, PI), nest.underground_layer)
+	var ant := -1
+	# Into a full nest the new worker joins the abstract population.
+	if sim.layer_full(nest.underground_layer):
+		sim.add_abstract(colony, caste[k])
+	else:
+		ant = sim.spawn_ant(colony, caste[k], pos[k], sim.rng.randf_range(-PI, PI), nest.underground_layer)
 	if ant >= 0 and state_id != "" and sim.state_id(ant) != state_id:
 		sim.change_state(ant, state_id)
 	nest.ants_raised += 1
@@ -482,3 +493,9 @@ func _hash_care(ctx: HashingContext) -> void:
 		ctx.update(claimed.to_byte_array())
 		ctx.update(dirt.to_byte_array())
 		ctx.update(hunger.to_byte_array())
+
+## Brood the colony can look after: brood_per_worker per worker (at least
+## 10, so a founding queen can start). The queen lays no more than this, so
+## brood isn't laid only to starve.
+func care_limit(sim: Simulation, nest: FungusNest) -> int:
+	return maxi(10, int(nest.workers_alive(sim) * brood_per_worker))

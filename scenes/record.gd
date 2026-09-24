@@ -2,7 +2,7 @@ extends Node
 ## Recording entry point, meant to run under Movie Maker:
 ##
 ##   godot --path . --write-movie out/frame.png --fixed-fps 60 res://scenes/record.tscn \
-##         -- --scenario=<name> [--seed=<n>] [--duration=<s>] [--layout=split|normal] [--at=<s>]
+##         -- --scenario=<name> [--seed=<n>] [--duration=<s>] [--layout=split|normal|nest] [--at=<s>]
 ##
 ## --at fast-forwards to that video time before the first frame (for drafts
 ## and stills of a later moment).

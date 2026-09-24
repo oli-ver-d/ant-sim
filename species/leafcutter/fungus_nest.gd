@@ -40,7 +40,8 @@ extends NestType
 ##         brood (optional, see LeafcutterBrood), underground (optional, see
 ##         NestType and FungusChambers) with, for it: open_entrance_at,
 ##         brood_per_nurse, retinue_max, dig_fraction, queen_groom_time,
-##         queen_reserve (a sealed nest: 30), queen_feed_rate, initial_chambers
+##         queen_reserve (a sealed nest: 30), queen_feed_rate, initial_chambers,
+##         garden_reserve (replaces brood_reserve: a share of garden capacity)
 
 var fungus: float = 60.0
 var substrate: float = 0.0
@@ -78,11 +79,16 @@ var chambers_layout: FungusChambers
 var queen_ant: int = -1
 ## Workers needed before a sealed nest digs its entrance open.
 var open_entrance_at: int = 4
-var brood_per_nurse: float = 6.0
+## Larvae a nurse can feed (eggs and pupae: four times as many).
+var brood_per_nurse: float = 2.5
 var retinue_max: int = 5
 var dig_fraction: float = 0.3
+## How much each role's shortfall counts when choosing (see pick_role).
+const ROLE_WEIGHT := {"nurse": 3.0, "tend_queen": 1.5, "dig": 1.2, "garden": 1.0}
 ## Share of a caste that works inside when no role is short (see pick_role).
 var inside_share: float = 0.6
+## Share of the gardens' capacity kept back from brood (see reserve()).
+var garden_reserve: float = 0.3
 ## Seconds a grooming keeps the queen laying at her full pace.
 var queen_groom_time: float = 60.0
 ## Simulated time the queen was last groomed.
@@ -101,9 +107,9 @@ var leaf_on_floor: PackedInt32Array = []
 ## Spent material weeded out, and mass of it carried out of the nest.
 var weeded_mass: float = 0.0
 ## Body reserves a founding queen feeds her garden with (as substrate, at
-## queen_feed_rate per second) while the nest is sealed and has no leaf.
+## queen_feed_rate per second) until the first leaf comes in.
 var queen_reserve: float = 0.0
-var queen_feed_rate: float = 0.05
+var queen_feed_rate: float = 0.15
 var _entrance_planned: bool = false
 var _role_timer: float = 0.0
 
@@ -219,6 +225,7 @@ func _prepare_underground(sim: Simulation, under: Dictionary, params: Dictionary
 	queen_groom_time = float(params.get("queen_groom_time", queen_groom_time))
 	queen_reserve = float(params.get("queen_reserve", 0.0 if bool(u.get("open", true)) else 30.0))
 	queen_feed_rate = float(params.get("queen_feed_rate", queen_feed_rate))
+	garden_reserve = float(params.get("garden_reserve", garden_reserve))
 	return u
 
 func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
@@ -251,7 +258,7 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -
 	garden = GardenGrid.new()
 	garden.setup(Vector2(l.world.size), params.get("underground", {}))
 	garden.cap = chamber_capacity / (PI * 50.0 * 50.0 / (GardenGrid.CELL * GardenGrid.CELL))
-	garden.add_chamber(0, garden_spot(), royal.radius * 0.5)
+	garden.add_chamber(0, garden_spot(), royal.radius * 0.62, royal.centre, royal.radius * 0.88)
 	for c in chambers_layout.list:
 		if c.dug and c.kind == FungusChambers.Kind.GARDEN:
 			garden.add_chamber(c.index, c.centre, c.radius * 0.9)
@@ -268,9 +275,9 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 	garden.fungus_yield = fungus_yield
 	var before := garden.total_fungus() + garden.total_substrate()
 	garden.update(dt, sim.rng)
-	fungus_eaten += garden.eat(upkeep_per_ant * colony.population * dt)
-	# A sealed founding nest gets no leaf: the queen manures her garden.
-	if queen_reserve > 0.0 and not has_entrance() and queen_ant >= 0 and sim.alive[queen_ant] != 0:
+	fungus_eaten += garden.eat(upkeep_per_ant * colony.total_population() * dt)
+	# Until the first leaf comes in, the queen manures her garden.
+	if queen_reserve > 0.0 and leaf_items == 0 and queen_ant >= 0 and sim.alive[queen_ant] != 0:
 		var m := minf(queen_reserve, queen_feed_rate * dt)
 		if garden.plant(garden_spot(), m, chambers_layout.royal().radius * 0.4) > 0.0:
 			queen_reserve -= m
@@ -290,6 +297,7 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 		for c in chambers_layout.list:
 			if c.dug and c.kind == FungusChambers.Kind.GARDEN and not garden.has_chamber(c.index):
 				garden.add_chamber(c.index, c.centre, c.radius * 0.9)
+				_seed_new_garden(sim, c.index)
 
 ## Ants of this colony other than the queen.
 func workers_alive(sim: Simulation) -> int:
@@ -408,7 +416,9 @@ func _count_roles(sim: Simulation) -> void:
 	role_count["dig"] = role_count.get("dig", 0) + role_count.get("carry_spoil", 0)
 	var workers := workers_alive(sim)
 	role_need.clear()
-	role_need["nurse"] = ceili(brood.count() / brood_per_nurse) if brood.count() > 0 else 0
+	# Larvae need feeding; eggs and pupae only moving and grooming.
+	var larvae := brood.count_stage(LeafcutterBrood.Stage.LARVA)
+	role_need["nurse"] = ceili(larvae / brood_per_nurse + (brood.count() - larvae) / (brood_per_nurse * 4.0)) if brood.count() > 0 else 0
 	@warning_ignore("integer_division")
 	role_need["tend_queen"] = clampi(workers / 25, 1, retinue_max) if workers >= 3 else 0
 	var dig_work := 0
@@ -418,7 +428,7 @@ func _count_roles(sim: Simulation) -> void:
 			dig_work += job.remaining
 			dig_slots += job.max_diggers
 	# Digging gets more hands the fuller the gardens are.
-	var dig_cap := maxi(2, int(workers * dig_fraction * clampf(garden_pressure(), 0.3, 1.0)))
+	var dig_cap := maxi(2, int(workers * dig_fraction * clampf(garden_pressure(), 0.3, 1.7)))
 	role_need["dig"] = mini(mini(ceili(dig_work / 20.0), dig_cap), dig_slots) if dig_work > 0 else 0
 	# Gardeners: to cut up leaf waiting by the gardens, weed, and tend.
 	role_need["garden"] = ceili(leaf_on_floor.size() * 1.5 + garden.total_spent() / (waste_load * 3.0)
@@ -433,18 +443,21 @@ func pick_role(sim: Simulation, caste: int) -> String:
 	for r: String in ["nurse", "tend_queen", "garden", "dig"]:
 		if colony.allows(caste, sim.behaviour_index[r]):
 			roles.append(r)
+	# The role most short of hands relative to its need, brood care first.
 	var best := ""
-	var best_short := 0
+	var best_short := 0.0
 	for r in roles:
-		var short: int = role_need.get(r, 0) - role_count.get(r, 0)
-		if short > best_short:
+		var need: int = role_need.get(r, 0)
+		var short: float = float(need - role_count.get(r, 0)) / maxf(1.0, need) * float(ROLE_WEIGHT.get(r, 1.0))
+		if need > role_count.get(r, 0) and short > best_short:
 			best_short = short
 			best = r
 	if best == "":
-		# Nothing short: gardeners by default (minims mostly work inside),
-		# up to inside_share of the caste; the rest go out.
+		# Nothing short: minims garden by default (they mostly work inside), up
+		# to inside_share of them; the rest, and bigger castes, go out.
 		var inside: int = role_count.get("nurse", 0) + role_count.get("tend_queen", 0) + role_count.get("garden", 0)
-		if roles.has("garden") and (not has_entrance() or inside < colony.population_by_caste[caste] * inside_share):
+		var minim := colony.species.castes[caste].id == &"minim"
+		if roles.has("garden") and minim and (not has_entrance() or inside < colony.population_by_caste[caste] * inside_share):
 			best = "garden"
 		elif has_entrance():
 			best = "go_up"
@@ -471,13 +484,14 @@ func _plan_entrance() -> void:
 func _plan_chambers() -> void:
 	if not has_entrance() or chambers_layout.count() >= max_chambers:
 		return
-	# One chamber at a time, or two when the gardens are overflowing.
+	# One chamber at a time, more at once (up to four) the more the gardens
+	# are overflowing.
 	var undug := 0
 	for c in chambers_layout.list:
 		if not c.dug:
 			undug += 1
 	var pressure := garden_pressure()
-	if pressure < 0.8 or undug >= (2 if pressure > 1.2 else 1):
+	if pressure < 0.8 or undug >= clampi(int(pressure * 2.0), 1, 4):
 		return
 	var ch := chambers_layout.propose()
 	if ch != null:
@@ -532,20 +546,20 @@ func _sync_garden_totals(_before: float) -> void:
 	waste = garden.total_spent()
 	fungus_grown = garden.grown
 
-## Takes `mass` of fungus (gongylidia) from the garden cell at `at`. False
-## (nothing taken) if the cell hasn't enough or the garden is at its reserve.
-func take_fungus_at(at: Vector2, mass: float) -> bool:
+## Takes up to `mass` of fungus (gongylidia) from the garden around `at`.
+## Returns what was taken: 0 if the garden is at its reserve or there is
+## too little here (under a quarter of `mass`, which is put back).
+func take_fungus_at(at: Vector2, mass: float) -> float:
 	if fungus - mass <= reserve() * 0.5:
-		return false
+		return 0.0
 	var got := garden.take_around(at, mass)
-	if got < mass * 0.999:
-		# Not enough here: put it back and try elsewhere.
+	if got < mass * 0.25:
 		if got > 0.0:
 			garden.add_fungus(maxi(0, garden.cell_at(at)), got)
-		return false
-	fed_mass += mass
+		return 0.0
+	fed_mass += got
 	fungus = garden.total_fungus()
-	return true
+	return got
 
 ## Puts fungus an ant was carrying back into the garden nearest `at`.
 func return_fungus(at: Vector2, mass: float) -> void:
@@ -573,16 +587,18 @@ func _nearest_garden(at: Vector2, with_fungus: bool) -> int:
 			best = c.index
 	return best
 
-## The garden chamber leaf should go to: the one with the most room.
+## The garden leaf should go to: where fungus grows with room to spare
+## (fungus x room, so a garden that is just starting counts too).
 func leaf_chamber() -> int:
 	var best := 0
-	var best_fill := INF
+	var best_score := -1.0
 	for c in chambers_layout.list:
-		if c.index == 0 or not garden.has_chamber(c.index):
+		if not garden.has_chamber(c.index):
 			continue
 		var f := garden.fill(c.index)
-		if f < best_fill:
-			best_fill = f
+		var score := minf(f, 0.25) * (1.0 - f)
+		if score > best_score:
+			best_score = score
 			best = c.index
 	return best
 
@@ -686,7 +702,11 @@ func weed_point(sim: Simulation) -> Vector2:
 func weed_at(sim: Simulation, at: Vector2) -> Item:
 	var got := garden.weed(at, waste_load)
 	waste = garden.total_spent()
-	if got <= 1e-5:
+	if got <= waste_load * 0.05:
+		# Hardly anything: leave the crumbs for a later round.
+		if got > 0.0:
+			garden.spent[maxi(0, garden.cell_at(at))] += got
+			garden.recount()
 		return null
 	weeded_mass += got
 	var item := sim.create_item("waste", got)
@@ -694,13 +714,14 @@ func weed_at(sim: Simulation, at: Vector2) -> Item:
 	item.color = Color(0.4, 0.34, 0.24)
 	return item
 
-## Fungus kept back from brood: brood_reserve, but in a nest whose gardens
-## are cells in chambers at most a fifth of what they can hold (a founding
-## garden is small).
+## Fungus kept back from brood: brood_reserve; in a nest whose gardens are
+## cells in chambers, garden_reserve of what they can hold (unless 0), so the gardens
+## fill up (and grow faster) before brood takes the surplus, and grow on as
+## new chambers are dug.
 func reserve() -> float:
-	if garden == null:
+	if garden == null or garden_reserve <= 0.0:
 		return brood_reserve
-	return minf(brood_reserve, garden.capacity() * 0.2)
+	return maxf(1.0, garden.capacity() * garden_reserve)
 
 ## How full the gardens will be once the pulp waiting on them has grown
 ## (1 = full).
@@ -739,3 +760,76 @@ func short_elsewhere(except: String) -> bool:
 		if r != except and role_need[r] > role_count.get(r, 0):
 			return true
 	return false
+
+# --- Abstract population ------------------------------------------------------------------
+
+## Ants back from the abstract population: underground, somewhere in a dug
+## chamber taking a nest role; on the surface, at the entrance.
+func spawn_from_pool(sim: Simulation, caste: int, l: int) -> int:
+	if chambers_layout == null or l != underground_layer:
+		return super.spawn_from_pool(sim, caste, l)
+	var dug: Array[FungusChambers.Chamber] = []
+	for c in chambers_layout.list:
+		if c.dug:
+			dug.append(c)
+	var ch := dug[sim.rng.randi() % dug.size()]
+	var at := ch.centre + Vector2.from_angle(sim.rng.randf() * TAU) * ch.radius * 0.7 * sqrt(sim.rng.randf())
+	var i := sim.spawn_ant(sim.colonies[colony_id], caste, at, sim.rng.randf_range(-PI, PI), l)
+	if i >= 0:
+		sim.change_state(i, first_state(sim, caste))
+	return i
+
+## The colony's size and brood, for the nest view's readout.
+func stats_lines(sim: Simulation) -> PackedStringArray:
+	var out := PackedStringArray()
+	var n := sim.colonies[colony_id].total_population()
+	out.append("%s %s" % [_thousands(n), "ant" if n == 1 else "ants"])
+	if brood != null:
+		var eggs := brood.count_stage(LeafcutterBrood.Stage.EGG)
+		var larvae := brood.count_stage(LeafcutterBrood.Stage.LARVA)
+		var pupae := brood.count_stage(LeafcutterBrood.Stage.PUPA) + brood.count_stage(LeafcutterBrood.Stage.CALLOW)
+		out.append("%d %s  ·  %d %s  ·  %d %s" % [eggs, "egg" if eggs == 1 else "eggs", larvae,
+				"larva" if larvae == 1 else "larvae", pupae, "pupa" if pupae == 1 else "pupae"])
+	return out
+
+static func _thousands(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	while s.length() > 3:
+		out = "," + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return s + out
+
+## A newly dug garden chamber gets a start: gardeners carry in a little
+## fungus from the fullest garden (moved, not made), planted at its middle.
+func _seed_new_garden(sim: Simulation, k: int) -> void:
+	var donor := -1
+	var best := 0.0
+	for ch in chambers_layout.list:
+		if garden.has_chamber(ch.index) and ch.index != k:
+			var f := garden.fill(ch.index)
+			if f > best:
+				best = f
+				donor = ch.index
+	if donor < 0:
+		return
+	var want := minf(3.0, fungus * 0.08)
+	var moved := 0.0
+	for n in 12:
+		var from := garden.harvest_cell(donor, sim.rng)
+		if from < 0:
+			break
+		moved += garden.take_fungus(from, minf(want - moved, garden.fungus_at(from) * 0.5))
+		if moved >= want:
+			break
+	if moved <= 0.0:
+		return
+	var centre := chambers_layout.list[k].centre
+	var cells: PackedInt32Array = []
+	for c in garden.cells.slice(garden.chamber_first[k], garden.chamber_first[k] + garden.chamber_count[k]):
+		if garden.cell_center(c).distance_to(centre) < 8.0:
+			cells.append(c)
+	if cells.is_empty():
+		cells.append(garden.cells[garden.chamber_first[k]])
+	for c in cells:
+		garden.add_fungus(c, moved / cells.size())

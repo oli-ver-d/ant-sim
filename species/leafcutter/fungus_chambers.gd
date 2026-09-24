@@ -89,7 +89,10 @@ func propose() -> Chamber:
 		# Recent chambers are likelier parents, so the nest grows outward.
 		var n := list.size()
 		var parent := list[mini(n - 1, int(pow(_rng.randf(), 0.6) * n))]
-		var r := _rng.randf_range(min_radius, max_radius)
+		# The first chambers are small (a young colony digs little); later ones
+		# span the whole range.
+		var grown := clampf((n - 1) / 8.0, 0.0, 1.0)
+		var r := _rng.randf_range(min_radius * (0.7 + 0.3 * grown), lerpf(min_radius, max_radius, grown))
 		var away := (parent.centre - list[0].centre)
 		var base := away.angle() if away.length() > 1.0 else _rng.randf_range(-PI, PI)
 		var dir := Vector2.from_angle(base + _rng.randf_range(-1.3, 1.3))
@@ -124,8 +127,10 @@ func add(ch: Chamber, plan: ExcavationPlan, priority: float) -> void:
 	var dir := (ch.centre - parent.centre).normalized()
 	var start := parent.centre + dir * parent.radius * 0.8
 	var tunnel_end := ch.centre - dir * ch.radius * 0.6
-	var tunnel := plan.add_job("tunnel%d" % ch.index, start, start, tunnel_end, tunnel_radius, priority, 4)
-	var chamber := plan.add_job("chamber%d" % ch.index, tunnel_end, ch.centre, ch.centre, ch.radius, priority + 0.5, 8)
+	var tunnel := plan.add_job("tunnel%d" % ch.index, start, start, tunnel_end, tunnel_radius, priority, 6)
+	# Room for more diggers in a bigger chamber.
+	var chamber := plan.add_job("chamber%d" % ch.index, tunnel_end, ch.centre, ch.centre, ch.radius, priority + 0.5,
+			clampi(int(ch.radius / 3.0), 8, 20))
 	ch.tunnel_job = tunnel.id
 	ch.job = chamber.id
 	ch.nav_field = plan.nav.set_target_point(StringName("chamber:%d" % ch.index), ch.centre)

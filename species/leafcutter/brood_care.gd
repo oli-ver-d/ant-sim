@@ -24,6 +24,9 @@ const FREE_TIME := 2.8
 ## A larva this hungry gets fed; brood this dirty gets groomed.
 const HUNGRY := 0.55
 const DIRTY := 0.45
+## Brood this dirty is groomed before anything but freeing callows and
+## taking eggs from the queen (at 1 it stops developing).
+const FILTHY := 0.75
 ## Seconds between looks for work when there is none.
 const LOOK_EVERY := 1.0
 
@@ -65,8 +68,8 @@ static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_spee
 			elif step == 1:
 				_work(sim, i, dt, sim.target[i] + Vector2(1, 0))
 				if sim.scratch_f0[i] >= HARVEST_TIME:
-					var m := brood.feed_mass(nest)
-					if not nest.take_fungus_at(sim.target[i], m):
+					var m := nest.take_fungus_at(sim.target[i], brood.feed_mass(nest))
+					if m <= 0.0:
 						# Too little here: try another spot next time.
 						abandon(sim, i, nest)
 						return true
@@ -81,8 +84,8 @@ static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_spee
 			else:
 				_work(sim, i, dt, brood.pos[k])
 				if sim.scratch_f0[i] >= FEED_TIME:
-					brood.feed(k)
 					var item := sim.item_of(i)
+					brood.feed(k, item.mass / brood.feed_mass(nest) if item != null else 1.0)
 					if item != null:
 						sim.carried[i] = -1
 						item.carrier = -1
@@ -143,9 +146,13 @@ static func _pick(sim: Simulation, i: int, nest: FungusNest, only_chamber: int) 
 		var rank := 0
 		if brood.callow_ready(k):
 			task = Task.FREE
-			rank = 5
+			rank = 6
 		elif brood.pile[k] == Pile.QUEEN:
 			task = Task.CARRY
+			rank = 5
+		elif brood.dirt[k] >= FILTHY:
+			# Nearly too dirty to develop: nothing else helps it until groomed.
+			task = Task.GROOM
 			rank = 4
 		elif brood.stage[k] == Stage.LARVA and brood.hunger[k] >= HUNGRY and can_feed:
 			task = Task.FEED

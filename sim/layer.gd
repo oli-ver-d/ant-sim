@@ -21,6 +21,9 @@ var nav_grid: NavGrid
 ## from soaking through walls). Only worth it on the surface: an underground
 ## is almost all soil and its routing doesn't use pheromones.
 var clear_blocked: bool = true
+## Most agents (ants simulated one by one) this layer holds; beyond it a
+## colony grows as an abstract population (Simulation.balance_pools). 0 = no limit.
+var max_agents: int = 0
 
 var _blocked_cells: PackedInt32Array = []
 var _blocked_version: int = -1

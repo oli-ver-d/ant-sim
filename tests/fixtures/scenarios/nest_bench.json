@@ -1,0 +1,24 @@
+{
+	"name": "nest_bench",
+	"description": "Benchmark: an established nest that digs its own underground, busy above and below (~1,500 ants), for tests/bench.gd.",
+	"seed": 9,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1000],
+			"population": {"queen": 1, "minim": 700, "media": 700, "major": 60},
+			"nest_params": {
+				"initial_fungus": 900, "initial_chambers": 8, "chamber_capacity": 90, "max_chambers": 30,
+				"underground": {"size": [1400, 1400], "garden_life": 1500},
+				"brood": {"lay_interval": 1.5, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 400,
+					"initial": {"egg": 60, "larva": 80, "pupa": 60}}
+			}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [380, 760], "rotation": -30, "length": 320, "width": 150, "shape": "elliptic", "teeth": 24, "seed": 3},
+		{"type": "leaf", "pos": [760, 820], "rotation": 40, "length": 320, "width": 150, "shape": "lanceolate", "teeth": 22, "seed": 8},
+		{"type": "leaf", "pos": [300, 1350], "rotation": 60, "length": 320, "width": 150, "shape": "elliptic", "teeth": 24, "seed": 13},
+		{"type": "leaf", "pos": [800, 1400], "rotation": -60, "length": 320, "width": 150, "shape": "elliptic", "teeth": 24, "seed": 17}
+	]
+}

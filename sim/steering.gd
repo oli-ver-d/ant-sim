@@ -123,7 +123,7 @@ static func avoid_turn(world: World, at: Vector2, heading_rad: float, lookahead:
 static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float, dt: float) -> void:
 	var colony := sim.colonies[sim.colony_id[i]]
 	var c := sim.caste_id[i]
-	var world := sim.world if sim.layer[i] == 0 else sim.layers[sim.layer[i]].world
+	var world := sim.layers[sim.layer[i]].world if sim.multi_layer else sim.world
 	var at := sim.pos[i]
 	var h := sim.heading[i]
 	var max_turn := colony.caste_turn_rate[c]

@@ -159,6 +159,8 @@ var spoil_mass: float = 0.0
 var spoil_items: int = 0
 ## Soil bitten out while the entrance was closed (pressed into the walls).
 var packed_spoil: float = 0.0
+## Weight of spoil per unit of digging work (see make_spoil()).
+const SPOIL_WEIGHT := 0.3
 ## An ant a view should point out, e.g. a worker that has just come out of
 ## the nest onto the surface (-1 = none); see SplitLayout.
 var highlight_ant: int = -1
@@ -204,9 +206,11 @@ func receive_spoil(_sim: Simulation, item: Item) -> void:
 	spoil_mass += item.mass
 	spoil_items += 1
 
-## A new spoil pellet (the digger picks it up).
-func make_spoil(sim: Simulation, mass: float) -> Item:
-	var item := sim.create_item("spoil", mass)
+## A new spoil pellet for `dug` work of soil (the digger picks it up). A
+## pellet weighs SPOIL_WEIGHT per unit of work, so carrying it slows a
+## digger down about like any other load.
+func make_spoil(sim: Simulation, dug: float) -> Item:
+	var item := sim.create_item("spoil", dug * SPOIL_WEIGHT)
 	item.radius = 1.7
 	item.color = Color(0.42, 0.3, 0.2)
 	return item
@@ -228,3 +232,35 @@ func spawn_initial(sim: Simulation, caste: int) -> int:
 ## core "go_up" behaviour), e.g. to point out a new worker.
 func ant_surfaced(_sim: Simulation, _i: int) -> void:
 	pass
+
+## The caste of abstract ant to bring back as an agent onto layer l: the
+## one whose agents are furthest below its share of the whole colony (-1 if
+## the colony has none abstract).
+func pool_caste(sim: Simulation, _l: int) -> int:
+	var colony := sim.colonies[colony_id]
+	var best := -1
+	var best_gap := -INF
+	var total := maxf(1.0, colony.total_population())
+	var agents := maxf(1.0, colony.population)
+	for c in colony.abstract_by_caste.size():
+		if colony.abstract_by_caste[c] <= 0:
+			continue
+		var gap := colony.total_of_caste(c) / total - colony.population_by_caste[c] / agents
+		if gap > best_gap:
+			best_gap = gap
+			best = c
+	return best
+
+## Places an ant of caste c coming back from the abstract population onto
+## layer l and returns it (-1 if it couldn't be placed): at the entrance by
+## default.
+func spawn_from_pool(sim: Simulation, caste: int, l: int) -> int:
+	if l != 0:
+		return -1
+	return sim.spawn_ant(sim.colonies[colony_id], caste, entrance_position() + Vector2.from_angle(sim.rng.randf() * TAU) * 4.0,
+			sim.rng.randf_range(-PI, PI))
+
+## Lines of text about the colony a nest view may show (e.g. its size),
+## the first one larger. None by default.
+func stats_lines(_sim: Simulation) -> PackedStringArray:
+	return PackedStringArray()

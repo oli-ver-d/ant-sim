@@ -152,8 +152,9 @@ func _update_hud() -> void:
 	for colony in sim.colonies:
 		var history := _delivery_history[colony.id]
 		var per_min := colony.delivered_items - history[0] if history.size() > 0 else 0
-		lines.append("%s #%d: %d ants, %d delivered (%d/min)" % [colony.species.display_name, colony.id,
-				colony.population, colony.delivered_items, per_min])
+		var simulated := "" if colony.abstract == 0 else " (%d simulated)" % colony.population
+		lines.append("%s #%d: %d ants%s, %d delivered (%d/min)" % [colony.species.display_name, colony.id,
+				colony.total_population(), simulated, colony.delivered_items, per_min])
 	hud.text = "\n".join(lines)
 
 func _unhandled_input(event: InputEvent) -> void:

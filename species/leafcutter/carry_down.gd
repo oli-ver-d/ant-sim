@@ -6,7 +6,7 @@ extends Behaviour
 ## the gardeners to cut up, then -> `next`. Hitchhikers get off at the
 ## entrance.
 ##
-## params: next ("go_up")
+## params: next ("go_up"; leafcutters: "nest_role", to dig if needed)
 ## scratch_f0: 1 once a drop point is chosen (in target)
 
 func enter(sim: Simulation, i: int) -> void:

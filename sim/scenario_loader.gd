@@ -9,6 +9,8 @@ extends RefCounted
 ##   "obstacles": [shape, ...]              (see ScenarioEvents for shapes)
 ##   "debris":    [{"type": "twig" | "pebble", "pos": [x, y], ...}]  (see Debris)
 ##   "events":    [{"t": seconds, "type": ..., ...}]   (see ScenarioEvents)
+##   "max_agents": {"surface": n, "nest": n}   agents per layer, beyond which
+##                colonies grow as an abstract population (Simulation.balance_pools)
 ##
 ## Playback settings (used by ScenarioPlayer, not the simulation):
 ##   "duration": video seconds,
@@ -44,6 +46,12 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 		Debris.create(sim, d)
 	for col: Dictionary in data.get("colonies", []):
 		ScenarioEvents.add_colony(sim, col)
+	# Agent caps per layer: "surface", or "nest" for every nest's underground.
+	var caps: Dictionary = data.get("max_agents", {})
+	for l in sim.layers:
+		var key := "surface" if l.index == 0 else "nest"
+		if caps.has(key):
+			sim.set_max_agents(l.index, int(caps[key]))
 	var events: Array[Dictionary] = []
 	for ev: Dictionary in data.get("events", []):
 		events.append(ev)

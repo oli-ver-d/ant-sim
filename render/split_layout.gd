@@ -57,6 +57,8 @@ var _ring_ant: int = -1
 var _ring_age: float = INF
 var _split_surface: Rect2
 var _split_under: Rect2
+## The nest's readout (NestType.stats_lines) over a layered nest's view.
+var _stats: Control
 
 ## Builds the layout for spec's colony, or returns null if its nest has
 ## neither an underground layer nor a cutaway view.
@@ -130,6 +132,11 @@ func _build(surface_on_top: bool) -> void:
 	_seam.size = Vector2(FRAME.x, SEAM)
 	_seam.draw.connect(_draw_seam)
 	add_child(_seam)
+	if nest_viewport != null:
+		_stats = Control.new()
+		_stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_stats.draw.connect(_draw_stats)
+		add_child(_stats)
 	if "safe_rect" in underground:
 		var safe := Rect2(0, Overlays.SafeZones.TOP, FRAME.x - Overlays.SafeZones.RIGHT,
 				FRAME.y - Overlays.SafeZones.TOP - Overlays.SafeZones.BOTTOM)
@@ -169,6 +176,8 @@ func _process(delta: float) -> void:
 		_ring_age = 0.0
 	_ring_age += delta
 	_ring.queue_redraw()
+	if _stats != null:
+		_stats.queue_redraw()
 
 ## A soft ring around the highlighted ant, fading out.
 func _draw_ring() -> void:
@@ -197,3 +206,19 @@ func screen_to_world(screen: Vector2) -> Vector2:
 ## Position on the nest's layer under a screen point (frame pixels).
 func screen_to_nest(screen: Vector2) -> Vector2:
 	return nest_viewport.canvas_transform.affine_inverse() * (screen - underground_rect.position)
+
+## The nest's readout, top left of the nest part inside the TikTok/Reels
+## safe area (see Overlays.SafeZones).
+func _draw_stats() -> void:
+	var lines := nest.stats_lines(sim)
+	if lines.is_empty():
+		return
+	var font := ThemeDB.fallback_font
+	var at := Vector2(40, maxf(underground_rect.position.y, Overlays.SafeZones.TOP) + 24)
+	var sizes: PackedInt32Array = [46, 28]
+	for n in lines.size():
+		var fs := sizes[mini(n, 1)]
+		at.y += fs
+		_stats.draw_string_outline(font, at, lines[n], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 7, Color(0.05, 0.03, 0.02, 0.8))
+		_stats.draw_string(font, at, lines[n], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 0.97, 0.9, 0.95))
+		at.y += 10

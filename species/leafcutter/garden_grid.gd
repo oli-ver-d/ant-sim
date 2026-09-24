@@ -11,8 +11,9 @@ extends RefCounted
 ##   gong       gongylidia (the swollen hyphal tips ants eat), 0-1
 ##   sick       1 if a mould has taken hold (spreads until weeded)
 ##
-## It is the M8 model, per cell: fungus digests substrate at digest_rate *
-## fungus per second, turning fungus_yield of it into fungus and the rest
+## It is the M8 model: the gardens digest their pulp at digest_rate * fungus
+## per second (each cell by its share of the pulp, growing fungus there),
+## turning fungus_yield of it into fungus and the rest
 ## into spent material; the colony's upkeep eats from every cell alike (a
 ## lazy scale, like PheromoneField's, so that costs nothing per cell). So
 ## FungusNest.fungus, .substrate and .waste are this grid's totals.
@@ -55,7 +56,7 @@ var version: int = 0
 var digest_rate: float = 0.02
 var fungus_yield: float = 0.6
 var life: float = 900.0
-var sick_rate: float = 0.000002
+var sick_rate: float = 0.0000005
 var gong_rate: float = 1.0 / 90.0
 ## Fungus grown in total (digested pulp * fungus_yield).
 var grown: float = 0.0
@@ -64,6 +65,13 @@ var _cursor: int = 0
 var _sum_fungus: float = 0.0
 var _sum_substrate: float = 0.0
 var _sum_spent: float = 0.0
+## Fungus and pulp in all the gardens as of the last full sweep (digestion
+## uses them).
+var _sweep_fungus: float = 0.0
+var _sweep_substrate: float = 0.0
+## Stored fungus and spent material per chamber, as of the last full sweep.
+var _chamber_fungus: PackedFloat32Array = []
+var _chamber_spent: PackedFloat32Array = []
 
 func setup(layer_size: Vector2, params: Dictionary) -> void:
 	width = int(layer_size.x / CELL)
@@ -80,8 +88,9 @@ func setup(layer_size: Vector2, params: Dictionary) -> void:
 	life = float(params.get("garden_life", life))
 	sick_rate = float(params.get("mould_rate", sick_rate))
 
-## Makes the cells within `radius` of `centre` the garden of chamber k.
-func add_chamber(k: int, centre: Vector2, radius: float) -> void:
+## Makes the cells within `radius` of `centre` (and within `clip_radius` of
+## `clip_centre`, if given: the chamber's walls) the garden of chamber k.
+func add_chamber(k: int, centre: Vector2, radius: float, clip_centre: Vector2 = Vector2.ZERO, clip_radius: float = 0.0) -> void:
 	while chamber_first.size() <= k:
 		chamber_first.append(cells.size())
 		chamber_count.append(0)
@@ -92,7 +101,8 @@ func add_chamber(k: int, centre: Vector2, radius: float) -> void:
 			var c := cy * width + cx
 			if chamber_of[c] != NONE:
 				continue
-			if Vector2((cx + 0.5) * CELL, (cy + 0.5) * CELL).distance_squared_to(centre) <= r2:
+			var at := Vector2((cx + 0.5) * CELL, (cy + 0.5) * CELL)
+			if at.distance_squared_to(centre) <= r2 and (clip_radius <= 0.0 or at.distance_to(clip_centre) <= clip_radius):
 				chamber_of[c] = k
 				cells.append(c)
 	chamber_count[k] = cells.size() - chamber_first[k]
@@ -127,14 +137,12 @@ func total_spent() -> float:
 func fungus_at(c: int) -> float:
 	return fungus[c] * fscale
 
-## Share of chamber k's room its fungus fills (0-1).
+## Share of chamber k's room its fungus fills (0-1), as of the last full
+## sweep (cached: callers ask often).
 func fill(k: int) -> float:
-	if not has_chamber(k):
+	if not has_chamber(k) or k >= _chamber_fungus.size():
 		return 0.0
-	var sum := 0.0
-	for j in range(chamber_first[k], chamber_first[k] + chamber_count[k]):
-		sum += fungus[cells[j]]
-	return sum * fscale / (chamber_count[k] * cap)
+	return _chamber_fungus[k] * fscale / (chamber_count[k] * cap)
 
 ## Fungus all the garden cells hold when full.
 func capacity() -> float:
@@ -145,13 +153,21 @@ func recount() -> void:
 	var f := 0.0
 	var s := 0.0
 	var w := 0.0
+	_chamber_fungus.resize(chamber_count.size())
+	_chamber_fungus.fill(0.0)
+	_chamber_spent.resize(chamber_count.size())
+	_chamber_spent.fill(0.0)
 	for c in cells:
 		f += fungus[c]
 		s += substrate[c]
 		w += spent[c]
+		_chamber_fungus[chamber_of[c]] += fungus[c]
+		_chamber_spent[chamber_of[c]] += spent[c]
 	_sum_fungus = f
 	_sum_substrate = s
 	_sum_spent = w
+	_sweep_fungus = f * fscale
+	_sweep_substrate = s
 
 # --- Changes -------------------------------------------------------------------------------
 
@@ -211,7 +227,7 @@ func plant(at: Vector2, mass: float, radius: float = 3.0) -> float:
 
 ## Removes up to `mass` of spent material around `at` (weeding; mouldy
 ## cells there are cleared too). Returns what was removed.
-func weed(at: Vector2, mass: float, radius: float = 4.0) -> float:
+func weed(at: Vector2, mass: float, radius: float = 9.0) -> float:
 	var got := 0.0
 	var r2 := radius * radius
 	for cy in range(maxi(0, int((at.y - radius) / CELL)), mini(height, int((at.y + radius) / CELL) + 1)):
@@ -247,16 +263,22 @@ func update(dt: float, rng: RandomNumberGenerator) -> void:
 		var s := substrate[c]
 		if f <= 0.0 and s <= 0.0 and spent[c] <= 0.0:
 			continue
-		# Digestion (fungus grows on pulp, up to the cell's capacity).
-		if f > 0.0 and s > 0.0:
-			var d := minf(s, digest_rate * f * fscale * step)
-			if f >= capr:
-				d = 0.0
+		# Digestion: the gardens digest their pulp at the M8 rate (digest_rate
+		# * all the fungus), each cell its share by the pulp on it; the new
+		# fungus grows where the pulp was.
+		if s > 0.0 and _sweep_fungus > 0.0:
+			var d := minf(s, digest_rate * _sweep_fungus * step * s / maxf(_sweep_substrate, s))
 			substrate[c] = s - d
 			_sum_substrate -= d
 			var gain := d * fungus_yield / fscale
 			grown += d * fungus_yield
-			fungus[c] = f + gain
+			# New growth is young: the cell's age is the mass-weighted age.
+			age[c] = age[c] * f / (f + gain) if f > 0.0 else 0.01
+			# A full cell spills its growth into a neighbouring garden cell.
+			var keep := minf(gain, maxf(0.0, capr - f))
+			fungus[c] = f + keep
+			if gain > keep:
+				_spill(c, gain - keep)
 			_sum_fungus += gain
 			spent[c] += d * (1.0 - fungus_yield)
 			_sum_spent += d * (1.0 - fungus_yield)
@@ -284,7 +306,7 @@ func update(dt: float, rng: RandomNumberGenerator) -> void:
 				spent[c] += lost * fscale
 				_sum_spent += lost * fscale
 				gong[c] *= 1.0 - minf(1.0, rot)
-				if sick[c] != 0 and rng.randf() < 0.15 * step:
+				if sick[c] != 0 and rng.randf() < 0.04 * step:
 					_infect_neighbour(c, rng)
 	_cursor = 0 if end >= n else end
 	if _cursor == 0:
@@ -338,7 +360,9 @@ func plant_cell(k: int, rng: RandomNumberGenerator, tries: int = 40) -> int:
 		var c := cells[chamber_first[k] + rng.randi() % chamber_count[k]]
 		var f := fungus[c] * fscale
 		var near := f > 0.0 or _neighbour_fungus(c)
-		var score := (1.0 if near else 0.0) + 0.6 * (1.0 - f / cap) - substrate[c] / (cap * 1.5) - spent[c] / cap - float(sick[c])
+		# Best on fungus that has room to grow: pulp there digests at once.
+		var growing := minf(f / cap, 1.0) * (1.0 - minf(f / cap, 1.0)) * 4.0
+		var score := (1.0 if near else 0.0) + growing - substrate[c] / (cap * 1.5) - spent[c] / cap - float(sick[c])
 		if score > best_score:
 			best_score = score
 			best = c
@@ -372,14 +396,11 @@ func weed_cell(k: int, rng: RandomNumberGenerator, min_spent: float, tries: int 
 			best = c
 	return best
 
-## Spent material in chamber k.
+## Spent material in chamber k, as of the last full sweep.
 func spent_in(k: int) -> float:
-	if not has_chamber(k):
+	if not has_chamber(k) or k >= _chamber_spent.size():
 		return 0.0
-	var sum := 0.0
-	for j in range(chamber_first[k], chamber_first[k] + chamber_count[k]):
-		sum += spent[cells[j]]
-	return sum
+	return _chamber_spent[k]
 
 func _neighbour_fungus(c: int) -> bool:
 	for nb: int in [c - 1, c + 1, c - width, c + width]:
@@ -395,7 +416,7 @@ func hash_into(ctx: HashingContext) -> void:
 ## Takes up to `mass` of fungus from the cells within `radius` of `at`, the
 ## richest first (a bite of gongylidia spans several cells). Returns what
 ## was taken; their gongylidia are used up in proportion.
-func take_around(at: Vector2, mass: float, radius: float = 6.0) -> float:
+func take_around(at: Vector2, mass: float, radius: float = 10.0) -> float:
 	var near: Array[Vector2] = []
 	var r2 := radius * radius
 	for cy in range(maxi(0, int((at.y - radius) / CELL)), mini(height, int((at.y + radius) / CELL) + 1)):
@@ -410,7 +431,28 @@ func take_around(at: Vector2, mass: float, radius: float = 6.0) -> float:
 			break
 		var c := int(e.y)
 		var had := fungus[c] * fscale
-		var take := take_fungus(c, minf(mass - got, had * 0.6))
+		var take := take_fungus(c, minf(mass - got, had * 0.7))
 		gong[c] = maxf(0.0, gong[c] - take / maxf(had, 1e-6))
 		got += take
 	return got
+
+## Puts `raw` stored fungus from a full cell c into its least full
+## neighbouring garden cell (or back into c if it has none).
+func _spill(c: int, raw: float) -> void:
+	var best := c
+	var best_f := INF
+	var cx := c % width
+	@warning_ignore("integer_division")
+	var cy := c / width
+	for k in 4:
+		var nx := cx + (1 if k == 0 else (-1 if k == 1 else 0))
+		var ny := cy + (1 if k == 2 else (-1 if k == 3 else 0))
+		if nx < 0 or ny < 0 or nx >= width or ny >= height:
+			continue
+		var nb := ny * width + nx
+		if chamber_of[nb] != NONE and fungus[nb] < best_f:
+			best_f = fungus[nb]
+			best = nb
+	if fungus[best] <= 0.0:
+		age[best] = 0.01
+	fungus[best] += raw

@@ -34,6 +34,8 @@ var nest_camera: CameraDirector
 var _nest_keyframes: Array = []
 ## "surface" (the world full screen), "split" or "nest".
 var _mode: String = "surface"
+## Timed layout changes ("render.layout.modes": [{"t": video s, "mode": ...}]).
+var _mode_schedule: Array[Dictionary] = []
 var _layout_layer: CanvasLayer
 var _hud: CanvasLayer
 ## Video seconds played so far.
@@ -91,6 +93,13 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 	var mode := str(_layout_spec.get("mode", "split")) if render.has("layout") else "normal"
 	if layout_mode != "":
 		mode = layout_mode
+	for m: Dictionary in _layout_spec.get("modes", []):
+		_mode_schedule.append(m)
+	_mode_schedule.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t"]) < float(b["t"]))
+	if layout_mode == "" and not _mode_schedule.is_empty():
+		mode = str(_mode_schedule[0]["mode"])
+	else:
+		_mode_schedule.clear()
 	if mode == "split" or mode == "nest":
 		set_mode(mode)
 
@@ -100,6 +109,7 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 ## own ticks-per-frame (interactive speed keys).
 func advance(delta: float, speed: float = 1.0) -> void:
 	video_time += delta
+	_apply_mode_schedule()
 	runner.advance(ticks_per_frame_at(video_time) * VIDEO_FPS * delta * speed)
 	view.alpha = runner.alpha()
 	if cutaway != null:
@@ -205,6 +215,7 @@ func is_split() -> bool:
 
 ## Interactive toggle (L): surface -> split -> nest (layered nests) -> surface.
 func toggle_layout() -> void:
+	_mode_schedule.clear()
 	match _mode:
 		"surface":
 			if not set_mode("split"):
@@ -224,3 +235,15 @@ func screen_to_world(screen: Vector2) -> Vector2:
 	if is_split():
 		return layout.screen_to_world(screen)
 	return get_viewport().get_canvas_transform().affine_inverse() * screen
+
+## Switches layout mode when the scenario's schedule says so (a --layout
+## override or an interactive L press stops the schedule).
+func _apply_mode_schedule() -> void:
+	if _mode_schedule.is_empty():
+		return
+	var want := ""
+	for m in _mode_schedule:
+		if float(m["t"]) <= video_time + 1e-6:
+			want = str(m["mode"])
+	if want != "" and want != _mode:
+		set_mode(want)

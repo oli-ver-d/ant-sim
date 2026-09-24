@@ -21,6 +21,8 @@ var world: World
 var pheromones: PheromoneField
 var layers: Array[SimLayer] = []
 var portals: Array[Portal] = []
+## True once there is more than one layer (hot paths skip layer lookups otherwise).
+var multi_layer: bool = false
 var colonies: Array[Colony] = []
 var food_sources: Array[FoodSource] = []
 var items: Dictionary[int, Item] = {}
@@ -74,6 +76,8 @@ var transit_until: PackedInt32Array = []
 var transit_portal: PackedInt32Array = []
 ## Tick the ant last came out of a portal (renderers fade it in).
 var arrive_tick: PackedInt32Array = []
+## Agents on each layer (kept up to date by spawn, remove and portals).
+var layer_agents: PackedInt32Array = []
 ## Snapshots for rendering: positions/headings after the last two *completed*
 ## ticks. Renderers interpolate prev -> shown, so they never see a tick that is
 ## half processed (see begin_step()/step_ants()). Snapshotting is cheap:
@@ -117,6 +121,7 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	dt = config.tick_dt()
 	var surface := SimLayer.new(0, &"surface", config.world_size, config.cell_size, config.diffuse_every_n_ticks, dt)
 	layers.append(surface)
+	layer_agents.append(0)
 	world = surface.world
 	pheromones = surface.pheromones
 
@@ -175,6 +180,8 @@ func add_layer(layer_name: StringName, size: Vector2i, cell: int) -> SimLayer:
 	for c in pheromones.channel_count():
 		l.pheromones.add_channel_like(pheromones, c)
 	layers.append(l)
+	layer_agents.append(0)
+	multi_layer = true
 	return l
 
 ## Links two layers (see Portal). Its nav field toward the side-b end is
@@ -242,6 +249,8 @@ func _tick_transit(i: int) -> void:
 	var at := out + Vector2.from_angle(h) * 2.0
 	if layers[to_layer].world.is_blocked(at):
 		at = out
+	layer_agents[layer[i]] -= 1
+	layer_agents[to_layer] += 1
 	layer[i] = to_layer
 	pos[i] = at
 	heading[i] = h
@@ -376,6 +385,7 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float, on_l
 	target[i] = Vector2.ZERO
 	anim_phase[i] = rng.randf() * TAU
 	layer[i] = on_layer
+	layer_agents[on_layer] += 1
 	transit_until[i] = 0
 	arrive_tick[i] = NEVER_ARRIVED
 	state[i] = colony.caste_initial_state[caste]
@@ -396,6 +406,7 @@ func remove_ant(i: int) -> void:
 	colony.population -= 1
 	colony.population_by_caste[caste_id[i]] -= 1
 	alive[i] = 0
+	layer_agents[layer[i]] -= 1
 	transit_until[i] = 0
 	ant_count -= 1
 	_free_slots.append(i)
@@ -431,7 +442,7 @@ func lay(i: int, c: int) -> void:
 	var colony := colonies[colony_id[i]]
 	var amount := colony.deposit_base * exp(-source_age[i] * colony.deposit_decay_per_second)
 	# Inlined PheromoneField.deposit() (max + reinforce); ants are always inside the world.
-	var field := pheromones if layer[i] == 0 else layers[layer[i]].pheromones
+	var field := layers[layer[i]].pheromones if multi_layer else pheromones
 	var at := pos[i]
 	var row := int(at.y * field.inv_cell)
 	var idx := c * field.cell_count + row * field.width + int(at.x * field.inv_cell)
@@ -567,7 +578,10 @@ func _sync_riders() -> void:
 			var o := item.rider_offsets[k]
 			pos[r] = centre + fwd * o.x + fwd.orthogonal() * o.y
 			heading[r] = h
-			layer[r] = layer[c]
+			if layer[r] != layer[c]:
+				layer_agents[layer[r]] -= 1
+				layer_agents[layer[c]] += 1
+				layer[r] = layer[c]
 
 # --- Queries ---------------------------------------------------------------------
 
@@ -628,6 +642,8 @@ func begin_step() -> void:
 	for colony in colonies:
 		colony.nest.release_waiting(self, dt)
 		colony.nest.update(self, dt)
+	if tick_count % POOL_EVERY == 0 and _pools_on:
+		balance_pools()
 	var lookahead := 0.0
 	for colony in colonies:
 		lookahead = maxf(lookahead, colony.avoid_lookahead)
@@ -727,6 +743,8 @@ func state_hash() -> String:
 			ctx.update(layers[l].pheromones.values.to_byte_array())
 		for p in portals:
 			ctx.update(PackedByteArray([1 if p.open else 0]))
+		for colony in colonies:
+			ctx.update(colony.abstract_by_caste.to_byte_array())
 	return ctx.finish().hex_encode()
 
 static func _vec2(v: Variant) -> Vector2:
@@ -803,3 +821,111 @@ func _hashed_states() -> PackedByteArray:
 		for i in out.size():
 			out[i] = rank[out[i]]
 	return out
+
+# --- Agents and the abstract population ----------------------------------------------
+# A layer can cap how many ants it simulates one by one (SimLayer.max_agents).
+# Beyond that a colony keeps growing as an abstract population
+# (Colony.abstract_by_caste): brood that emerges into a full layer joins it
+# (the nest decides, see layer_full()), and every POOL_EVERY ticks
+# balance_pools() moves idle agents out of layers that are over their cap,
+# brings abstract ants back into layers with room, and swaps a few so the
+# agents stay a representative sample of the colony (castes in proportion).
+# Abstract ants count wherever the colony's size matters (costs, the HUD);
+# the agents do the work. All choices use the sim's RNG, so runs stay
+# deterministic.
+
+## Ticks between pool balancing.
+const POOL_EVERY := 30
+## Most abstract ants brought back into one layer per balancing.
+const POOL_MAX_IN := 25
+
+var _pools_on: bool = false
+var _pool_cursor: int = 0
+
+## Caps layer `l` at `n` agents (0 = no limit).
+func set_max_agents(l: int, n: int) -> void:
+	layers[l].max_agents = n
+	_pools_on = false
+	for layer_ in layers:
+		_pools_on = _pools_on or layer_.max_agents > 0
+
+## True if layer l is at its agent cap.
+func layer_full(l: int) -> bool:
+	return layers[l].max_agents > 0 and layer_agents[l] >= layers[l].max_agents
+
+## Moves ant i into its colony's abstract population.
+func pool_ant(i: int) -> void:
+	var colony := colonies[colony_id[i]]
+	var c := caste_id[i]
+	remove_ant(i)
+	colony.abstract_by_caste[c] += 1
+	colony.abstract += 1
+
+## Adds a new ant of caste c straight to the colony's abstract population.
+func add_abstract(colony: Colony, c: int) -> void:
+	colony.abstract_by_caste[c] += 1
+	colony.abstract += 1
+
+## True if ant i may be moved to the abstract population now: idle enough
+## (its state is one of the species' pool_states), carrying nothing, not
+## riding or going through a portal, and of a caste that is ever spawned
+## (never the queen).
+func poolable(i: int) -> bool:
+	if alive[i] == 0 or carried[i] >= 0 or riding[i] >= 0 or transit_until[i] != 0:
+		return false
+	var colony := colonies[colony_id[i]]
+	return colony.pool_state_mask[state[i]] != 0 and colony.species.castes[caste_id[i]].spawn_ratio > 0.0
+
+## See the notes above.
+func balance_pools() -> void:
+	for l in layers:
+		if l.max_agents <= 0:
+			continue
+		var over := layer_agents[l.index] - l.max_agents
+		if over > 0:
+			_pool_out(l.index, over)
+			continue
+		for colony in colonies:
+			var room := l.max_agents - layer_agents[l.index]
+			var n := mini(mini(room, colony.abstract), POOL_MAX_IN)
+			for k in n:
+				_pool_in(colony, l.index)
+			# Full: swap a few so the agents stay representative.
+			if colony.abstract > 0 and layer_agents[l.index] >= l.max_agents - 1:
+				@warning_ignore("integer_division")
+				var swap := maxi(1, l.max_agents / 300)
+				var out := _pool_out(l.index, swap, colony.id)
+				for k in out:
+					_pool_in(colony, l.index)
+
+## Moves up to n poolable agents on layer l (of colony `only`, or any) to
+## the abstract population, scanning from a rotating start. Returns how many.
+func _pool_out(l: int, n: int, only: int = -1) -> int:
+	var moved := 0
+	if high_water == 0:
+		return 0
+	var start := _pool_cursor % high_water
+	for k in high_water:
+		if moved >= n:
+			break
+		var i := (start + k) % high_water
+		if layer[i] != l or (only >= 0 and colony_id[i] != only) or not poolable(i):
+			continue
+		pool_ant(i)
+		moved += 1
+		_pool_cursor = i + 1
+	return moved
+
+## Brings one abstract ant of the colony back as an agent on layer l: the
+## nest picks the caste and places it (NestType.spawn_from_pool).
+func _pool_in(colony: Colony, l: int) -> void:
+	if colony.abstract <= 0:
+		return
+	var c := colony.nest.pool_caste(self, l)
+	if c < 0 or colony.abstract_by_caste[c] <= 0:
+		return
+	colony.abstract_by_caste[c] -= 1
+	colony.abstract -= 1
+	if colony.nest.spawn_from_pool(self, c, l) < 0:
+		colony.abstract_by_caste[c] += 1
+		colony.abstract += 1

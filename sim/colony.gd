@@ -13,6 +13,11 @@ var population: int = 0
 var population_by_caste: PackedInt32Array = []
 var delivered_items: int = 0
 var delivered_mass: float = 0.0
+## Ants that exist but aren't simulated as agents (a layer was full, see
+## Simulation.balance_pools), per caste. They count in the population
+## everywhere costs are counted; the agents do the work and stand in for them.
+var abstract_by_caste: PackedInt32Array = []
+var abstract: int = 0
 
 ## Local channel name -> PheromoneField channel index.
 var channels: Dictionary[StringName, int] = {}
@@ -50,12 +55,16 @@ var overrides: Dictionary = {}
 var arrive_distance: float
 ## Per (caste, state), 1 if the caste may be in that state (see allows()).
 var allowed_states: PackedByteArray = []
+## Per state, 1 if an ant in it may be moved to the abstract population
+## (species tunable "pool_states": idle or easily resumed states).
+var pool_state_mask: PackedByteArray = []
 
 func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
 	id = colony_id
 	species = def
 	nest_position = nest_pos
 	population_by_caste.resize(def.castes.size())
+	abstract_by_caste.resize(def.castes.size())
 	for t in def.food_source_types:
 		food_types[t] = true
 
@@ -127,6 +136,11 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int], colon
 		var caste := species.castes[c]
 		assert(state_index.has(caste.initial_state), "Unknown initial state %s" % caste.initial_state)
 		caste_initial_state[c] = state_index[caste.initial_state]
+	pool_state_mask.resize(num_states)
+	pool_state_mask.fill(0)
+	for s: Variant in params.get(&"pool_states", []):
+		if state_index.has(str(s)):
+			pool_state_mask[state_index[str(s)]] = 1
 	build_allowed_states(state_index)
 
 ## Rebuilds which states each caste may enter: its `states`, plus its
@@ -167,3 +181,11 @@ func _resolve_channels(raw: Dictionary) -> Dictionary:
 			value = channels[StringName(value)]
 		resolved[str(key)] = value
 	return resolved
+
+## Every ant of the colony: agents plus the abstract population.
+func total_population() -> int:
+	return population + abstract
+
+## Ants of caste c, agents and abstract.
+func total_of_caste(c: int) -> int:
+	return population_by_caste[c] + abstract_by_caste[c]

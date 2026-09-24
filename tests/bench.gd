@@ -1,6 +1,7 @@
 extends SceneTree
 ## Headless benchmark: runs a scenario and reports time per tick by section,
-## plus a timeline of ants per behaviour state and deliveries.
+## plus a timeline of ants per behaviour state and deliveries, and with
+## several layers (a nest underground) the ant cost per layer.
 ##
 ##   godot --headless --path . -s res://tests/bench.gd -- [scenario] [ticks] [ants_per_colony] [seed]
 ##
@@ -27,10 +28,18 @@ func _initialize() -> void:
 			print("  t=%3ds %s" % [(t + 1) / config.tick_rate, _summary(sim)])
 	var total_ms := (Time.get_ticks_usec() - t0) / 1000.0
 
-	print("%s: %d ants, %d ticks, %d pheromone channels" % [scenario, sim.ant_count, ticks, sim.pheromones.channel_count()])
+	print("%s: %d ants, %d ticks, %d pheromone channels, %d layers" % [scenario, sim.ant_count, ticks, sim.pheromones.channel_count(), sim.layers.size()])
 	print("  total      %.2f ms/tick" % (total_ms / ticks))
 	for key in sim.profile_usec:
 		print("  %-10s %.2f ms/tick" % [key, sim.profile_usec[key] / 1000.0 / ticks])
+	# With several layers: ant updates per layer.
+	for l in sim.profile_layer_usec.size():
+		var n := maxi(1, sim.profile_layer_ant_ticks[l])
+		print("  layer %d (%s): %.2f ms/tick, %.1f us per ant-tick, %d agents now" % [l, sim.layers[l].name,
+				sim.profile_layer_usec[l] / 1000.0 / ticks, float(sim.profile_layer_usec[l]) / n, sim.layer_agents[l]])
+	for colony in sim.colonies:
+		if colony.abstract > 0:
+			print("  colony %d: %d ants (%d agents, %d abstract)" % [colony.id, colony.total_population(), colony.population, colony.abstract])
 	quit()
 
 func _summary(sim: Simulation) -> String:

@@ -45,6 +45,10 @@ var nav: NavGrid
 var layer: int
 ## Work removed from a soil cell per bite (a cell of normal soil holds 0.8-1.2).
 var bite: float = 1.2
+## Soil cells a bite clears: the one bitten and, beside it, more of the
+## same job's digging face (a pellet is a mouthful of soil, bigger than a
+## cell).
+var cells_per_bite: int = 3
 var jobs: Array[Job] = []
 ## Soil cell -> id of the job it belongs to.
 var _cell_job: Dictionary[int, int] = {}
@@ -125,7 +129,30 @@ func job_by_id(id: int) -> Job:
 func dig_cell(target: Job, cell: int, amount: float = -1.0) -> float:
 	if not world.is_soil(cell):
 		return 0.0
-	var take := minf(bite if amount < 0.0 else amount, world.soil[cell])
+	var take := _dig_one(target, cell, bite if amount < 0.0 else amount)
+	if amount < 0.0 and cells_per_bite > 1 and not target.done:
+		# More of the face beside it, nearest the bitten cell first.
+		var extra := 0
+		var cx := cell % world.width
+		@warning_ignore("integer_division")
+		var cy := cell / world.width
+		for k in 8:
+			if extra >= cells_per_bite - 1:
+				break
+			var nx := cx + _DX[k]
+			var ny := cy + _DY[k]
+			if nx < 0 or ny < 0 or nx >= world.width or ny >= world.height:
+				continue
+			var n := ny * world.width + nx
+			if _cell_job.get(n, -1) == target.id and _free_beside(n):
+				take += _dig_one(target, n, bite)
+				extra += 1
+	return take
+
+func _dig_one(target: Job, cell: int, amount: float) -> float:
+	if not world.is_soil(cell):
+		return 0.0
+	var take := minf(amount, world.soil[cell])
 	if world.dig(cell, take + 1e-5):
 		if _cell_job.get(cell, -1) == target.id:
 			target.remaining -= 1
@@ -133,6 +160,13 @@ func dig_cell(target: Job, cell: int, amount: float = -1.0) -> float:
 				_finish(target)
 		_cell_job.erase(cell)
 	return take
+
+## True if a free cell touches cell c (it is on the digging face).
+func _free_beside(c: int) -> bool:
+	for nb: int in [c - 1, c + 1, c - world.width, c + world.width]:
+		if nb >= 0 and nb < world.obstacles.size() and world.obstacles[nb] == World.Cell.FREE:
+			return true
+	return false
 
 ## Where a digger at `at` inside the job's box should step next toward the
 ## digging face: `at` itself if it can bite from here, or Vector2.INF if the

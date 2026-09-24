@@ -10,7 +10,8 @@ extends Behaviour
 ## After `stint` seconds, between jobs -> `on_done`.
 ##
 ## params: cut_time (s, 1.6), plant_time (s, 1.0), weed_time (s, 1.8),
-##         pulp_mass (0.25), stint (s, 100), on_done ("nest_role"),
+##         pulp_mass (0.5, times the caste's carry_capacity), stint (s, 100),
+##         on_done ("nest_role"),
 ##         on_waste ("carry_spent")
 ## scratch_f1: step (see Step); scratch_i: the fragment's item id;
 ## scratch_f0: seconds into the current bit of work; target: where to go
@@ -47,6 +48,11 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 	match step:
 		Step.CHOOSE:
 			var carried := sim.item_of(i)
+			# Between jobs: after the stint, or when the brood needs nurses,
+			# take a new role (pulp in the jaws gets planted first).
+			if carried == null and (sim.timer[i] > float(p.get("stint", 100.0))
+					or nest.role_need.get("nurse", 0) > nest.role_count.get("nurse", 0)):
+				return p.get("on_done", "nest_role")
 			if carried != null and carried.type_id == "pulp":
 				sim.target[i] = nest.plant_point(sim, nest.leaf_chamber())
 				_to(sim, i, Step.TO_PLANT)
@@ -83,7 +89,8 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 				return ""
 			if _work(sim, i, dt, frag.position) >= float(p.get("cut_time", 1.6)):
 				var k := nest.chambers_layout.chamber_at(frag.position)
-				var pulp := nest.cut_pulp(sim, frag, float(p.get("pulp_mass", 0.25)))
+				# A bite as big as the gardener can carry (a media takes twice a minim's).
+				var pulp := nest.cut_pulp(sim, frag, float(p.get("pulp_mass", 0.5)) * sim.caste_of(i).carry_capacity)
 				_release(sim, i)
 				sim.pick_up(i, pulp)
 				sim.target[i] = nest.plant_point(sim, k if k >= 0 and nest.garden.has_chamber(k) else nest.leaf_chamber())
