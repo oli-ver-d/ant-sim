@@ -18,14 +18,17 @@ var radius: float = 12.0
 ## Distance from which returning ants see the entrance and head straight for it.
 var sense_radius: float = 60.0
 
-func setup(_sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
+func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	colony_id = owner_colony.id
 	position = owner_colony.nest_position
 	radius = params.get("radius", radius)
 	sense_radius = params.get("sense_radius", sense_radius)
+	if params.has("underground"):
+		setup_underground(sim, params["underground"])
 
+## A nest with an underground has an entrance once its portal is open.
 func has_entrance() -> bool:
-	return true
+	return portal == null or portal.open
 
 func entrance_position() -> Vector2:
 	return position
@@ -119,3 +122,94 @@ func dump_position() -> Vector2:
 func receive_waste(_sim: Simulation, item: Item) -> void:
 	dumped_mass += item.mass
 	dumped_items += 1
+
+# --- Underground ---------------------------------------------------------------------
+# A nest may dig its own underground (nest_params "underground"): a layer of
+# soil below the surface, linked to the entrance by a portal (the shaft).
+# Its excavation plan says what to dig; diggers ("dig") bite soil at the
+# digging face and carry the spoil up ("carry_spoil") to spoil_position() on
+# the surface. Nest types extend the plan (e.g. new chambers as they grow)
+# through excavation_plan().
+#
+#   "underground": {"size": [1280, 1280], "cell_size": 4, "hardness": 1.0,
+#       "shaft": [640, 640], "shaft_radius": 10, "open": true, "bite": 0.5,
+#       "spoil": [-70, 40],
+#       "carve": [{"from": [x, y], "to": [x, y], "radius": r}, ...],
+#       "plan": [{"name": "tunnel", "origin": [x, y], "from": [x, y], "to": [x, y],
+#                 "radius": 7, "priority": 0, "diggers": 4}, ...]}
+#
+# "shaft" is where the entrance comes down (default: the layer's centre);
+# "carve" shapes are dug out from the start (default: the shaft bottom, if
+# open), "plan" jobs are dug by the colony. A sealed nest ("open": false) has
+# no entrance until the job named "entrance" (if any) is finished.
+
+## Layer index of the nest's underground, or -1 if it has none.
+var underground_layer: int = -1
+## The entrance shaft (surface <-> underground), or null.
+var portal: Portal
+var plan: ExcavationPlan
+## Where spoil is dropped on the surface, relative to the entrance.
+var spoil_offset: Vector2 = Vector2(-70, 40)
+## Soil carried out and dropped on the spoil heap so far.
+var spoil_mass: float = 0.0
+var spoil_items: int = 0
+## Soil bitten out while the entrance was closed (pressed into the walls).
+var packed_spoil: float = 0.0
+## An ant a view should point out, e.g. a worker that has just come out of
+## the nest onto the surface (-1 = none); see SplitLayout.
+var highlight_ant: int = -1
+
+func setup_underground(sim: Simulation, params: Dictionary) -> void:
+	var size := Vector2i(ScenarioEvents.vec2(params.get("size", [1280, 1280])))
+	var l := sim.add_layer(StringName("nest%d" % colony_id), size, int(params.get("cell_size", 4)))
+	l.world.fill_soil(float(params.get("hardness", 1.0)))
+	underground_layer = l.index
+	var shaft := ScenarioEvents.vec2(params["shaft"]) if params.has("shaft") else Vector2(size) * 0.5
+	var shaft_r := float(params.get("shaft_radius", 10.0))
+	var open := bool(params.get("open", true))
+	if params.has("spoil"):
+		spoil_offset = ScenarioEvents.vec2(params["spoil"])
+	if params.has("carve"):
+		for c: Dictionary in params["carve"]:
+			var a := ScenarioEvents.vec2(c.get("from", c.get("center", [0, 0])))
+			l.world.carve_segment(a, ScenarioEvents.vec2(c.get("to", [a.x, a.y])), float(c.get("radius", 10.0)))
+	elif open:
+		l.world.carve_segment(shaft, shaft, shaft_r)
+	portal = sim.add_portal(0, entrance_position(), l.index, shaft, maxf(radius, shaft_r))
+	portal.open = open
+	plan = ExcavationPlan.new(l)
+	plan.bite = float(params.get("bite", plan.bite))
+	for j: Dictionary in params.get("plan", []):
+		var a := ScenarioEvents.vec2(j["from"])
+		var job := plan.add_job(str(j.get("name", "")), ScenarioEvents.vec2(j.get("origin", j["from"])), a,
+				ScenarioEvents.vec2(j.get("to", j["from"])), float(j.get("radius", 7.0)),
+				float(j.get("priority", 0.0)), int(j.get("diggers", 4)))
+		if job.name == "entrance":
+			plan.open_portal_when_done(job, portal)
+
+## What the nest wants dug (null without an underground).
+func excavation_plan() -> ExcavationPlan:
+	return plan
+
+## Where diggers drop spoil on the surface.
+func spoil_position() -> Vector2:
+	return entrance_position() + spoil_offset
+
+## A load of spoil dropped on the heap. The Simulation destroys the item.
+func receive_spoil(_sim: Simulation, item: Item) -> void:
+	spoil_mass += item.mass
+	spoil_items += 1
+
+## A new spoil pellet (the digger picks it up).
+func make_spoil(sim: Simulation, mass: float) -> Item:
+	var item := sim.create_item("spoil", mass)
+	item.radius = 1.7
+	item.color = Color(0.42, 0.3, 0.2)
+	return item
+
+## Underground state for Simulation.state_hash() (nest types that override
+## hash_state() call this).
+func hash_underground(ctx: HashingContext) -> void:
+	if plan != null:
+		plan.hash_into(ctx)
+		ctx.update(PackedFloat64Array([spoil_mass, spoil_items, packed_spoil]).to_byte_array())

@@ -13,11 +13,12 @@ extends Node2D
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   manual camera (overrides the scenario's)
 ##   --safe=1 --debug=1 --pheromones=0 --cutaway=1 --tuning=1   initial overlay state
-##   --layout=split|normal  split surface/underground view, or full screen
+##   --layout=split|normal|nest  split surface/underground view, the surface full
+##                          screen, or the nest's underground full screen
 ##                          (overrides the scenario's render.layout)
 ##
 ## Keys: Space pause, P pheromones, D debug overlay, S safe zones, N nest cutaway,
-##       L split surface/underground layout,
+##       L cycles surface / split / nest (underground full screen) layouts,
 ##       T tuning panel, F follow the ant under the cursor (again to stop),
 ##       C scenario camera, 1-5 speed (1/2/4/8/16x the scenario's pace), Esc quit.
 ## Mouse: left-drag draws walls (Shift+left-drag erases), right-click places

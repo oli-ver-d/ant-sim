@@ -18,6 +18,7 @@ mandible_size = 0.25
 leg_length = 1.0
 spawn_ratio = 0.25
 states = PackedStringArray("assign_role", "explore", "follow_trail", "seek_ride", "hitchhike", "linger", "carry_waste")
+underground_states = PackedStringArray("dig", "carry_spoil")
 initial_state = "assign_role"
 state_params = {
 "explore": {
@@ -40,6 +41,7 @@ mandible_size = 0.35
 leg_length = 1.1
 spawn_ratio = 0.65
 states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
+underground_states = PackedStringArray("dig", "carry_spoil")
 initial_state = "explore"
 carry_capacity = 1.0
 

@@ -26,6 +26,14 @@ var cutaway: CutawayPanel
 ## until first used, and while unused the world is drawn full screen.
 var layout: SplitLayout
 var _layout_spec: Dictionary = {"mode": "split", "colony": 0}
+## The nest's underground layer view and its camera (layered nests, created
+## with the layout).
+var nest_view: WorldView
+var nest_camera: CameraDirector
+## Camera keyframes for the nest view ("camera": {"nest": [...]}).
+var _nest_keyframes: Array = []
+## "surface" (the world full screen), "split" or "nest".
+var _mode: String = "surface"
 var _layout_layer: CanvasLayer
 var _hud: CanvasLayer
 ## Video seconds played so far.
@@ -72,15 +80,19 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 
 	camera = CameraDirector.new()
 	add_child(camera)
-	camera.setup(sim, data.get("camera", []))
+	var cams: Variant = data.get("camera", [])
+	if cams is Dictionary:
+		_nest_keyframes = cams.get("nest", [])
+		cams = cams.get("surface", [])
+	camera.setup(sim, cams)
 	camera.make_current()
 	if render.has("layout"):
 		_layout_spec.merge(render["layout"], true)
 	var mode := str(_layout_spec.get("mode", "split")) if render.has("layout") else "normal"
 	if layout_mode != "":
 		mode = layout_mode
-	if mode == "split":
-		set_split(true)
+	if mode == "split" or mode == "nest":
+		set_mode(mode)
 
 	_parse_tpf(data.get("ticks_per_frame", config.ticks_per_frame))
 
@@ -94,6 +106,10 @@ func advance(delta: float, speed: float = 1.0) -> void:
 		cutaway.update_visibility(video_time)
 	camera.alpha = runner.alpha()
 	camera.update_camera(video_time, delta)
+	if nest_view != null and _mode != "surface":
+		nest_view.alpha = runner.alpha()
+		nest_camera.alpha = runner.alpha()
+		nest_camera.update_camera(video_time, delta)
 
 func ticks_per_frame_at(t: float) -> float:
 	if _tpf_points.size() == 1 or t <= _tpf_points[0].x:
@@ -129,39 +145,79 @@ func _add_cutaway(colony_id: int, rect: Rect2) -> void:
 	if cutaway != null:
 		_hud.add_child(cutaway)
 
-## Switches between the split surface/underground layout and the normal
-## full-screen one. Returns false (and stays full screen) if the colony's nest
-## has no cutaway view.
-func set_split(on: bool) -> bool:
-	if on and layout == null:
+## Switches the layout: "surface" (or "normal": the world full screen),
+## "split" (surface and nest) or "nest" (the nest full screen, layered nests
+## only). Returns false (and stays as it was) if the colony's nest has no
+## view to split with, or "nest" isn't possible.
+func set_mode(new_mode: String) -> bool:
+	if new_mode == "normal":
+		new_mode = "surface"
+	if new_mode != "surface" and layout == null:
 		layout = SplitLayout.create(sim, registry, _layout_spec)
 		if layout == null:
 			return false
 		_layout_layer.add_child(layout)
+		if layout.nest_viewport != null:
+			_build_nest_view()
 	if layout == null:
-		return not on
-	var parent: Node = layout.surface_viewport if on else self
+		return new_mode == "surface"
+	if new_mode == "nest" and not layout.has_nest_mode():
+		return false
+	var split := new_mode != "surface"
+	var parent: Node = layout.surface_viewport if split else self
 	if view.get_parent() != parent:
 		view.reparent(parent, false)
 		camera.reparent(parent, false)
 		# Keep the world under the insets when drawn full screen.
-		if not on:
+		if not split:
 			move_child(view, 0)
 			move_child(camera, 1)
 		camera.make_current()
-	layout.visible = on
+	if split:
+		layout.set_mode(new_mode)
+	layout.visible = split
+	_mode = new_mode
 	return true
 
-func is_split() -> bool:
-	return layout != null and layout.visible
+## The nest's underground layer view and camera, in the layout's nest viewport.
+func _build_nest_view() -> void:
+	var nest := layout.nest
+	nest_view = WorldView.new()
+	nest_view.setup(sim, registry, float(sim.rng.seed % 100) + 50.0, null, nest.underground_layer)
+	nest_view.pheromone_renderer.visible = false
+	layout.nest_viewport.add_child(nest_view)
+	nest_camera = CameraDirector.new()
+	layout.nest_viewport.add_child(nest_camera)
+	var frames := _nest_keyframes if not _nest_keyframes.is_empty() else [{"t": 0, "fit": "excavation", "margin": 80}]
+	nest_camera.setup(sim, frames, nest.underground_layer)
+	nest_camera.make_current()
 
-## Interactive toggle (L).
+## Current layout mode: "surface", "split" or "nest".
+func mode() -> String:
+	return _mode
+
+## Split layout on or off (off = the surface full screen).
+func set_split(on: bool) -> bool:
+	return set_mode("split" if on else "surface")
+
+func is_split() -> bool:
+	return _mode == "split"
+
+## Interactive toggle (L): surface -> split -> nest (layered nests) -> surface.
 func toggle_layout() -> void:
-	set_split(not is_split())
+	match _mode:
+		"surface":
+			if not set_mode("split"):
+				set_mode("nest")
+		"split":
+			if not set_mode("nest"):
+				set_mode("surface")
+		_:
+			set_mode("surface")
 
 ## True if a screen point (1080x1920 frame pixels) shows the world.
 func shows_world_at(screen: Vector2) -> bool:
-	return not is_split() or layout.is_on_surface(screen)
+	return _mode == "surface" or (_mode == "split" and layout.is_on_surface(screen))
 
 ## World position under a screen point (1080x1920 frame pixels).
 func screen_to_world(screen: Vector2) -> Vector2:

@@ -10,7 +10,8 @@ shader_type canvas_item;
 //   COLOR.rgb       caste colour         COLOR.a       mandible size
 //   CUSTOM.x        head scale           CUSTOM.y      abdomen scale
 //   CUSTOM.z        floor = thorax scale * 100, fract = leg length / 4
-//   CUSTOM.w        floor = heading quantised to 0..1023, fract = walk phase / TAU
+//   CUSTOM.w        floor = heading quantised to 0..1023 + 1024 * fade (0 opaque .. 15),
+//                   fract = walk phase / TAU (fade: an ant going through a portal)
 
 // The quad spans QUAD body lengths (legs, antennae and shadow fit inside).
 const float QUAD = 2.4;
@@ -146,7 +147,10 @@ void fragment() {
 	b.thorax_s = floor(v_custom.z) / 100.0;
 	b.leg = fract(v_custom.z) * 4.0;
 	b.mandible = v_color.a;
-	float heading = floor(v_custom.w) / 1023.0 * TAU_ - 3.14159265;
+	float hw = floor(v_custom.w);
+	float fade_steps = floor(hw / 1024.0);
+	float heading = (hw - fade_steps * 1024.0) / 1023.0 * TAU_ - 3.14159265;
+	float visible = 1.0 - fade_steps / 15.0;
 	b.phase = fract(v_custom.w) * TAU_;
 
 	// World-oriented quad coordinates (body lengths) -> body space (x forward).
@@ -180,5 +184,5 @@ void fragment() {
 	vec3 ant_col = body_col * body_a + limb_col * limb_a;
 	float out_a = ant_a + shadow_a * (1.0 - ant_a);
 	vec3 out_col = out_a > 0.0 ? ant_col / out_a : vec3(0.0);
-	COLOR = vec4(out_col, out_a);
+	COLOR = vec4(out_col, out_a * visible);
 }

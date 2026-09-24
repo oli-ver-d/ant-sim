@@ -21,8 +21,8 @@ const AVOID_WIDE_ANGLE := 1.4
 ##    0  if the centre is strongest (keep going) or nothing is sensed,
 ##   -1  to turn left, +1 to turn right, toward the stronger side.
 ## Raw values are compared, since scaling a whole channel doesn't change the order.
-static func sense_turn(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony) -> float:
-	var field := sim.pheromones
+static func sense_turn(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony, on_layer: int = 0) -> float:
+	var field := sim.pheromones if on_layer == 0 else sim.layers[on_layer].pheromones
 	var values := field.values
 	var off := c * field.cell_count
 	var inv := field.inv_cell
@@ -60,12 +60,12 @@ static func sense_turn(sim: Simulation, c: int, at: Vector2, heading_rad: float,
 ## The opposite of sense_turn(): turns toward the *weaker* side sensor of
 ## channel c (0 if the centre is weakest or nothing is sensed). Explorers use
 ## it on their own home trail to push into ground nobody has walked yet.
-static func sense_away(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony) -> float:
-	var field := sim.pheromones
+static func sense_away(sim: Simulation, c: int, at: Vector2, heading_rad: float, colony: Colony, on_layer: int = 0) -> float:
+	var field := sim.pheromones if on_layer == 0 else sim.layers[on_layer].pheromones
 	var fwd := Vector2(cos(heading_rad), sin(heading_rad)) * colony.sensor_distance
-	var centre := _sample_open(sim, c, at + fwd)
-	var left := _sample_open(sim, c, at + fwd.rotated(-colony.sensor_angle))
-	var right := _sample_open(sim, c, at + fwd.rotated(colony.sensor_angle))
+	var centre := _sample_open(sim, c, at + fwd, on_layer)
+	var left := _sample_open(sim, c, at + fwd.rotated(-colony.sensor_angle), on_layer)
+	var right := _sample_open(sim, c, at + fwd.rotated(colony.sensor_angle), on_layer)
 	if centre <= left and centre <= right:
 		return 0.0
 	# Too faint everywhere walkable: no preference.
@@ -79,8 +79,9 @@ static func sense_away(sim: Simulation, c: int, at: Vector2, heading_rad: float,
 
 ## Raw pheromone at a point, or +INF on obstacles (so walls never look like
 ## "unexplored ground").
-static func _sample_open(sim: Simulation, c: int, p: Vector2) -> float:
-	return INF if sim.world.is_blocked(p) else sim.pheromones.sample_raw(c, p)
+static func _sample_open(sim: Simulation, c: int, p: Vector2, on_layer: int = 0) -> float:
+	var l := sim.layers[on_layer]
+	return INF if l.world.is_blocked(p) else l.pheromones.sample_raw(c, p)
 
 ## Turn input in [-1, 1] that steers heading toward `goal`. Proportional near
 ## the goal direction so ants don't oscillate around it.
@@ -122,7 +123,7 @@ static func avoid_turn(world: World, at: Vector2, heading_rad: float, lookahead:
 static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float, dt: float) -> void:
 	var colony := sim.colonies[sim.colony_id[i]]
 	var c := sim.caste_id[i]
-	var world := sim.world
+	var world := sim.world if sim.layer[i] == 0 else sim.layers[sim.layer[i]].world
 	var at := sim.pos[i]
 	var h := sim.heading[i]
 	var max_turn := colony.caste_turn_rate[c]
@@ -156,6 +157,48 @@ static func move(sim: Simulation, i: int, desired_turn: float, move_speed: float
 		step_len = 0.0
 	else:
 		sim.pos[i] = next
+	sim.heading[i] = h
+	sim.anim_phase[i] += step_len * colony.caste_phase_per_unit[c]
+
+## Moves ant i one tick toward `goal` in tight spaces (tunnels, chambers):
+## turns quickly toward it with only a little wander, slows while turning,
+## and instead of probing for obstacles slides along a wall when the straight
+## step is blocked. Never enters a blocked cell. Used with navigation fields
+## (see Travel), which already route around walls.
+static func move_to(sim: Simulation, i: int, goal: Vector2, move_speed: float, dt: float) -> void:
+	var colony := sim.colonies[sim.colony_id[i]]
+	var c := sim.caste_id[i]
+	var world := sim.layers[sim.layer[i]].world
+	var at := sim.pos[i]
+	var to := goal - at
+	var dist := to.length()
+	var h := sim.heading[i]
+	var max_turn := colony.caste_turn_rate[c] * 1.5
+	var wander := sim.rng.randf_range(-1.0, 1.0) * colony.wander_strength * 0.25
+	var step_len := 0.0
+	if dist > 0.05:
+		var diff := angle_difference(h, to.angle())
+		h = wrapf(h + clampf(diff * 5.0 + wander, -max_turn, max_turn) * dt, -PI, PI)
+		# Slow down while facing away from the goal, and don't overshoot it.
+		var facing := cos(angle_difference(h, to.angle()))
+		step_len = minf(move_speed * dt * clampf(0.25 + 0.75 * facing, 0.2, 1.0), dist)
+	var fwd := Vector2(cos(h), sin(h))
+	var next := at + fwd * step_len
+	if step_len > 0.0 and world.is_blocked(next):
+		# Slide: keep whichever axis of the step is free, else stay put.
+		var slide_x := Vector2(next.x, at.y)
+		var slide_y := Vector2(at.x, next.y)
+		if absf(fwd.x) >= absf(fwd.y) and not world.is_blocked(slide_x):
+			next = slide_x
+		elif not world.is_blocked(slide_y):
+			next = slide_y
+		elif not world.is_blocked(slide_x):
+			next = slide_x
+		else:
+			next = at
+			sim.since_obstacle[i] = 0.0
+		step_len = at.distance_to(next)
+	sim.pos[i] = next
 	sim.heading[i] = h
 	sim.anim_phase[i] += step_len * colony.caste_phase_per_unit[c]
 

@@ -21,6 +21,8 @@ var sim: Simulation
 var alpha: float = 1.0
 ## True for the layer that draws only ants riding on items (above the items).
 var riders_only: bool = false
+## Layer whose ants are drawn.
+var layer: int = 0
 var _buffer: PackedFloat32Array = []
 # Per [colony][caste] look data, flattened: index = colony_base[colony] + caste.
 var _colony_base: PackedInt32Array = []
@@ -91,11 +93,16 @@ func _process(_delta: float) -> void:
 	var colony_id := sim.colony_id
 	var caste_id := sim.caste_id
 	var phase := sim.anim_phase
+	var layers := sim.layer
+	var layered := sim.layers.size() > 1
+	var transit := sim.transit_until
+	var arrived := sim.arrive_tick
+	var fade_after := sim.completed_ticks() - 30
 	var a := alpha
 	var o := 0
 	for k in n:
 		var i := list[k] if riders_only else k
-		if alive[i] == 0 or (not riders_only and riding[i] >= 0):
+		if alive[i] == 0 or (not riders_only and riding[i] >= 0) or (layered and layers[i] != layer):
 			# Zero-scale transform hides the slot.
 			_buffer[o] = 0.0
 			_buffer[o + 5] = 0.0
@@ -125,6 +132,9 @@ func _process(_delta: float) -> void:
 		_buffer[o + 14] = cu.z
 		# Heading quantised to 1023 steps (0.35 deg) plus walk phase as the fraction.
 		var hq := roundf((wrapf(h, -PI, PI) + PI) / TAU * HEADING_STEPS)
+		# Fading through a portal: 0 (opaque) to 15, in steps of 1024 above the heading.
+		if layered and (transit[i] != 0 or arrived[i] > fade_after):
+			hq += 1024.0 * roundf((1.0 - sim.portal_fade(i)) * 15.0)
 		_buffer[o + 15] = hq + fposmod(phase[i], TAU) / TAU * 0.999
 		o += STRIDE
 	multimesh.buffer = _buffer

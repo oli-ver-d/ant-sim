@@ -1,20 +1,26 @@
 class_name SplitLayout
 extends Control
 ## Split-screen layout of the 1080x1920 frame: the world (the surface) in a
-## SubViewport on one part, and a colony's nest cutaway view full width on the
-## other, so the nest reads as continuing underground below the surface.
+## SubViewport on one part, and a colony's nest full width on the other, so
+## the nest reads as continuing underground below the surface.
 ##
 ## Scenario: "render": {"layout": {"mode": "split", "colony": 0,
 ##                                 "surface": "top", "ratio": 0.5}}
 ## ratio is the surface's share of the frame height; "surface": "bottom" puts
-## it below. Optional "view": {"<property>": value} sets properties the
-## cutaway view declares. The cutaway is the nest type's "cutaway:<type>"
-## renderer (see CutawayPanel.create_view); nests without one get no layout
-## (create() returns null) and the scenario plays full screen as usual.
+## it below. "mode": "nest" shows only the nest, full screen.
+##
+## The nest part is one of two things:
+## - For a nest with an underground layer (NestType.underground_layer), a
+##   second SubViewport (nest_viewport) where ScenarioPlayer puts a WorldView
+##   of that layer and its own CameraDirector (camera keyframes "nest").
+## - Otherwise the nest type's cutaway view ("cutaway:<type>", see
+##   CutawayPanel.create_view), a Control. Optional "view": {"<property>":
+##   value} sets properties the cutaway view declares. Nests with neither get
+##   no layout (create() returns null) and the scenario plays full screen.
 ##
 ## The world's WorldView and CameraDirector are moved into surface_viewport by
 ## ScenarioPlayer, so camera keyframes, clamping and follow work against the
-## surface part's size. The cutaway view may declare these optional
+## surface part's size. A cutaway view may declare these optional
 ## properties, which the layout keeps up to date every frame:
 ##   entrance_x: float  screen x (view pixels) of the nest entrance on the
 ##                      surface, so the view can line its entrance up with it
@@ -23,6 +29,7 @@ extends Control
 ## and it may name an ant (index) for the layout to ring on the surface for
 ## a moment, e.g. a worker that has just come out of the nest:
 ##   highlight_ant: int  (-1 = none; ringed each time it changes)
+## For layered nests the nest's own NestType.highlight_ant is used.
 
 const FRAME := Vector2(1080, 1920)
 ## Height of the seam drawn where the two parts meet.
@@ -32,20 +39,27 @@ const SEAM_COLOR := Color(0.06, 0.04, 0.03)
 const HIGHLIGHT_TIME := 3.0
 
 var surface_viewport: SubViewport
+## The underground layer's viewport (layered nests), or null.
+var nest_viewport: SubViewport
 var surface_rect: Rect2
 var underground_rect: Rect2
+## The nest part: a cutaway view, or the container of nest_viewport.
 var underground: Control
 var nest: NestType
 var sim: Simulation
+## "split" or "nest" (the nest full screen); see set_mode().
+var mode: String = "split"
 
 var _container: SubViewportContainer
 var _seam: Control
 var _ring: Control
 var _ring_ant: int = -1
 var _ring_age: float = INF
+var _split_surface: Rect2
+var _split_under: Rect2
 
-## Builds the layout for spec's colony, or returns null if its nest has no
-## cutaway view.
+## Builds the layout for spec's colony, or returns null if its nest has
+## neither an underground layer nor a cutaway view.
 static func create(simulation: Simulation, registry: Registry, spec: Dictionary) -> SplitLayout:
 	var ratio := clampf(float(spec.get("ratio", 0.5)), 0.2, 0.8)
 	var surface_h := roundf(FRAME.y * ratio)
@@ -53,19 +67,38 @@ static func create(simulation: Simulation, registry: Registry, spec: Dictionary)
 	var surface := Rect2(0, 0 if on_top else FRAME.y - surface_h, FRAME.x, surface_h)
 	var below := Rect2(0, surface_h if on_top else 0, FRAME.x, FRAME.y - surface_h)
 	var colony_id := int(spec.get("colony", 0))
-	var view := CutawayPanel.create_view(simulation, registry, colony_id, below)
-	if view == null:
+	if colony_id < 0 or colony_id >= simulation.colonies.size():
 		return null
+	var nest := simulation.colonies[colony_id].nest
 	var layout := SplitLayout.new()
+	var view: Control
+	if nest.underground_layer >= 0:
+		var container := SubViewportContainer.new()
+		container.position = below.position
+		container.size = below.size
+		container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layout.nest_viewport = SubViewport.new()
+		layout.nest_viewport.size = Vector2i(below.size)
+		layout.nest_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		layout.nest_viewport.handle_input_locally = false
+		container.add_child(layout.nest_viewport)
+		view = container
+	else:
+		view = CutawayPanel.create_view(simulation, registry, colony_id, below)
+		if view == null:
+			layout.free()
+			return null
+		var props: Dictionary = spec.get("view", {})
+		for key: String in props:
+			if key in view:
+				view.set(key, props[key])
 	layout.sim = simulation
-	layout.nest = simulation.colonies[colony_id].nest
+	layout.nest = nest
 	layout.surface_rect = surface
 	layout.underground_rect = below
+	layout._split_surface = surface
+	layout._split_under = below
 	layout.underground = view
-	var props: Dictionary = spec.get("view", {})
-	for key: String in props:
-		if key in view:
-			view.set(key, props[key])
 	layout._build(on_top)
 	return layout
 
@@ -103,23 +136,43 @@ func _build(surface_on_top: bool) -> void:
 		var r := safe.intersection(underground_rect)
 		underground.set("safe_rect", Rect2(r.position - underground_rect.position, r.size))
 
+## True if the nest part can be shown full screen (layered nests only).
+func has_nest_mode() -> bool:
+	return nest_viewport != null
+
+## "split": surface and nest; "nest": the nest full screen (layered nests).
+func set_mode(new_mode: String) -> void:
+	if new_mode == "nest" and not has_nest_mode():
+		new_mode = "split"
+	mode = new_mode
+	var full := mode == "nest"
+	surface_rect = Rect2() if full else _split_surface
+	underground_rect = Rect2(Vector2.ZERO, FRAME) if full else _split_under
+	_container.visible = not full
+	surface_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if full else SubViewport.UPDATE_ALWAYS
+	_ring.visible = not full
+	_seam.visible = not full
+	underground.position = underground_rect.position
+	underground.size = underground_rect.size
+	if nest_viewport != null:
+		nest_viewport.size = Vector2i(underground_rect.size)
+
 func _process(delta: float) -> void:
 	if not visible:
 		return
 	if "entrance_x" in underground:
 		var at := surface_viewport.canvas_transform * nest.entrance_position()
 		underground.set("entrance_x", at.x)
-	if "highlight_ant" in underground:
-		var ant: int = underground.get("highlight_ant")
-		if ant != _ring_ant:
-			_ring_ant = ant
-			_ring_age = 0.0
+	var ant: int = underground.get("highlight_ant") if "highlight_ant" in underground else nest.highlight_ant
+	if ant != _ring_ant:
+		_ring_ant = ant
+		_ring_age = 0.0
 	_ring_age += delta
 	_ring.queue_redraw()
 
 ## A soft ring around the highlighted ant, fading out.
 func _draw_ring() -> void:
-	if _ring_ant < 0 or _ring_age > HIGHLIGHT_TIME or sim.alive[_ring_ant] == 0:
+	if _ring_ant < 0 or _ring_age > HIGHLIGHT_TIME or sim.alive[_ring_ant] == 0 or sim.layer[_ring_ant] != 0:
 		return
 	var at := surface_viewport.canvas_transform * sim.shown_pos[_ring_ant]
 	var zoom := surface_viewport.canvas_transform.get_scale().x
@@ -140,3 +193,7 @@ func is_on_surface(screen: Vector2) -> bool:
 ## World position under a screen point (frame pixels) on the surface part.
 func screen_to_world(screen: Vector2) -> Vector2:
 	return surface_viewport.canvas_transform.affine_inverse() * (screen - surface_rect.position)
+
+## Position on the nest's layer under a screen point (frame pixels).
+func screen_to_nest(screen: Vector2) -> Vector2:
+	return nest_viewport.canvas_transform.affine_inverse() * (screen - underground_rect.position)

@@ -13,6 +13,8 @@ extends Node2D
 			(s.material as ShaderMaterial).set_shader_parameter("opacity", v)
 
 var sim: Simulation
+## Layer whose pheromones are drawn.
+var layer: int = 0
 var _sprites: Array[Sprite2D] = []
 var _images: Array[Image] = []
 
@@ -22,7 +24,7 @@ func bind(simulation: Simulation) -> void:
 func _process(_delta: float) -> void:
 	if sim == null or not visible:
 		return
-	var field := sim.pheromones
+	var field := sim.layers[layer].pheromones
 	while _sprites.size() < field.channel_count():
 		_add_sprite(_sprites.size())
 	for c in field.channel_count():
@@ -33,7 +35,7 @@ func _process(_delta: float) -> void:
 		(_sprites[c].material as ShaderMaterial).set_shader_parameter("gain", field.scale[c] * field.render_intensity[c] / exposure_value)
 
 func _add_sprite(c: int) -> void:
-	var field := sim.pheromones
+	var field := sim.layers[layer].pheromones
 	var img := Image.create_empty(field.width, field.height, false, Image.FORMAT_RF)
 	var sprite := Sprite2D.new()
 	sprite.texture = ImageTexture.create_from_image(img)

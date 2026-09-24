@@ -17,6 +17,8 @@ var sim: Simulation
 var alpha: float = 1.0
 ## True: draw items on the ground; false: draw carried items.
 var ground_layer: bool = false
+## Layer whose items are drawn (carried items: their carrier's layer).
+var layer: int = 0
 var _textures: Dictionary[int, ImageTexture] = {}
 var _drawn_version: int = -1
 
@@ -36,7 +38,7 @@ func _draw() -> void:
 	for id: int in sim.items:
 		var item: Item = sim.items[id]
 		var carried := item.carrier >= 0
-		if carried == ground_layer:
+		if carried == ground_layer or (sim.layer[item.carrier] if carried else item.layer) != layer:
 			continue
 		var at := item.position
 		var rot := item.rotation

@@ -77,6 +77,19 @@ func add_channel(channel_name: StringName, def: PheromoneChannelDef) -> int:
 	configure_channel(c, def)
 	return c
 
+## Adds a channel with the same name and settings as channel c of another
+## field (e.g. a new layer copying the surface's channels). Returns its index.
+func add_channel_like(other: PheromoneField, c: int) -> int:
+	var def := PheromoneChannelDef.new()
+	def.color = other.colors[c]
+	def.render_intensity = other.render_intensity[c]
+	var n := add_channel(other.names[c], def)
+	decay_per_tick[n] = other.decay_per_tick[c]
+	diffusion[n] = other.diffusion[c]
+	cap[n] = other.cap[c]
+	reinforce[n] = other.reinforce[c]
+	return n
+
 ## (Re)applies a channel definition's settings to channel c; values stay.
 func configure_channel(c: int, def: PheromoneChannelDef) -> void:
 	decay_per_tick[c] = pow(0.5, tick_dt / maxf(def.half_life, 0.001))

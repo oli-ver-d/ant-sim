@@ -28,7 +28,7 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 
 	var turn := 0.0
 	if follow >= 0:
-		turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony)
+		turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony, sim.layer[i])
 	Steering.move(sim, i, turn, sim.speed[i] * float(p.get("speed_factor", 0.7)), dt)
 	return ""
 

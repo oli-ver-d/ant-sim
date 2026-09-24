@@ -1,0 +1,36 @@
+{
+	"name": "dig_demo",
+	"description": "Phase A check: minims dig a planned tunnel and chambers under a young nest and carry the spoil up to a heap.",
+	"seed": 4,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1100],
+			"population": {"minim": 60, "media": 30},
+			"params": {"hitchhiker_fraction": 0.0},
+			"state_params": {"assign_role": {"stayer": "dig"}, "dig": {"on_idle": "dig"}},
+			"nest_params": {
+				"underground": {
+					"size": [1280, 1280],
+					"carve": [{"center": [640, 640], "radius": 46}],
+					"plan": [
+						{"name": "t1", "origin": [680, 640], "from": [680, 640], "to": [880, 560], "radius": 7, "priority": 0, "diggers": 20},
+						{"name": "c1", "origin": [868, 565], "from": [900, 550], "radius": 40, "priority": 1, "diggers": 20},
+						{"name": "t2", "origin": [610, 670], "from": [610, 670], "to": [470, 820], "radius": 7, "priority": 0, "diggers": 20}
+					]
+				}
+			}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [540, 800], "rotation": -20, "length": 240, "width": 110, "shape": "elliptic", "teeth": 20, "seed": 5}
+	],
+	"warmup": 60,
+	"ticks_per_frame": [{"t": 0, "tpf": 0.5}, {"t": 4, "tpf": 0.5}, {"t": 6, "tpf": 8}],
+	"camera": {
+		"surface": [{"t": 0, "pos": [540, 1050], "zoom": 1.4}],
+		"nest": [{"t": 0, "pos": [740, 610], "zoom": 5.5}, {"t": 4, "pos": [740, 610], "zoom": 5.5}, {"t": 8, "fit": "excavation", "margin": 90, "max_zoom": 2.5}]
+	},
+	"render": {"layout": {"mode": "split", "colony": 0, "ratio": 0.45}}
+}

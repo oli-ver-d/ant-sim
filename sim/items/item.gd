@@ -18,6 +18,8 @@ var position: Vector2 = Vector2.ZERO
 var rotation: float = 0.0
 ## FoodSource id this came from, or -1 (e.g. debris).
 var source_id: int = -1
+## Layer the item lies on when on the ground (carried items are on their carrier's).
+var layer: int = 0
 
 ## Ant that has claimed this item (e.g. is on its way to pick it up), or -1.
 var reserved_by: int = -1

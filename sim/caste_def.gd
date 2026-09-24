@@ -25,6 +25,9 @@ extends Resource
 ## Behaviour state ids this caste may be in.
 @export var states: PackedStringArray = []
 @export var initial_state: String = "explore"
+## More states this caste may use when its colony's nest has an underground
+## (NestType.underground_layer >= 0), e.g. digging and nest work.
+@export var underground_states: PackedStringArray = []
 ## Per-state param overrides for this caste, merged over SpeciesDef.state_params
 ## (e.g. {"follow_trail": {"on_arrive": "patrol_trail"}}).
 @export var state_params: Dictionary = {}

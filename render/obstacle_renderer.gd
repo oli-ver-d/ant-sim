@@ -6,23 +6,25 @@ extends Sprite2D
 ## look; BridgeRenderer draws the bridge on top.
 
 var sim: Simulation
+## Layer whose obstacles are drawn.
+var layer: int = 0
 var _version: int = -1
 
 func bind(simulation: Simulation) -> void:
 	sim = simulation
 	centered = false
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	scale = Vector2(sim.world.cell_size, sim.world.cell_size)
+	scale = Vector2(sim.layers[layer].world.cell_size, sim.layers[layer].world.cell_size)
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://render/obstacle.gdshader")
-	mat.set_shader_parameter("world_size", Vector2(sim.world.size))
+	mat.set_shader_parameter("world_size", Vector2(sim.layers[layer].world.size))
 	material = mat
 
 func _process(_delta: float) -> void:
-	if sim == null or sim.world.version == _version:
+	if sim == null or sim.layers[layer].world.version == _version:
 		return
-	_version = sim.world.version
-	var world := sim.world
+	_version = sim.layers[layer].world.version
+	var world := sim.layers[layer].world
 	var bytes := PackedByteArray()
 	bytes.resize(world.obstacles.size() * 2)
 	for i in world.obstacles.size():

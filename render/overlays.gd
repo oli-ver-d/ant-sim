@@ -40,6 +40,8 @@ class DebugView extends Node2D:
 	## Returns the world position under the mouse; set it when the world is
 	## drawn in a SubViewport (split layout). Unset: the mouse in this canvas.
 	var mouse_world: Callable
+	## Layer whose ants are shown.
+	var layer: int = 0
 	var _state_colors: PackedColorArray = []
 
 	func bind(simulation: Simulation, label: RichTextLabel) -> void:
@@ -60,7 +62,7 @@ class DebugView extends Node2D:
 		var mouse := _mouse()
 		var font := ThemeDB.fallback_font
 		for i in sim.high_water:
-			if sim.alive[i] == 0:
+			if sim.alive[i] == 0 or sim.layer[i] != layer:
 				continue
 			var p := sim.shown_pos[i]
 			draw_circle(p, 2.0, _state_colors[sim.state[i]])
@@ -76,8 +78,9 @@ class DebugView extends Node2D:
 	func _update_readout() -> void:
 		var mouse := _mouse()
 		var lines: PackedStringArray = ["cursor (%d, %d)" % [mouse.x, mouse.y]]
-		for c in sim.pheromones.channel_count():
-			lines.append("%s: %.3f" % [sim.pheromones.names[c], sim.pheromones.sample(c, mouse)])
+		var field := sim.layers[layer].pheromones
+		for c in field.channel_count():
+			lines.append("%s: %.3f" % [field.names[c], field.sample(c, mouse)])
 		for s in sim.behaviour_ids.size():
 			lines.append("[color=#%s]●[/color] %s" % [_state_colors[s].to_html(false), sim.behaviour_ids[s]])
 		readout.text = "\n".join(lines)

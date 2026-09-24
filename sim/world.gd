@@ -1,9 +1,15 @@
 class_name World
 extends RefCounted
-## Static environment: world bounds and the obstacle grid (walls, water).
-## The grid uses the same cells as the PheromoneField.
+## Static environment: world bounds and the obstacle grid (walls, water,
+## diggable soil). The grid uses the same cells as the PheromoneField.
+##
+## Soil (Cell.SOIL, e.g. an underground layer) blocks movement like a wall
+## until it is dug out: each soil cell holds the digging work left in it
+## (`soil`), and dig() frees the cell when that runs out. Digging only ever
+## frees cells, so caches can follow it incrementally through `dig_log`
+## instead of rebuilding; any other change bumps `edit_version`.
 
-enum Cell { FREE = 0, WALL = 1, WATER = 2 }
+enum Cell { FREE = 0, WALL = 1, WATER = 2, SOIL = 3 }
 
 var size: Vector2i
 var cell_size: int
@@ -12,6 +18,20 @@ var height: int
 var obstacles: PackedByteArray = []
 ## Incremented on every change so renderers and caches know to refresh.
 var version: int = 0
+## Incremented on every change except digging (see dig_log).
+var edit_version: int = 0
+## Work left in each soil cell (1.0 = a cell of normal soil); only
+## allocated once soil is placed (fill_soil).
+var soil: PackedFloat32Array = []
+## Cells touched by dig() or carve_*(), in order (a cell may appear more
+## than once). Consumers remember how far they have read.
+var dig_log: PackedInt32Array = []
+## Bounding box (world units) of every cell freed by digging or carving.
+var dug_rect: Rect2 = Rect2()
+## Number of cells freed by digging or carving.
+var dug_cells: int = 0
+## Nominal work in a full soil cell (fill_soil's hardness).
+var soil_hardness: float = 1.0
 ## 1 for cells within `near_radius` of a blocked cell or the world edge.
 ## Steering only runs its (costly) obstacle probes on these cells.
 var near_blocked: PackedByteArray = []
@@ -110,12 +130,14 @@ func fill_circle(center: Vector2, radius: float, kind: int) -> void:
 			if c.distance_squared_to(center) <= r2:
 				set_cell(cx, cy, kind)
 	version += 1
+	edit_version += 1
 
 func fill_rect(rect: Rect2, kind: int) -> void:
 	for cy in range(int(rect.position.y * _inv_cell), int(ceil(rect.end.y * _inv_cell))):
 		for cx in range(int(rect.position.x * _inv_cell), int(ceil(rect.end.x * _inv_cell))):
 			set_cell(cx, cy, kind)
 	version += 1
+	edit_version += 1
 
 ## Fills the cells of a closed polygon.
 func fill_polygon(points: PackedVector2Array, kind: int) -> void:
@@ -127,6 +149,7 @@ func fill_polygon(points: PackedVector2Array, kind: int) -> void:
 			if Geometry2D.is_point_in_polygon(Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size), points):
 				set_cell(cx, cy, kind)
 	version += 1
+	edit_version += 1
 
 ## Thick polyline (a wall drawn as connected segments with round joints).
 func draw_polyline(points: PackedVector2Array, thickness: float, kind: int) -> void:
@@ -140,6 +163,7 @@ func draw_polyline(points: PackedVector2Array, thickness: float, kind: int) -> v
 	if points.size() == 1:
 		_stamp(points[0], r, kind)
 	version += 1
+	edit_version += 1
 
 ## Ground clutter (debris lying on the ground): number of clutter items
 ## covering each cell. Ants crossing cluttered cells are slowed.
@@ -160,6 +184,83 @@ func add_clutter(center: Vector2, radius: float, delta: int) -> void:
 func clear_all() -> void:
 	obstacles.fill(Cell.FREE)
 	version += 1
+	edit_version += 1
+
+# --- Soil ------------------------------------------------------------------------------
+
+## Fills the whole world with soil of the given hardness (work per cell). A
+## little per-cell variation (from the cell index, not the RNG) makes some
+## spots take longer than others.
+func fill_soil(hardness: float) -> void:
+	soil.resize(width * height)
+	soil_hardness = hardness
+	for i in soil.size():
+		obstacles[i] = Cell.SOIL
+		soil[i] = hardness * (0.8 + 0.4 * _cell_noise(i))
+	version += 1
+	edit_version += 1
+
+## Digs `amount` of work out of a soil cell. Returns true if that freed it
+## (then `version` is bumped). Non-soil cells are left alone.
+func dig(cell: int, amount: float) -> bool:
+	if cell < 0 or cell >= obstacles.size() or obstacles[cell] != Cell.SOIL:
+		return false
+	soil[cell] -= amount
+	dig_log.append(cell)
+	if soil[cell] > 1e-4:
+		return false
+	_free_soil(cell)
+	return true
+
+## Remaining work in a soil cell, as a share of the cell's hardness when full
+## (for drawing freshly bitten edges); 0 for free cells.
+func soil_left(cell: int) -> float:
+	return soil[cell] if obstacles[cell] == Cell.SOIL else 0.0
+
+func is_soil(cell: int) -> bool:
+	return cell >= 0 and obstacles[cell] == Cell.SOIL
+
+## Frees every soil cell whose centre is within `radius` of the segment a-b
+## (a circle when a == b), as if dug out at once (e.g. a founding chamber).
+func carve_segment(a: Vector2, b: Vector2, radius: float) -> void:
+	for cell in cells_in_segment(a, b, radius):
+		if obstacles[cell] == Cell.SOIL:
+			dig_log.append(cell)
+			_free_soil(cell)
+
+## Cells whose centres are within `radius` of the segment a-b (inside the world).
+func cells_in_segment(a: Vector2, b: Vector2, radius: float) -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	var r2 := radius * radius
+	var x0 := maxi(0, int((minf(a.x, b.x) - radius) * _inv_cell))
+	var x1 := mini(width - 1, int((maxf(a.x, b.x) + radius) * _inv_cell))
+	var y0 := maxi(0, int((minf(a.y, b.y) - radius) * _inv_cell))
+	var y1 := mini(height - 1, int((maxf(a.y, b.y) + radius) * _inv_cell))
+	for cy in range(y0, y1 + 1):
+		for cx in range(x0, x1 + 1):
+			var c := Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size)
+			if Geometry2D.get_closest_point_to_segment(c, a, b).distance_squared_to(c) <= r2:
+				out.append(cy * width + cx)
+	return out
+
+func _free_soil(cell: int) -> void:
+	obstacles[cell] = Cell.FREE
+	soil[cell] = 0.0
+	dug_cells += 1
+	var r := Rect2(cell_center(cell) - Vector2.ONE * cell_size * 0.5, Vector2.ONE * cell_size)
+	dug_rect = r if dug_cells == 1 else dug_rect.merge(r)
+	# Freeing a cell can only shrink near_blocked, so the old one stays a safe
+	# (slightly generous) answer and needn't be rebuilt.
+	var near_ok := _near_version == version
+	version += 1
+	if near_ok:
+		_near_version = version
+
+## Stable pseudo-random value in [0, 1) for a cell index.
+static func _cell_noise(i: int) -> float:
+	var h := (i * 73856093) ^ (i >> 7) * 19349663
+	h = (h ^ (h >> 13)) * 1274126177
+	return float((h ^ (h >> 16)) & 0xFFFF) / 65536.0
 
 ## Indices of every non-free cell.
 func blocked_cells() -> PackedInt32Array:

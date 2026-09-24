@@ -7,12 +7,20 @@ extends RefCounted
 ## Removed ants go on a free list and their slot is reused by the next spawn.
 ## All randomness goes through `rng`, so the same seed and scenario give the
 ## same run.
+##
+## Layers: layer 0 is the surface (`world` and `pheromones` are its World and
+## PheromoneField). A nest may add an underground layer (add_layer) linked to
+## the surface by a Portal. Each ant is on one layer (`layer[i]`) and moves,
+## senses and lays pheromone there; positions are in its layer's coordinates.
 
 var config: SimConfig
 var registry: Registry
 var rng := RandomNumberGenerator.new()
+## Surface layer's obstacle grid and pheromones (layers[0]).
 var world: World
 var pheromones: PheromoneField
+var layers: Array[SimLayer] = []
+var portals: Array[Portal] = []
 var colonies: Array[Colony] = []
 var food_sources: Array[FoodSource] = []
 var items: Dictionary[int, Item] = {}
@@ -58,6 +66,14 @@ var scratch_i: PackedInt32Array = []
 var target: PackedVector2Array = []
 ## Walk-cycle phase for rendering (advances with distance travelled).
 var anim_phase: PackedFloat32Array = []
+## Layer the ant is on (index into `layers`).
+var layer: PackedByteArray = []
+## While going through a portal: the tick it comes out (0 = not in a portal),
+## and which portal (see enter_portal()).
+var transit_until: PackedInt32Array = []
+var transit_portal: PackedInt32Array = []
+## Tick the ant last came out of a portal (renderers fade it in).
+var arrive_tick: PackedInt32Array = []
 ## Snapshots for rendering: positions/headings after the last two *completed*
 ## ticks. Renderers interpolate prev -> shown, so they never see a tick that is
 ## half processed (see begin_step()/step_ants()). Snapshotting is cheap:
@@ -77,9 +93,6 @@ var _next_item_id: int = 0
 var _next_food_id: int = 0
 ## Ids of obstructing items (debris) lying on the ground.
 var _ground_clutter: PackedInt32Array = []
-## Obstacle cells, cleared from pheromones once per diffusion cycle.
-var _blocked_cells: PackedInt32Array = []
-var _blocked_version: int = -1
 
 ## Timed scenario events sorted by "t" (simulated seconds); see ScenarioEvents.
 var events: Array[Dictionary] = []
@@ -93,14 +106,19 @@ var rain: Array[Dictionary] = []
 
 ## Accumulated microseconds spent in each part of step(), for profiling.
 var profile_usec: Dictionary[String, int] = {"nests": 0, "ants": 0, "pheromones": 0}
+## With several layers: microseconds of ant updates, and ant updates, per layer.
+var profile_layer_usec: PackedInt64Array = []
+var profile_layer_ant_ticks: PackedInt64Array = []
 
 func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> void:
 	config = sim_config
 	registry = sim_registry
 	rng.seed = seed_value
 	dt = config.tick_dt()
-	world = World.new(config.world_size, config.cell_size)
-	pheromones = PheromoneField.new(config.grid_size(), config.cell_size, config.diffuse_every_n_ticks, dt)
+	var surface := SimLayer.new(0, &"surface", config.world_size, config.cell_size, config.diffuse_every_n_ticks, dt)
+	layers.append(surface)
+	world = surface.world
+	pheromones = surface.pheromones
 
 	# Behaviour indices are assigned in sorted id order so they are stable.
 	var ids := registry.behaviours.keys()
@@ -135,8 +153,108 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	riding.resize(capacity)
 	riding.fill(-1)
 	scratch_i.resize(capacity)
+	layer.resize(capacity)
+	transit_until.resize(capacity)
+	transit_portal.resize(capacity)
+	arrive_tick.resize(capacity)
+	arrive_tick.fill(NEVER_ARRIVED)
+
+## arrive_tick of an ant that never came through a portal.
+const NEVER_ARRIVED := -(1 << 30)
 
 # --- Setup ---------------------------------------------------------------------
+
+## Adds a layer (e.g. an underground) of `size` world units with `cell`-unit
+## cells. Its pheromone field gets every channel the surface has, at the same
+## indices. Returns the new layer.
+func add_layer(layer_name: StringName, size: Vector2i, cell: int) -> SimLayer:
+	assert(layers.size() < 255, "Too many layers for a byte index")
+	var l := SimLayer.new(layers.size(), layer_name, size, cell, config.diffuse_every_n_ticks, dt)
+	l.clear_blocked = false
+	# Same channels as the surface (including a colony being set up right now).
+	for c in pheromones.channel_count():
+		l.pheromones.add_channel_like(pheromones, c)
+	layers.append(l)
+	return l
+
+## Links two layers (see Portal). Its nav field toward the side-b end is
+## created on layer b.
+func add_portal(layer_a: int, pos_a: Vector2, layer_b: int, pos_b: Vector2, radius: float = 10.0) -> Portal:
+	var p := Portal.new()
+	p.id = portals.size()
+	p.layer_a = layer_a
+	p.pos_a = pos_a
+	p.layer_b = layer_b
+	p.pos_b = pos_b
+	p.radius = radius
+	var nav := layers[layer_b].nav()
+	# Every cell within the portal radius is a way out.
+	p.nav_field = nav.set_target(StringName("portal:%d" % p.id),
+			layers[layer_b].world.cells_in_segment(pos_b, pos_b, maxf(radius * 0.6, layers[layer_b].world.cell_size)))
+	portals.append(p)
+	return p
+
+## Starts taking ant i through `portal` (it must be near the end on its
+## layer). The ant walks into the hole for the portal's transit time, then
+## comes out at the other end. Riders on its item get off here. Returns false
+## if the portal is closed or the ant is already going through one.
+func enter_portal(i: int, portal: Portal) -> bool:
+	if not portal.open or transit_until[i] != 0 or not portal.connects(layer[i]):
+		return false
+	var item := item_of(i)
+	if item != null:
+		_dismount_all(item)
+	dismount(i)
+	transit_portal[i] = portal.id
+	transit_until[i] = tick_count + maxi(1, roundi(portal.transit_time / dt))
+	return true
+
+func in_transit(i: int) -> bool:
+	return transit_until[i] != 0
+
+## How visible ant i is for renderers, 0-1: fading out while it goes into a
+## portal, fading in after it comes out.
+func portal_fade(i: int) -> float:
+	var done := completed_ticks()
+	if transit_until[i] != 0:
+		var total := maxi(1, roundi(portals[transit_portal[i]].transit_time / dt))
+		return clampf(float(transit_until[i] - done) / total, 0.0, 1.0)
+	var since := done - arrive_tick[i]
+	if since > 30:
+		return 1.0
+	return clampf(float(since) / 10.0, 0.0, 1.0)
+
+## One tick of an ant going through a portal: into the hole, then out.
+func _tick_transit(i: int) -> void:
+	var p := portals[transit_portal[i]]
+	if tick_count < transit_until[i]:
+		var here := p.end_on(layer[i])
+		var step := speed[i] * 0.6 * dt
+		var to := here - pos[i]
+		if to.length() > 0.5:
+			heading[i] = to.angle()
+		pos[i] = pos[i].move_toward(here, step)
+		anim_phase[i] += step * colonies[colony_id[i]].caste_phase_per_unit[caste_id[i]]
+		return
+	var to_layer := p.other_layer(layer[i])
+	var out := p.end_on(to_layer)
+	var h := rng.randf_range(-PI, PI)
+	var at := out + Vector2.from_angle(h) * 2.0
+	if layers[to_layer].world.is_blocked(at):
+		at = out
+	layer[i] = to_layer
+	pos[i] = at
+	heading[i] = h
+	# Jump the render snapshots too, so the ant doesn't streak across the layer.
+	prev_pos[i] = at
+	shown_pos[i] = at
+	transit_until[i] = 0
+	arrive_tick[i] = tick_count
+	since_obstacle[i] = 1e6
+
+## World of the layer ant i is on.
+func world_of(i: int) -> World:
+	return layers[layer[i]].world
 
 ## overrides: this colony's own tweaks: "params" and "state_params" (see
 ## Colony.build_params) and "channels": {"home": {"half_life": 60, ...}}
@@ -147,7 +265,10 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	assert(def != null, "Unknown species %s" % species_id)
 	var colony := Colony.new(colonies.size(), def, nest_pos)
 	for ch in def.channels:
-		colony.channels[ch.name] = pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), _channel_def(ch, overrides))
+		var channel_def := _channel_def(ch, overrides)
+		colony.channels[ch.name] = pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), channel_def)
+		for l in range(1, layers.size()):
+			layers[l].pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), channel_def)
 	colony.build_params(config, behaviour_index, overrides)
 	var nest_script: Script = registry.nest_types.get(def.nest_type)
 	assert(nest_script != null, "Unknown nest type %s" % def.nest_type)
@@ -156,6 +277,7 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	var nest_params := def.nest_params.duplicate()
 	nest_params.merge(nest_param_overrides, true)
 	colony.nest.setup(self, colony, nest_params)
+	colony.build_allowed_states(behaviour_index)
 	colonies.append(colony)
 	return colony
 
@@ -165,9 +287,10 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 func evict_ants_from_obstacles() -> int:
 	var moved := 0
 	for i in high_water:
-		if alive[i] == 0 or riding[i] >= 0 or not world.is_blocked(pos[i]):
+		var w := layers[layer[i]].world
+		if alive[i] == 0 or riding[i] >= 0 or in_transit(i) or not w.is_blocked(pos[i]):
 			continue
-		var p := world.nearest_free(pos[i])
+		var p := w.nearest_free(pos[i])
 		pos[i] = p
 		# Jump the render snapshots too, so the ant doesn't streak across the wall.
 		prev_pos[i] = p
@@ -182,7 +305,8 @@ func refresh_params() -> void:
 	for colony in colonies:
 		colony.build_params(config, behaviour_index, colony.overrides)
 		for ch in colony.species.channels:
-			pheromones.configure_channel(colony.channels[ch.name], _channel_def(ch, colony.overrides))
+			for l in layers:
+				l.pheromones.configure_channel(colony.channels[ch.name], _channel_def(ch, colony.overrides))
 
 ## The channel definition a colony uses: the species' own, or a copy with
 ## the colony's "channels" overrides applied (e.g. {"home": {"half_life": 60}}).
@@ -218,7 +342,7 @@ func food_by_id(food_id: int) -> FoodSource:
 # --- Ants ------------------------------------------------------------------------
 
 ## Creates an ant and returns its index, or -1 if the simulation is full.
-func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float) -> int:
+func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float, on_layer: int = 0) -> int:
 	var i: int
 	if _free_slots.size() > 0:
 		i = _free_slots[_free_slots.size() - 1]
@@ -249,6 +373,9 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float) -> i
 	scratch_i[i] = -1
 	target[i] = Vector2.ZERO
 	anim_phase[i] = rng.randf() * TAU
+	layer[i] = on_layer
+	transit_until[i] = 0
+	arrive_tick[i] = NEVER_ARRIVED
 	state[i] = colony.caste_initial_state[caste]
 	ant_count += 1
 	colony.population += 1
@@ -267,6 +394,7 @@ func remove_ant(i: int) -> void:
 	colony.population -= 1
 	colony.population_by_caste[caste_id[i]] -= 1
 	alive[i] = 0
+	transit_until[i] = 0
 	ant_count -= 1
 	_free_slots.append(i)
 
@@ -288,7 +416,7 @@ func state_id(i: int) -> String:
 func change_state(i: int, next_state: String) -> void:
 	var next_idx: int = behaviour_index.get(next_state, -1)
 	assert(next_idx >= 0, "Unknown behaviour state '%s'" % next_state)
-	assert(caste_of(i).states.has(next_state),
+	assert(colonies[colony_id[i]].allows(caste_id[i], next_idx),
 			"Caste %s may not enter state %s" % [caste_of(i).id, next_state])
 	behaviours[state[i]].exit(self, i)
 	state[i] = next_idx
@@ -301,7 +429,7 @@ func lay(i: int, c: int) -> void:
 	var colony := colonies[colony_id[i]]
 	var amount := colony.deposit_base * exp(-source_age[i] * colony.deposit_decay_per_second)
 	# Inlined PheromoneField.deposit() (max + reinforce); ants are always inside the world.
-	var field := pheromones
+	var field := pheromones if layer[i] == 0 else layers[layer[i]].pheromones
 	var at := pos[i]
 	var row := int(at.y * field.inv_cell)
 	var idx := c * field.cell_count + row * field.width + int(at.x * field.inv_cell)
@@ -347,16 +475,18 @@ func drop_item(i: int) -> Item:
 		item.carrier = -1
 		item.position = pos[i]
 		item.rotation = heading[i]
+		item.layer = layer[i]
 		_dismount_all(item)
 		_set_on_ground(item, true)
 		items_version += 1
 	return item
 
 ## Places a new item on the ground (e.g. debris from a scenario).
-func place_on_ground(item: Item, at: Vector2, rotation_rad: float) -> void:
+func place_on_ground(item: Item, at: Vector2, rotation_rad: float, on_layer: int = 0) -> void:
 	item.carrier = -1
 	item.position = at
 	item.rotation = rotation_rad
+	item.layer = on_layer
 	_set_on_ground(item, true)
 	items_version += 1
 
@@ -385,10 +515,10 @@ func _set_on_ground(item: Item, on_ground: bool) -> void:
 	var k := _ground_clutter.find(item.id)
 	if on_ground and k < 0:
 		_ground_clutter.append(item.id)
-		world.add_clutter(item.position, item.footprint, 1)
+		layers[item.layer].world.add_clutter(item.position, item.footprint, 1)
 	elif not on_ground and k >= 0:
 		_ground_clutter.remove_at(k)
-		world.add_clutter(item.position, item.footprint, -1)
+		layers[item.layer].world.add_clutter(item.position, item.footprint, -1)
 
 # --- Riding ------------------------------------------------------------------------
 # Generic mechanism for ants riding on a carried item (e.g. hitchhikers).
@@ -435,6 +565,7 @@ func _sync_riders() -> void:
 			var o := item.rider_offsets[k]
 			pos[r] = centre + fwd * o.x + fwd.orthogonal() * o.y
 			heading[r] = h
+			layer[r] = layer[c]
 
 # --- Queries ---------------------------------------------------------------------
 
@@ -498,7 +629,10 @@ func begin_step() -> void:
 	var lookahead := 0.0
 	for colony in colonies:
 		lookahead = maxf(lookahead, colony.avoid_lookahead)
-	world.ensure_near_blocked(lookahead)
+	for l in layers:
+		l.world.ensure_near_blocked(lookahead)
+		if l.nav_grid != null:
+			l.nav_grid.update()
 	# Ants spawned during this tick get their first update next tick.
 	_tick_ants = high_water
 	_cursor = 0
@@ -509,31 +643,52 @@ func begin_step() -> void:
 func step_ants(count: int) -> bool:
 	var t0 := Time.get_ticks_usec()
 	var end := mini(_tick_ants, _cursor + count)
-	for i in range(_cursor, end):
-		if alive[i] == 0:
-			continue
-		timer[i] += dt
-		source_age[i] += dt
-		since_obstacle[i] += dt
-		var next := behaviours[state[i]].tick(self, i, dt)
-		if next != "":
-			change_state(i, next)
+	if layers.size() > 1:
+		_step_ants_layered(_cursor, end)
+	else:
+		for i in range(_cursor, end):
+			if alive[i] == 0:
+				continue
+			timer[i] += dt
+			source_age[i] += dt
+			since_obstacle[i] += dt
+			var next := behaviours[state[i]].tick(self, i, dt)
+			if next != "":
+				change_state(i, next)
 	_cursor = end
 	profile_usec["ants"] += Time.get_ticks_usec() - t0
 	return _cursor >= _tick_ants
+
+## step_ants() with several layers: ants going through a portal are moved by
+## the core, and time is profiled per layer (profile_layer_usec).
+func _step_ants_layered(from: int, end: int) -> void:
+	if profile_layer_usec.size() != layers.size():
+		profile_layer_usec.resize(layers.size())
+		profile_layer_ant_ticks.resize(layers.size())
+	for i in range(from, end):
+		if alive[i] == 0:
+			continue
+		var t := Time.get_ticks_usec()
+		var li := layer[i]
+		if transit_until[i] != 0:
+			_tick_transit(i)
+		else:
+			timer[i] += dt
+			source_age[i] += dt
+			since_obstacle[i] += dt
+			var next := behaviours[state[i]].tick(self, i, dt)
+			if next != "":
+				change_state(i, next)
+		profile_layer_usec[li] += Time.get_ticks_usec() - t
+		profile_layer_ant_ticks[li] += 1
 
 ## Finishes the tick in progress: pheromone update and render snapshots.
 func end_step() -> void:
 	assert(in_tick() and _cursor >= _tick_ants, "end_step() before all ants were updated")
 	var t2 := Time.get_ticks_usec()
-	pheromones.update()
-	# Keep trails from soaking through walls: clear obstacle cells once per
-	# diffusion cycle (diffusion is the only way pheromone can get there).
-	if tick_count % pheromones.diffuse_every == 0:
-		if _blocked_version != world.version:
-			_blocked_cells = world.blocked_cells()
-			_blocked_version = world.version
-		pheromones.clear_cells(_blocked_cells)
+	# Keeps trails from soaking through walls on the surface (see SimLayer).
+	for l in layers:
+		l.update_pheromones(tick_count)
 	profile_usec["pheromones"] += Time.get_ticks_usec() - t2
 
 	_sync_riders()
@@ -549,7 +704,7 @@ func state_hash() -> String:
 	ctx.start(HashingContext.HASH_SHA256)
 	ctx.update(PackedInt64Array([tick_count, ant_count, high_water, rng.state]).to_byte_array())
 	ctx.update(alive.slice(0, high_water))
-	ctx.update(state.slice(0, high_water))
+	ctx.update(_hashed_states())
 	ctx.update(pos.slice(0, high_water).to_byte_array())
 	ctx.update(heading.slice(0, high_water).to_byte_array())
 	ctx.update(carried.slice(0, high_water).to_byte_array())
@@ -559,6 +714,17 @@ func state_hash() -> String:
 	for colony in colonies:
 		ctx.update(PackedFloat64Array([colony.delivered_items, colony.delivered_mass, colony.population]).to_byte_array())
 		colony.nest.hash_state(ctx)
+	# Only runs with more than one layer hash these, so single-layer runs
+	# keep the hashes they had before layers existed.
+	if layers.size() > 1:
+		ctx.update(layer.slice(0, high_water))
+		ctx.update(transit_until.slice(0, high_water).to_byte_array())
+		for l in range(1, layers.size()):
+			ctx.update(layers[l].world.obstacles)
+			ctx.update(layers[l].world.soil.to_byte_array())
+			ctx.update(layers[l].pheromones.values.to_byte_array())
+		for p in portals:
+			ctx.update(PackedByteArray([1 if p.open else 0]))
 	return ctx.finish().hex_encode()
 
 static func _vec2(v: Variant) -> Vector2:
@@ -610,3 +776,28 @@ func _apply_rain() -> void:
 			pheromones.wipe_rect(ScenarioEvents.rect2(area["rect"]), keep)
 		else:
 			pheromones.wipe_circle(ScenarioEvents.vec2(area["center"]), float(area["radius"]), keep)
+
+## The ants' states for state_hash(), each as its rank among the states the
+## simulation's colonies may use (in index order) rather than its index among
+## every registered behaviour, so registering new behaviours no colony here
+## can use doesn't change the hash of existing runs.
+func _hashed_states() -> PackedByteArray:
+	var used := PackedByteArray()
+	used.resize(behaviours.size())
+	for colony in colonies:
+		for k in colony.allowed_states.size():
+			if colony.allowed_states[k] != 0:
+				used[k % colony.num_states] = 1
+	var rank := PackedByteArray()
+	rank.resize(behaviours.size())
+	var n := 0
+	var identity := true
+	for s in behaviours.size():
+		rank[s] = n
+		identity = identity and n == s
+		n += used[s]
+	var out := state.slice(0, high_water)
+	if not identity:
+		for i in out.size():
+			out[i] = rank[out[i]]
+	return out

@@ -48,6 +48,8 @@ var caste_phase_per_unit: PackedFloat32Array = []
 ## This colony's own tweaks (see build_params), kept so params can be rebuilt.
 var overrides: Dictionary = {}
 var arrive_distance: float
+## Per (caste, state), 1 if the caste may be in that state (see allows()).
+var allowed_states: PackedByteArray = []
 
 func _init(colony_id: int, def: SpeciesDef, nest_pos: Vector2) -> void:
 	id = colony_id
@@ -121,6 +123,28 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int], colon
 		var caste := species.castes[c]
 		assert(state_index.has(caste.initial_state), "Unknown initial state %s" % caste.initial_state)
 		caste_initial_state[c] = state_index[caste.initial_state]
+	build_allowed_states(state_index)
+
+## Rebuilds which states each caste may enter: its `states`, plus its
+## `underground_states` if the nest has an underground. Called again by the
+## Simulation once the nest is set up.
+func build_allowed_states(state_index: Dictionary[String, int]) -> void:
+	var underground := nest != null and nest.underground_layer >= 0
+	allowed_states.resize(species.castes.size() * num_states)
+	allowed_states.fill(0)
+	for c in species.castes.size():
+		var caste := species.castes[c]
+		var lists: Array[PackedStringArray] = [caste.states]
+		if underground:
+			lists.append(caste.underground_states)
+		for list in lists:
+			for s in list:
+				assert(state_index.has(s), "Caste %s lists unknown state %s" % [caste.id, s])
+				allowed_states[c * num_states + state_index[s]] = 1
+
+## True if caste c may be in state s (a state index).
+func allows(c: int, s: int) -> bool:
+	return allowed_states[c * num_states + s] != 0
 
 func param(key: StringName) -> Variant:
 	return params[key]

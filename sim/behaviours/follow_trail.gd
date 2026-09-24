@@ -34,7 +34,7 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 	else:
 		var follow: int = p.get("follow_channel", -1)
 		if follow >= 0:
-			turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony)
+			turn = Steering.sense_turn(sim, follow, at, sim.heading[i], colony, sim.layer[i])
 		# Path integration: ants know roughly where home is (see Steering.home_turn).
 		# Right after steering around an obstacle they trust the trail instead,
 		# which may lead around it (SimConfig.obstacle_memory).
