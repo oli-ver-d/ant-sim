@@ -66,11 +66,10 @@ static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_spee
 				_work(sim, i, dt, sim.target[i] + Vector2(1, 0))
 				if sim.scratch_f0[i] >= HARVEST_TIME:
 					var m := brood.feed_mass(nest)
-					if nest.fungus - m <= nest.brood_reserve * 0.5:
+					if not nest.take_fungus_at(sim.target[i], m):
+						# Too little here: try another spot next time.
 						abandon(sim, i, nest)
 						return true
-					nest.fungus -= m
-					nest.fed_mass += m
 					var bite := sim.create_item("gongylidia", m)
 					bite.radius = 1.3
 					bite.color = Color(0.95, 0.94, 0.86)
@@ -117,8 +116,7 @@ static func abandon(sim: Simulation, i: int, nest: FungusNest) -> void:
 			brood.claimed[k] = -1
 	var item := sim.item_of(i)
 	if item != null and item.type_id == "gongylidia":
-		nest.fungus += item.mass
-		nest.fed_mass -= item.mass
+		nest.return_fungus(sim.pos[i], item.mass)
 		sim.carried[i] = -1
 		item.carrier = -1
 		sim.destroy_item(item.id)
@@ -135,7 +133,7 @@ static func _pick(sim: Simulation, i: int, nest: FungusNest, only_chamber: int) 
 	var best_task := Task.NONE
 	var best_rank := 0
 	var best_d := INF
-	var can_feed := nest.fungus > nest.brood_reserve
+	var can_feed := nest.fungus > nest.reserve()
 	for k in brood.count():
 		if brood.claimed[k] >= 0 or brood.carrier[k] >= 0:
 			continue

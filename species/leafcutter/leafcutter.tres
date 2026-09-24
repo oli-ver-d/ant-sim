@@ -18,7 +18,7 @@ mandible_size = 0.25
 leg_length = 1.0
 spawn_ratio = 0.25
 states = PackedStringArray("assign_role", "explore", "follow_trail", "seek_ride", "hitchhike", "linger", "carry_waste")
-underground_states = PackedStringArray("nest_role", "nurse", "tend_queen", "dig", "carry_spoil", "go_up")
+underground_states = PackedStringArray("nest_role", "nurse", "tend_queen", "garden", "carry_spent", "dig", "carry_spoil", "go_up")
 initial_state = "assign_role"
 state_params = {
 "explore": {
@@ -44,7 +44,7 @@ mandible_size = 0.35
 leg_length = 1.1
 spawn_ratio = 0.65
 states = PackedStringArray("explore", "follow_trail", "go_to_food", "cut_leaf", "carry_home", "deliver")
-underground_states = PackedStringArray("nest_role", "dig", "carry_spoil", "go_up")
+underground_states = PackedStringArray("nest_role", "carry_down", "dig", "carry_spoil", "go_up")
 initial_state = "explore"
 carry_capacity = 1.0
 
@@ -172,6 +172,18 @@ state_params = {
 "on_done": "nest_role",
 "stint": 70.0
 },
+"garden": {
+"cut_time": 1.6,
+"on_done": "nest_role",
+"on_waste": "carry_spent",
+"stint": 100.0
+},
+"carry_spent": {
+"on_done": "nest_role"
+},
+"carry_down": {
+"next": "go_up"
+},
 "go_up": {
 "next": "explore"
 },
@@ -224,6 +236,9 @@ state_params = {
 }
 }
 underground_state_params = {
+"carry_home": {
+"on_arrive": "carry_down"
+},
 "carry_waste": {
 "on_done": "nest_role",
 "on_none": "nest_role"

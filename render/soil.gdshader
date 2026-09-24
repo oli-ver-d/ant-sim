@@ -14,7 +14,7 @@ shader_type canvas_item;
 uniform vec2 world_size = vec2(1280.0, 1280.0);
 uniform float seed = 0.0;
 uniform vec2 light_dir = vec2(-0.55, -0.85);
-uniform vec4 soil_dark : source_color = vec4(0.17, 0.11, 0.07, 1.0);
+uniform vec4 soil_dark : source_color = vec4(0.22, 0.15, 0.09, 1.0);
 uniform vec4 soil_mid : source_color = vec4(0.3, 0.2, 0.12, 1.0);
 uniform vec4 clay : source_color = vec4(0.37, 0.25, 0.15, 1.0);
 uniform vec4 sand : source_color = vec4(0.45, 0.36, 0.25, 1.0);

@@ -9,7 +9,7 @@
 			"nest": [540, 1100],
 			"population": {"queen": 1, "minim": 16},
 			"nest_params": {
-				"initial_fungus": 120,
+				"initial_fungus": 14,
 				"brood_reserve": 10,
 				"underground": {"size": [1000, 1000], "royal_radius": 44},
 				"brood": {"lay_interval": 5, "egg": 40, "larva": 80, "pupa": 60, "callow": 6,

@@ -27,7 +27,7 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		return ""
 	if BroodCare.tick(sim, i, dt, nest, speed):
 		return ""
-	if sim.timer[i] > float(p.get("stint", 90.0)):
+	if sim.timer[i] > float(p.get("stint", 90.0)) or (sim.timer[i] > 5.0 and nest.short_elsewhere("nurse")):
 		return p.get("on_done", "nest_role")
 	# Nothing to do: wait by the brood.
 	var spot := nest.pile_centre(LeafcutterBrood.Pile.LARVAE) + Vector2.from_angle(i * 2.39996) * 12.0

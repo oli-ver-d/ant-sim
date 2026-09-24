@@ -153,13 +153,15 @@ func index_of(brood_id: int) -> int:
 func hash_into(ctx: HashingContext) -> void:
 	ctx.update(PackedInt64Array([_next_id, eggs_laid, emerged]).to_byte_array())
 	ctx.update(PackedFloat64Array([_since_lay, _budget]).to_byte_array())
-	ctx.update(id.to_byte_array())
-	ctx.update(stage)
-	ctx.update(age.to_byte_array())
-	ctx.update(chamber)
-	ctx.update(slot.to_byte_array())
-	ctx.update(growth.to_byte_array())
-	ctx.update(caste)
+	# (Hashing an empty array is an engine error; with no brood there is nothing to add.)
+	if count() > 0:
+		ctx.update(id.to_byte_array())
+		ctx.update(stage)
+		ctx.update(age.to_byte_array())
+		ctx.update(chamber)
+		ctx.update(slot.to_byte_array())
+		ctx.update(growth.to_byte_array())
+		ctx.update(caste)
 	if care:
 		_hash_care(ctx)
 
@@ -399,7 +401,7 @@ func groom(k: int) -> void:
 
 func _update_care(sim: Simulation, nest: FungusNest, dt: float) -> void:
 	var colony := sim.colonies[nest.colony_id]
-	starving = nest.fungus <= nest.brood_reserve
+	starving = nest.fungus <= nest.reserve()
 	var k := 0
 	while k < stage.size():
 		var s := stage[k]
@@ -473,9 +475,10 @@ func free_callow(sim: Simulation, nest: FungusNest, k: int, state_id: String) ->
 
 func _hash_care(ctx: HashingContext) -> void:
 	ctx.update(PackedInt64Array([deaths]).to_byte_array())
-	ctx.update(pos.to_byte_array())
-	ctx.update(pile)
-	ctx.update(carrier.to_byte_array())
-	ctx.update(claimed.to_byte_array())
-	ctx.update(dirt.to_byte_array())
-	ctx.update(hunger.to_byte_array())
+	if count() > 0:
+		ctx.update(pos.to_byte_array())
+		ctx.update(pile)
+		ctx.update(carrier.to_byte_array())
+		ctx.update(claimed.to_byte_array())
+		ctx.update(dirt.to_byte_array())
+		ctx.update(hunger.to_byte_array())

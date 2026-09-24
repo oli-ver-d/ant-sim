@@ -1,0 +1,30 @@
+{
+	"name": "garden_demo",
+	"description": "Phase C check: a young open nest whose foragers bring leaf down; gardeners cut and plant it, the garden grows and a chamber gets dug.",
+	"seed": 6,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1100],
+			"population": {"queen": 1, "minim": 30, "media": 50},
+			"nest_params": {
+				"initial_fungus": 300, "initial_chambers": 3,
+				"underground": {"size": [1000, 1000], "royal_radius": 44, "garden_life": 200},
+				"brood": {"lay_interval": 5, "egg": 40, "larva": 80, "pupa": 60, "callow": 6,
+					"initial": {"egg": 6, "larva": 8, "pupa": 5}}
+			}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [540, 820], "rotation": -20, "length": 240, "width": 110, "shape": "elliptic", "teeth": 20, "seed": 5},
+		{"type": "leaf", "pos": [300, 1000], "rotation": 40, "length": 220, "width": 100, "shape": "lanceolate", "teeth": 18, "seed": 8}
+	],
+	"warmup": 240,
+	"ticks_per_frame": 0.5,
+	"camera": {
+		"surface": [{"t": 0, "pos": [540, 1000], "zoom": 1.2}],
+		"nest": [{"t": 0, "fit": "excavation", "margin": 40, "max_zoom": 3}]
+	},
+	"render": {"layout": {"mode": "split", "colony": 0, "ratio": 0.35}}
+}

@@ -144,3 +144,14 @@ func update_dug(plan: ExcavationPlan) -> int:
 func point_in(k: int, angle: float, u: float) -> Vector2:
 	var c := list[k]
 	return c.centre + Vector2.from_angle(angle) * c.radius * u
+
+## Adds a proposed chamber already dug out (a nest that starts established):
+## its tunnel and itself are carved into the layer's soil at once.
+func add_dug(ch: Chamber, world: World, nav: NavGrid) -> void:
+	var parent := list[ch.parent]
+	var dir := (ch.centre - parent.centre).normalized()
+	world.carve_segment(parent.centre + dir * parent.radius * 0.8, ch.centre - dir * ch.radius * 0.6, tunnel_radius)
+	world.carve_segment(ch.centre, ch.centre, ch.radius)
+	ch.dug = true
+	ch.nav_field = nav.set_target_point(StringName("chamber:%d" % ch.index), ch.centre)
+	list.append(ch)

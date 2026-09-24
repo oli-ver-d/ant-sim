@@ -43,8 +43,8 @@ class Job:
 var world: World
 var nav: NavGrid
 var layer: int
-## Work removed from a soil cell per bite (1.0 = a normal cell per bite).
-var bite: float = 0.5
+## Work removed from a soil cell per bite (a cell of normal soil holds 0.8-1.2).
+var bite: float = 1.2
 var jobs: Array[Job] = []
 ## Soil cell -> id of the job it belongs to.
 var _cell_job: Dictionary[int, int] = {}
@@ -269,4 +269,5 @@ func hash_into(ctx: HashingContext) -> void:
 	for job in jobs:
 		state.append(job.remaining)
 		state.append(job.diggers)
-	ctx.update(state.to_byte_array())
+	if not state.is_empty():
+		ctx.update(state.to_byte_array())
