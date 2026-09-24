@@ -1,17 +1,28 @@
 class_name ExcavationPlan
 extends RefCounted
 ## The digging a nest wants done in its underground layer, as a list of jobs.
-## A job is a shape to dig out (every soil cell within `radius` of the
-## segment a-b: a tunnel, or a round chamber when a == b), dug starting from
-## `origin`, a point in space that is already open (the end of the tunnel it
-## branches off, the rim of the chamber it leaves from). A job is open once
-## its origin cell is free, so a chamber waits for the tunnel leading to it.
-## Diggers take the open job with the lowest `priority` that has room for
-## them (max_diggers), walk to its origin (a nav field per job), then to its
-## digging face (a small local field over the job's box, toward cells next to
-## the job's remaining soil) and bite the soil cell nearest the job's `b`
-## end, so tunnels advance toward their end and chambers grow out from the
-## way in. See the core "dig" behaviour.
+## A job is a shape to dig out (a DigShape: a tunnel along a path with a
+## radius per point, an irregular blob of lobes, or any cell set), dug
+## starting from `origin`, a point in space that is already open (the end of
+## the tunnel it branches off, the rim of the chamber it leaves from). A job
+## is open once its origin cell is free, so a chamber waits for the tunnel
+## leading to it. Diggers take the open job with the lowest `priority` that
+## has room for them (max_diggers), walk to its origin (a nav field per job),
+## then to its digging face (a small local field over the job's box, toward
+## cells next to the job's remaining soil) and bite one of the job's soil
+## cells beside them. Each cell has a rank (DigShape: progress along a path,
+## closeness to where a blob is entered), and the bitten cell is a weighted
+## random pick among those in reach, favouring the highest ranked and the
+## softest soil, so tunnels advance along their path and chambers open up
+## outward from the way in, with an uneven, crumbling face. See the core
+## "dig" behaviour.
+##
+## `overdig` (world units) makes new shapes' outlines rough (DigShape), so
+## walls come out scalloped; `ragged` sets how uneven the face is (0: always
+## the highest ranked cell, as a deterministic order).
+##
+## add_job() plans the classic capsule (every soil cell within `radius` of
+## the segment a-b: a tunnel, or a round chamber when a == b).
 ##
 ## A job can open a portal when it is finished (e.g. the entrance shaft of a
 ## sealed nest, see open_portal_when_done()).
@@ -20,6 +31,11 @@ class Job:
 	var id: int
 	var name: String
 	var origin: Vector2
+	## The shape being dug (its cells, ranks and, for paths, points and radii).
+	var shape: DigShape
+	## Where digging heads: the path's end, or a blob's way in.
+	var face_target: Vector2
+	## Capsule jobs (add_job): the segment and radius they were planned with.
 	var a: Vector2
 	var b: Vector2
 	var radius: float
@@ -39,6 +55,8 @@ class Job:
 	var local: PackedInt32Array = []
 	var local_log: int = -1
 	var open_portal: Portal = null
+	## Free-form tags for whoever planned it (e.g. "gallery", "widening").
+	var tags: Dictionary = {}
 
 var world: World
 var nav: NavGrid
@@ -49,9 +67,18 @@ var bite: float = 1.2
 ## same job's digging face (a pellet is a mouthful of soil, bigger than a
 ## cell).
 var cells_per_bite: int = 3
+## Roughness of new shapes' outlines (world units, see DigShape); 0 = exact.
+var overdig: float = 0.0
+## Seed of the outline noise.
+var rough_seed: int = 0
+## How uneven the digging face is: rank difference (world units) at which a
+## cell is e times less likely to be bitten. 0 = always the best ranked.
+var ragged: float = 6.0
 var jobs: Array[Job] = []
 ## Soil cell -> id of the job it belongs to.
 var _cell_job: Dictionary[int, int] = {}
+## Soil cell -> its rank in that job (see DigShape).
+var _cell_rank: Dictionary[int, float] = {}
 ## Jobs finished so far, in order.
 var finished: PackedInt32Array = []
 
@@ -60,29 +87,62 @@ func _init(on_layer: SimLayer) -> void:
 	nav = on_layer.nav()
 	layer = on_layer.index
 
-## Plans a job and returns it. Cells another unfinished job already claims
-## stay with that job.
+## Plans a capsule job (see the class notes) and returns it. Cells another
+## unfinished job already claims stay with that job. With overdig on, the
+## capsule's outline is rough like any other shape.
 func add_job(job_name: String, origin: Vector2, a: Vector2, b: Vector2, radius: float,
 		priority: float = 0.0, max_diggers: int = 4) -> Job:
+	var shape: DigShape
+	if overdig > 0.0:
+		shape = DigShape.path(world, PackedVector2Array([a, b]) if a != b else PackedVector2Array([a]),
+				PackedFloat32Array([radius, radius]) if a != b else PackedFloat32Array([radius]), overdig, rough_seed)
+		shape.face_target = b
+	else:
+		# Exactly the cells within the radius, each ranked by closeness to b.
+		shape = DigShape.from_cells(world, world.cells_in_segment(a, b, radius), b)
+	var job := add_shape_job(job_name, origin, shape, priority, max_diggers)
+	job.a = a
+	job.b = b
+	job.radius = radius
+	return job
+
+## Plans a tunnel along `points` with radius `radii[k]` at points[k].
+func add_path_job(job_name: String, origin: Vector2, points: PackedVector2Array, radii: PackedFloat32Array,
+		priority: float = 0.0, max_diggers: int = 4) -> Job:
+	return add_shape_job(job_name, origin, DigShape.path(world, points, radii, overdig, rough_seed), priority, max_diggers)
+
+## Plans a blob of ellipses (DigShape.ellipses: 5 floats per lobe), opened
+## up outward from `face_target`.
+func add_blob_job(job_name: String, origin: Vector2, lobes: PackedFloat32Array, face_target: Vector2,
+		priority: float = 0.0, max_diggers: int = 4) -> Job:
+	return add_shape_job(job_name, origin, DigShape.ellipses(world, lobes, face_target, overdig, rough_seed),
+			priority, max_diggers)
+
+## Plans any shape and returns the job. Cells another unfinished job already
+## claims stay with that job; only soil cells are dug (stones stay).
+func add_shape_job(job_name: String, origin: Vector2, shape: DigShape, priority: float = 0.0,
+		max_diggers: int = 4) -> Job:
 	var job := Job.new()
 	job.id = jobs.size()
 	job.name = job_name
 	job.origin = origin
-	job.a = a
-	job.b = b
-	job.radius = radius
+	job.shape = shape
+	job.face_target = shape.face_target
+	job.a = origin
+	job.b = shape.face_target
 	job.priority = priority
 	job.max_diggers = max_diggers
-	for cell in world.cells_in_segment(a, b, radius):
+	for k in shape.cells.size():
+		var cell := shape.cells[k]
 		if world.is_soil(cell) and not _cell_job.has(cell):
 			job.cells.append(cell)
 			_cell_job[cell] = job.id
+			_cell_rank[cell] = shape.rank[k]
 	job.remaining = job.cells.size()
 	var cs := world.cell_size
-	var lo := Vector2i(int((minf(minf(a.x, b.x) - radius, origin.x)) / cs) - 3,
-			int((minf(minf(a.y, b.y) - radius, origin.y)) / cs) - 3)
-	var hi := Vector2i(int((maxf(maxf(a.x, b.x) + radius, origin.x)) / cs) + 4,
-			int((maxf(maxf(a.y, b.y) + radius, origin.y)) / cs) + 4)
+	var o := Vector2i(int(origin.x / cs), int(origin.y / cs))
+	var lo := Vector2i(mini(shape.box.position.x, o.x), mini(shape.box.position.y, o.y)) - Vector2i(3, 3)
+	var hi := Vector2i(maxi(shape.box.end.x, o.x + 1), maxi(shape.box.end.y, o.y + 1)) + Vector2i(3, 3)
 	lo = lo.clamp(Vector2i.ZERO, Vector2i(world.width - 1, world.height - 1))
 	hi = hi.clamp(Vector2i.ZERO, Vector2i(world.width, world.height))
 	job.box = Rect2i(lo, hi - lo)
@@ -92,6 +152,11 @@ func add_job(job_name: String, origin: Vector2, a: Vector2, b: Vector2, radius: 
 	else:
 		job.nav_field = nav.set_target_point(StringName("job:%d" % job.id), origin)
 	return job
+
+## Every soil cell claimed by an unfinished job (cell -> job id), e.g. for
+## routing new tunnels clear of planned chambers.
+func planned_cells() -> Dictionary[int, int]:
+	return _cell_job
 
 ## Opens `portal` when `job` is finished (at once if it already is).
 func open_portal_when_done(job: Job, portal: Portal) -> void:
@@ -159,6 +224,7 @@ func _dig_one(target: Job, cell: int, amount: float) -> float:
 			if target.remaining <= 0:
 				_finish(target)
 		_cell_job.erase(cell)
+		_cell_rank.erase(cell)
 	return take
 
 ## True if a free cell touches cell c (it is on the digging face).
@@ -203,17 +269,22 @@ func face_step(target: Job, at: Vector2) -> Vector2:
 	return Vector2((best % w + target.box.position.x + 0.5) * world.cell_size,
 			(best / w + target.box.position.y + 0.5) * world.cell_size)
 
-## The job's soil cell to bite from `at` (a neighbour of its cell), the one
-## nearest the job's b end, or -1.
-func bite_cell(target: Job, at: Vector2) -> int:
+## The job's soil cell to bite from `at` (one of the 8 around its cell), or
+## -1. With `rng` and `ragged` > 0 a weighted random pick: the best ranked
+## (see DigShape) is likeliest, a cell `ragged` world units of rank behind it
+## e times less likely, and harder soil (clay, roots) less likely in
+## proportion to its hardness; without, the best ranked.
+func bite_cell(target: Job, at: Vector2, rng: RandomNumberGenerator = null) -> int:
 	var here := world.cell_at(at)
 	if here < 0:
 		return -1
 	var cx := here % world.width
 	@warning_ignore("integer_division")
 	var cy := here / world.width
+	var found: PackedInt32Array = []
+	var ranks: PackedFloat32Array = []
 	var best := -1
-	var best_d := INF
+	var best_rank := -INF
 	for k in 8:
 		var nx := cx + _DX[k]
 		var ny := cy + _DY[k]
@@ -222,11 +293,30 @@ func bite_cell(target: Job, at: Vector2) -> int:
 		var n := ny * world.width + nx
 		if _cell_job.get(n, -1) != target.id:
 			continue
-		var d := world.cell_center(n).distance_squared_to(target.b)
-		if d < best_d:
-			best_d = d
+		var r: float = _cell_rank.get(n, 0.0)
+		found.append(n)
+		ranks.append(r)
+		if r > best_rank:
+			best_rank = r
 			best = n
-	return best
+	if rng == null or ragged <= 0.0 or found.size() < 2:
+		return best
+	var weights: PackedFloat32Array = []
+	var total := 0.0
+	for k in found.size():
+		var w := exp((ranks[k] - best_rank) / ragged) / maxf(1.0, world.soil[found[k]] / world.soil_hardness)
+		weights.append(w)
+		total += w
+	var pick := rng.randf() * total
+	for k in found.size():
+		pick -= weights[k]
+		if pick <= 0.0:
+			return found[k]
+	return found[found.size() - 1]
+
+## True if `cell` is still soil of `target` (a bite chosen earlier is still there).
+func is_job_cell(target: Job, cell: int) -> bool:
+	return _cell_job.get(cell, -1) == target.id
 
 const _DX: PackedInt32Array = [1, -1, 0, 0, 1, 1, -1, -1]
 const _DY: PackedInt32Array = [0, 0, 1, -1, 1, -1, 1, -1]

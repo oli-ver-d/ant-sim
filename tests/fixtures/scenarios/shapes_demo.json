@@ -1,0 +1,38 @@
+{
+	"name": "shapes_demo",
+	"description": "M13a check: minims dig a curving, tapering path job and an irregular blob chamber through textured soil (clay, roots, stones) with rough outlines.",
+	"seed": 12,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1100],
+			"population": {"minim": 50, "media": 20},
+			"params": {"hitchhiker_fraction": 0.0},
+			"state_params": {"assign_role": {"stayer": "dig"}, "dig": {"on_idle": "dig"}},
+			"nest_params": {
+				"underground": {
+					"size": [1000, 1000],
+					"carve": [{"center": [500, 500], "radius": 40}],
+					"texture": {"clay": 0.2, "stones": 8},
+					"overdig": 4.5,
+					"plan": [
+						{"name": "gallery", "path": [[536, 500], [590, 470], [640, 480], [690, 440]], "radii": [9, 8, 7, 6], "priority": 0, "diggers": 16},
+						{"name": "cave", "origin": [688, 442], "lobes": [720, 420, 34, 24, 0.4, 700, 390, 20, 16, 1.2, 745, 445, 18, 14, 0.0], "face": [690, 440], "priority": 1, "diggers": 16},
+						{"name": "twig", "path": [[480, 530], [430, 580], [420, 640]], "radii": [7, 6, 5], "priority": 0, "diggers": 10}
+					]
+				}
+			}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [540, 800], "rotation": -20, "length": 240, "width": 110, "shape": "elliptic", "teeth": 20, "seed": 5}
+	],
+	"warmup": 60,
+	"ticks_per_frame": [{"t": 0, "tpf": 0.5}, {"t": 4, "tpf": 8}],
+	"camera": {
+		"surface": [{"t": 0, "pos": [540, 1050], "zoom": 1.4}],
+		"nest": [{"t": 0, "fit": "excavation", "margin": 60, "max_zoom": 4}]
+	},
+	"render": {"layout": {"mode": "split", "colony": 0, "ratio": 0.35}}
+}

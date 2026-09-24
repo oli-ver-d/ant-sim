@@ -319,3 +319,135 @@ func nearest_free(pos: Vector2, max_cells: int = 40) -> Vector2:
 		if best >= 0:
 			return cell_center(best)
 	return pos
+
+# --- Soil texture ----------------------------------------------------------------------
+# Soil isn't uniform: patches of clay and fine roots take more digging, and
+# stones can't be dug at all (they are Cell.WALL, so plans and routes go
+# around them and a chamber dug around one keeps it as a pillar). All of it
+# comes from a seed, not the simulation's RNG.
+
+enum Soil { PLAIN = 0, CLAY = 1, ROOT = 2, STONE = 3 }
+
+## Soil kind of each cell (Soil); empty until add_soil_texture().
+var soil_kind: PackedByteArray = []
+
+## Adds the texture to soil laid by fill_soil(). params (all optional):
+##   clay: share of cells in clay patches (0.16), clay_hardness: work
+##   multiplier (2.2), roots: share of cells with roots (0.05),
+##   root_hardness (3.0), stones: stones per 10,000 cells (5), rocks: big
+##   rocks per 100,000 cells (4), pebbles: share of cells holding a pebble
+##   (0.002).
+## Cells within the keep_clear circles (x, y, radius) stay plain soil.
+func add_soil_texture(seed_value: int, params: Dictionary, keep_clear: PackedVector3Array = []) -> void:
+	soil_kind.resize(width * height)
+	soil_kind.fill(Soil.PLAIN)
+	var clay_share := float(params.get("clay", 0.16))
+	var clay_hard := float(params.get("clay_hardness", 2.2))
+	var root_share := float(params.get("roots", 0.05))
+	var root_hard := float(params.get("root_hardness", 3.0))
+	# Clay: where a smooth two-octave noise is high (threshold picked so
+	# about clay_share of the cells are clay).
+	var clay_cut := 1.0 - clay_share * 1.6
+	for cy in height:
+		for cx in width:
+			var i := cy * width + cx
+			if obstacles[i] != Cell.SOIL or _kept_clear(i, keep_clear):
+				continue
+			var n := 0.65 * _value_noise(cx / 14.0, cy / 11.0, seed_value) + 0.35 * _value_noise(cx / 5.0, cy / 5.0, seed_value + 17)
+			if n > clay_cut:
+				soil_kind[i] = Soil.CLAY
+				soil[i] *= clay_hard
+				continue
+			# Roots: thin lines where a warped noise crosses one half.
+			var r := _value_noise(cx / 9.0 + 0.4 * _value_noise(cx / 20.0, cy / 20.0, seed_value + 5), cy / 9.0, seed_value + 31)
+			if absf(r - 0.5) < root_share * 0.45 and _value_noise(cx / 30.0, cy / 30.0, seed_value + 43) > 0.45:
+				soil_kind[i] = Soil.ROOT
+				soil[i] *= root_hard
+	# Stones and rocks: small blobs of undiggable cells.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 92821 + 7
+	var stones := int(float(params.get("stones", 5.0)) * width * height / 10000.0)
+	var rocks := int(float(params.get("rocks", 4.0)) * width * height / 100000.0)
+	for k in stones + rocks:
+		var centre := Vector2(rng.randf() * size.x, rng.randf() * size.y)
+		var r := rng.randf_range(1.2, 2.2) * cell_size if k < stones else rng.randf_range(3.0, 5.0) * cell_size
+		var squash := rng.randf_range(0.55, 1.0)
+		var turn := rng.randf() * TAU
+		for cy in range(maxi(0, int((centre.y - r) * _inv_cell)), mini(height, int((centre.y + r) * _inv_cell) + 1)):
+			for cx in range(maxi(0, int((centre.x - r) * _inv_cell)), mini(width, int((centre.x + r) * _inv_cell) + 1)):
+				var i := cy * width + cx
+				var local := (cell_center(i) - centre).rotated(-turn)
+				if obstacles[i] != Cell.SOIL or _kept_clear(i, keep_clear) or Vector2(local.x, local.y / squash).length() > r:
+					continue
+				_make_stone(i)
+	var pebbles := float(params.get("pebbles", 0.002))
+	for k in int(pebbles * width * height):
+		var i := rng.randi() % (width * height)
+		if obstacles[i] == Cell.SOIL and not _kept_clear(i, keep_clear):
+			_make_stone(i)
+	version += 1
+	edit_version += 1
+
+func _make_stone(i: int) -> void:
+	obstacles[i] = Cell.WALL
+	soil[i] = 0.0
+	soil_kind[i] = Soil.STONE
+
+func _kept_clear(i: int, keep_clear: PackedVector3Array) -> bool:
+	if keep_clear.is_empty():
+		return false
+	var c := cell_center(i)
+	for k in keep_clear:
+		if c.distance_squared_to(Vector2(k.x, k.y)) <= k.z * k.z:
+			return true
+	return false
+
+## Work a digger must put into cell i relative to plain soil (1 = plain; INF
+## for stone and walls; 0 for free cells).
+func hardness_at(i: int) -> float:
+	match obstacles[i]:
+		Cell.FREE:
+			return 0.0
+		Cell.SOIL:
+			return soil[i] / soil_hardness
+		_:
+			return INF
+
+## Smooth value noise over (x, y) in [0, 1), seeded.
+static func _value_noise(x: float, y: float, s: int) -> float:
+	var ix := floori(x)
+	var iy := floori(y)
+	var fx := x - ix
+	var fy := y - iy
+	fx = fx * fx * (3.0 - 2.0 * fx)
+	fy = fy * fy * (3.0 - 2.0 * fy)
+	return lerpf(lerpf(DigShape._lattice(ix, iy, s), DigShape._lattice(ix + 1, iy, s), fx),
+			lerpf(DigShape._lattice(ix, iy + 1, s), DigShape._lattice(ix + 1, iy + 1, s), fx), fy)
+
+## Frees every soil cell in `set_cells`, as if dug out at once (stones stay).
+func carve_cells(set_cells: PackedInt32Array) -> void:
+	for cell in set_cells:
+		if cell >= 0 and cell < obstacles.size() and obstacles[cell] == Cell.SOIL:
+			dig_log.append(cell)
+			_free_soil(cell)
+
+## Carves a DigShape.path() (a tunnel dug out at once).
+func carve_path(pts: PackedVector2Array, r: PackedFloat32Array, rough: float = 0.0, rough_seed: int = 0) -> void:
+	carve_cells(DigShape.path(self, pts, r, rough, rough_seed).cells)
+
+## Carves a DigShape.ellipses() blob (a chamber dug out at once).
+func carve_ellipses(lobes: PackedFloat32Array, rough: float = 0.0, rough_seed: int = 0) -> void:
+	carve_cells(DigShape.ellipses(self, lobes, Vector2(lobes[0], lobes[1]), rough, rough_seed).cells)
+
+## Turns a stone (or any blocked cell) into diggable soil of `hardness`
+## (times plain soil): e.g. a chamber planned over a stone digs it out. Still
+## blocked, so navigation is unaffected; logged in dig_log for renderers.
+func soften(cell: int, hardness: float) -> void:
+	if obstacles[cell] == Cell.FREE or obstacles[cell] == Cell.SOIL:
+		return
+	obstacles[cell] = Cell.SOIL
+	soil[cell] = soil_hardness * hardness
+	if not soil_kind.is_empty():
+		soil_kind[cell] = Soil.CLAY
+	dig_log.append(cell)
+	version += 1

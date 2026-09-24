@@ -89,20 +89,25 @@ func setup(layer_size: Vector2, params: Dictionary) -> void:
 	sick_rate = float(params.get("mould_rate", sick_rate))
 
 ## Makes the cells within `radius` of `centre` (and within `clip_radius` of
-## `clip_centre`, if given: the chamber's walls) the garden of chamber k.
+## `clip_centre`, if given) the garden of chamber k.
 func add_chamber(k: int, centre: Vector2, radius: float, clip_centre: Vector2 = Vector2.ZERO, clip_radius: float = 0.0) -> void:
+	var r2 := radius * radius
+	add_chamber_where(k, Rect2(centre, Vector2.ZERO).grow(radius), func(at: Vector2) -> bool:
+		return at.distance_squared_to(centre) <= r2 and (clip_radius <= 0.0 or at.distance_to(clip_centre) <= clip_radius))
+
+## Makes the cells in `bounds` for which accept(cell centre) is true the
+## garden of chamber k (any shape; cells already in a garden stay there).
+func add_chamber_where(k: int, bounds: Rect2, accept: Callable) -> void:
 	while chamber_first.size() <= k:
 		chamber_first.append(cells.size())
 		chamber_count.append(0)
 	chamber_first[k] = cells.size()
-	var r2 := radius * radius
-	for cy in range(maxi(0, int((centre.y - radius) / CELL)), mini(height, int((centre.y + radius) / CELL) + 1)):
-		for cx in range(maxi(0, int((centre.x - radius) / CELL)), mini(width, int((centre.x + radius) / CELL) + 1)):
+	for cy in range(maxi(0, int(bounds.position.y / CELL)), mini(height, int(bounds.end.y / CELL) + 1)):
+		for cx in range(maxi(0, int(bounds.position.x / CELL)), mini(width, int(bounds.end.x / CELL) + 1)):
 			var c := cy * width + cx
 			if chamber_of[c] != NONE:
 				continue
-			var at := Vector2((cx + 0.5) * CELL, (cy + 0.5) * CELL)
-			if at.distance_squared_to(centre) <= r2 and (clip_radius <= 0.0 or at.distance_to(clip_centre) <= clip_radius):
+			if accept.call(Vector2((cx + 0.5) * CELL, (cy + 0.5) * CELL)):
 				chamber_of[c] = k
 				cells.append(c)
 	chamber_count[k] = cells.size() - chamber_first[k]

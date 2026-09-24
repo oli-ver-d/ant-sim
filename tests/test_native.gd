@@ -19,6 +19,7 @@ const RUNS := {
 	"two_species": 600,
 	"colony_founding": 1500,
 	"res://tests/fixtures/scenarios/dig_demo.json": 900,
+	"res://tests/fixtures/scenarios/shapes_demo.json": 900,
 	"res://tests/fixtures/scenarios/brood_demo.json": 900,
 	"res://tests/fixtures/scenarios/garden_demo.json": 900,
 	"res://tests/fixtures/scenarios/nest_bench.json": 450,

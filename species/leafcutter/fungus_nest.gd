@@ -112,6 +112,12 @@ var queen_reserve: float = 0.0
 var queen_feed_rate: float = 0.15
 var _entrance_planned: bool = false
 var _role_timer: float = 0.0
+## Cached places in chambers (see _spot).
+var _spots: Dictionary[Vector3, Vector2] = {}
+## Default roughness of dug outlines (nest_params underground "overdig").
+const OVERDIG := 4.5
+## Gardens grow this many cells (of the nest layer) in from a chamber's walls.
+const GARDEN_DEPTH := 2
 
 func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	var p := params
@@ -207,17 +213,29 @@ func hash_state(ctx: HashingContext) -> void:
 func _prepare_underground(sim: Simulation, under: Dictionary, params: Dictionary) -> Dictionary:
 	var u := under.duplicate()
 	var size := ScenarioEvents.vec2(u.get("size", [1280, 1280]))
+	# Leafcutter soil has texture (clay, roots, stones) and dug walls are rough
+	# unless the scenario says otherwise.
+	if not u.has("texture"):
+		u["texture"] = {}
+	if not u.has("overdig"):
+		u["overdig"] = OVERDIG
 	chambers_layout = FungusChambers.new()
 	chambers_layout.setup(size, sim.rng.seed, u)
 	var shaft := chambers_layout.shaft
 	var royal := chambers_layout.royal()
 	u["shaft"] = [shaft.x, shaft.y]
-	var carve: Array = [{"center": [royal.centre.x, royal.centre.y], "radius": royal.radius}]
+	var carve: Array = [chambers_layout.royal_carve()]
 	if bool(u.get("open", true)):
 		var r := float(u.get("shaft_radius", 10.0))
 		carve.append({"from": [royal.centre.x, royal.centre.y], "to": [shaft.x, shaft.y], "radius": chambers_layout.tunnel_radius})
 		carve.append({"center": [shaft.x, shaft.y], "radius": r})
 	u["carve"] = carve
+	# No stones between the royal chamber and the shaft (the first tunnel).
+	var clear: Array = u.get("keep_clear", []).duplicate()
+	for k in 6:
+		var p := royal.centre.lerp(shaft, k / 5.0)
+		clear.append([p.x, p.y, chambers_layout.tunnel_radius + 10.0])
+	u["keep_clear"] = clear
 	open_entrance_at = int(params.get("open_entrance_at", open_entrance_at))
 	brood_per_nurse = float(params.get("brood_per_nurse", brood_per_nurse))
 	retinue_max = int(params.get("retinue_max", retinue_max))
@@ -230,13 +248,14 @@ func _prepare_underground(sim: Simulation, under: Dictionary, params: Dictionary
 
 func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	var l := sim.layers[underground_layer]
+	chambers_layout.attach(l)
 	var royal := chambers_layout.royal()
 	royal.nav_field = l.nav().set_target_point(&"chamber:0", royal.centre)
 	# An established nest starts with garden chambers already dug.
 	for n in int(params.get("initial_chambers", 0)):
 		var ch := chambers_layout.propose()
 		if ch != null:
-			chambers_layout.add_dug(ch, l.world, l.nav())
+			chambers_layout.add_dug(ch, l.nav())
 	# The entrance shaft of a sealed nest takes extra digging (it goes all
 	# the way up to the surface).
 	if not portal.open:
@@ -258,10 +277,15 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -
 	garden = GardenGrid.new()
 	garden.setup(Vector2(l.world.size), params.get("underground", {}))
 	garden.cap = chamber_capacity / (PI * 50.0 * 50.0 / (GardenGrid.CELL * GardenGrid.CELL))
-	garden.add_chamber(0, garden_spot(), royal.radius * 0.62, royal.centre, royal.radius * 0.88)
+	var spot := garden_spot()
+	var r2 := royal.radius * 0.62 * royal.radius * 0.62
+	var layout := chambers_layout
+	garden.add_chamber_where(0, Rect2(spot, Vector2.ZERO).grow(royal.radius * 0.62), func(at: Vector2) -> bool:
+		return at.distance_squared_to(spot) <= r2 and layout.chamber_at(at) == 0 and layout.depth_at(at) >= GARDEN_DEPTH \
+				and not l.world.is_blocked(at))
 	for c in chambers_layout.list:
 		if c.dug and c.kind == FungusChambers.Kind.GARDEN:
-			garden.add_chamber(c.index, c.centre, c.radius * 0.9)
+			_add_garden_chamber(c)
 	_seed_garden(fungus)
 	_sync_garden_totals(0.0)
 
@@ -296,8 +320,19 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 		chambers = chambers_layout.dug_count()
 		for c in chambers_layout.list:
 			if c.dug and c.kind == FungusChambers.Kind.GARDEN and not garden.has_chamber(c.index):
-				garden.add_chamber(c.index, c.centre, c.radius * 0.9)
+				_add_garden_chamber(c)
 				_seed_new_garden(sim, c.index)
+
+## Chamber c's garden: its open floor, GARDEN_DEPTH cells in from the walls.
+func _add_garden_chamber(c: FungusChambers.Chamber) -> void:
+	var layout := chambers_layout
+	var w := layout.world
+	var k := c.index
+	var bounds := Rect2(w.cell_center(c.cells[0]), Vector2.ZERO)
+	for cell in c.cells:
+		bounds = bounds.expand(w.cell_center(cell))
+	garden.add_chamber_where(k, bounds.grow(w.cell_size), func(at: Vector2) -> bool:
+		return layout.chamber_at(at) == k and layout.depth_at(at) >= GARDEN_DEPTH and not w.is_blocked(at))
 
 ## Ants of this colony other than the queen.
 func workers_alive(sim: Simulation) -> int:
@@ -318,8 +353,7 @@ func lay_interval_now(sim: Simulation, base: float) -> float:
 
 ## Where the queen sits in the royal chamber.
 func queen_spot() -> Vector2:
-	var royal := chambers_layout.royal()
-	return royal.centre + Vector2(-royal.radius * 0.22, royal.radius * 0.05)
+	return _spot(0, Vector2(-0.22, 0.05))
 
 ## The chamber brood lives in: the first garden chamber dug, else the royal one.
 func brood_chamber() -> int:
@@ -331,18 +365,24 @@ func brood_chamber() -> int:
 ## Centre of a brood pile (LeafcutterBrood.Pile): eggs beside the queen,
 ## larvae in the garden, pupae at a drier spot near the wall.
 func pile_centre(p: int) -> Vector2:
-	var royal := chambers_layout.royal()
 	match p:
 		LeafcutterBrood.Pile.EGGS, LeafcutterBrood.Pile.QUEEN:
-			return royal.centre + Vector2(royal.radius * 0.3, royal.radius * 0.22)
+			return _spot(0, Vector2(0.3, 0.22))
 		LeafcutterBrood.Pile.LARVAE:
 			var k := brood_chamber()
-			var c := chambers_layout.list[k]
-			return c.centre + (Vector2(royal.radius * 0.28, -royal.radius * 0.35) if k == 0 else Vector2(-c.radius * 0.25, 0.0))
+			return _spot(k, Vector2(0.28, -0.35) if k == 0 else Vector2(-0.25, 0.0))
 		_:
 			var k := brood_chamber()
-			var c := chambers_layout.list[k]
-			return c.centre + (Vector2(-royal.radius * 0.1, -royal.radius * 0.62) if k == 0 else Vector2(c.radius * 0.45, c.radius * 0.3))
+			return _spot(k, Vector2(-0.1, -0.62) if k == 0 else Vector2(0.45, 0.3))
+
+## A place in chamber k at `rel` from its centre, as a share of the way to
+## its edge in that direction (FungusChambers.point_in; works for any shape).
+## Cached: chambers don't change shape.
+func _spot(k: int, rel: Vector2) -> Vector2:
+	var key := Vector3(k, rel.x, rel.y)
+	if not _spots.has(key):
+		_spots[key] = chambers_layout.point_in(k, rel.angle(), rel.length())
+	return _spots[key]
 
 ## Position of slot `s` in pile p: a sunflower spiral out from the centre.
 func pile_slot(p: int, s: int) -> Vector2:
@@ -383,7 +423,7 @@ func spawn_initial(sim: Simulation, caste: int) -> int:
 		var q := sim.spawn_ant(colony, caste, queen_spot(), 0.0, underground_layer)
 		queen_ant = q
 		return q
-	var at := royal.centre + Vector2.from_angle(sim.rng.randf() * TAU) * royal.radius * 0.6 * sqrt(sim.rng.randf())
+	var at := chambers_layout.random_point(0, sim.rng, 2)
 	var i := sim.spawn_ant(colony, caste, at, sim.rng.randf_range(-PI, PI), underground_layer)
 	if i >= 0:
 		sim.change_state(i, first_state(sim, caste))
@@ -473,8 +513,12 @@ func _plan_entrance() -> void:
 	var royal := chambers_layout.royal()
 	var shaft := chambers_layout.shaft
 	var dir := (shaft - royal.centre).normalized()
-	var start := royal.centre + dir * royal.radius * 0.8
-	plan.add_job("entrance_tunnel", start, start, shaft, chambers_layout.tunnel_radius, -2.0, 4)
+	var start := royal.centre + dir * chambers_layout.reach(0, dir.angle()) * 0.8
+	var pts := chambers_layout.route_tunnel(start, shaft, plan)
+	var radii := PackedFloat32Array()
+	for p in pts:
+		radii.append(chambers_layout.tunnel_radius)
+	plan.add_path_job("entrance_tunnel", start, pts, radii, -2.0, 4)
 	var job := plan.add_job("entrance", shaft - dir * 6.0, shaft, shaft, maxf(8.0, portal.radius * 0.8), -1.0, 4)
 	plan.open_portal_when_done(job, portal)
 
@@ -512,8 +556,7 @@ func garden_capacity() -> float:
 
 ## Centre of the founding garden in the royal chamber.
 func garden_spot() -> Vector2:
-	var royal := chambers_layout.royal()
-	return royal.centre + Vector2(royal.radius * 0.3, -royal.radius * 0.3)
+	return _spot(0, Vector2(0.3, -0.3))
 
 ## Spreads `mass` of fungus over the gardens from the founding garden's
 ## middle outward, filling cells to 90% of their capacity; any more is
@@ -607,12 +650,17 @@ func leaf_chamber() -> int:
 func leaf_drop_point(sim: Simulation) -> Vector2:
 	var k := leaf_chamber()
 	var c := chambers_layout.list[k]
+	var at: Vector2
 	if k == 0:
 		var spot := garden_spot()
-		return spot + (c.centre - spot).normalized().rotated(0.6) * c.radius * 0.5 \
-				+ Vector2.from_angle(sim.rng.randf() * TAU) * 3.0
-	var inward := (c.centre - c.door).normalized()
-	return c.door + inward * c.radius * 0.25 + inward.orthogonal() * sim.rng.randf_range(-0.5, 0.5) * c.radius * 0.6
+		at = spot + (c.centre - spot).normalized().rotated(0.6) * c.radius * 0.5 + Vector2.from_angle(sim.rng.randf() * TAU) * 3.0
+	else:
+		var inward := (c.centre - c.door).normalized()
+		at = c.door + inward * c.radius * 0.25 + inward.orthogonal() * sim.rng.randf_range(-0.5, 0.5) * c.radius * 0.6
+	# Irregular chambers: somewhere else on its floor if that missed it.
+	if chambers_layout.chamber_at(at) != k or chambers_layout.world.is_blocked(at):
+		at = chambers_layout.random_point(k, sim.rng, 2)
+	return at
 
 ## A fragment arrives underground (dropped at a garden's edge).
 func leaf_arrived(sim: Simulation, item: Item) -> void:
@@ -773,7 +821,7 @@ func spawn_from_pool(sim: Simulation, caste: int, l: int) -> int:
 		if c.dug:
 			dug.append(c)
 	var ch := dug[sim.rng.randi() % dug.size()]
-	var at := ch.centre + Vector2.from_angle(sim.rng.randf() * TAU) * ch.radius * 0.7 * sqrt(sim.rng.randf())
+	var at := chambers_layout.random_point(ch.index, sim.rng, 2)
 	var i := sim.spawn_ant(sim.colonies[colony_id], caste, at, sim.rng.randf_range(-PI, PI), l)
 	if i >= 0:
 		sim.change_state(i, first_state(sim, caste))

@@ -140,12 +140,22 @@ func receive_waste(_sim: Simulation, item: Item) -> void:
 #       "spoil": [-70, 40],
 #       "carve": [{"from": [x, y], "to": [x, y], "radius": r}, ...],
 #       "plan": [{"name": "tunnel", "origin": [x, y], "from": [x, y], "to": [x, y],
-#                 "radius": 7, "priority": 0, "diggers": 4}, ...]}
+#                 "radius": 7, "priority": 0, "diggers": 4},
+#                {"name": "gallery", "path": [[x, y], ...], "radii": [9, 7, ...]},
+#                {"name": "cave", "origin": [x, y], "lobes": [cx, cy, rx, ry, angle, ...],
+#                 "face": [x, y]}, ...],
+#       "texture": {"clay": 0.16, "roots": 0.05, "stones": 5, ...}, "overdig": 4.5,
+#       "ragged": 6}
 #
 # "shaft" is where the entrance comes down (default: the layer's centre);
 # "carve" shapes are dug out from the start (default: the shaft bottom, if
-# open), "plan" jobs are dug by the colony. A sealed nest ("open": false) has
-# no entrance until the job named "entrance" (if any) is finished.
+# open), "plan" jobs are dug by the colony: capsules (from/to/radius), paths
+# (points with a radius each) or blobs of ellipses (see ExcavationPlan and
+# DigShape). "texture" gives the soil clay, roots and stones (World.
+# add_soil_texture, kept clear of the shaft and the carved shapes);
+# "overdig" makes dug outlines rough and "ragged" the digging face uneven.
+# A sealed nest ("open": false) has no entrance until the job named
+# "entrance" (if any) is finished.
 
 ## Layer index of the nest's underground, or -1 if it has none.
 var underground_layer: int = -1
@@ -175,8 +185,29 @@ func setup_underground(sim: Simulation, params: Dictionary) -> void:
 	var open := bool(params.get("open", true))
 	if params.has("spoil"):
 		spoil_offset = ScenarioEvents.vec2(params["spoil"])
+	if params.has("texture"):
+		# Clay, roots and stones, kept clear of the shaft and anything carved.
+		var clear := PackedVector3Array([Vector3(shaft.x, shaft.y, shaft_r + 12.0)])
+		for c: Dictionary in params.get("carve", []):
+			if c.has("lobes"):
+				var lobes: Array = c["lobes"]
+				for k in range(0, lobes.size() - 4, 5):
+					clear.append(Vector3(lobes[k], lobes[k + 1], maxf(lobes[k + 2], lobes[k + 3]) + 8.0))
+				continue
+			var a := ScenarioEvents.vec2(c.get("from", c.get("center", [0, 0])))
+			var b := ScenarioEvents.vec2(c.get("to", [a.x, a.y]))
+			var r := float(c.get("radius", 10.0)) + 8.0
+			for k in 5:
+				var p := a.lerp(b, k / 4.0)
+				clear.append(Vector3(p.x, p.y, r))
+		for p: Variant in params.get("keep_clear", []):
+			clear.append(Vector3(p[0], p[1], p[2]))
+		l.world.add_soil_texture(sim.rng.seed * 31 + colony_id, params["texture"], clear)
 	if params.has("carve"):
 		for c: Dictionary in params["carve"]:
+			if c.has("lobes"):
+				l.world.carve_ellipses(PackedFloat32Array(c["lobes"]), float(c.get("rough", 0.0)), int(c.get("seed", 0)))
+				continue
 			var a := ScenarioEvents.vec2(c.get("from", c.get("center", [0, 0])))
 			l.world.carve_segment(a, ScenarioEvents.vec2(c.get("to", [a.x, a.y])), float(c.get("radius", 10.0)))
 	elif open:
@@ -185,11 +216,30 @@ func setup_underground(sim: Simulation, params: Dictionary) -> void:
 	portal.open = open
 	plan = ExcavationPlan.new(l)
 	plan.bite = float(params.get("bite", plan.bite))
+	plan.overdig = float(params.get("overdig", plan.overdig))
+	plan.ragged = float(params.get("ragged", plan.ragged))
+	plan.rough_seed = sim.rng.seed * 13 + colony_id
 	for j: Dictionary in params.get("plan", []):
-		var a := ScenarioEvents.vec2(j["from"])
-		var job := plan.add_job(str(j.get("name", "")), ScenarioEvents.vec2(j.get("origin", j["from"])), a,
-				ScenarioEvents.vec2(j.get("to", j["from"])), float(j.get("radius", 7.0)),
-				float(j.get("priority", 0.0)), int(j.get("diggers", 4)))
+		var job: ExcavationPlan.Job
+		var name := str(j.get("name", ""))
+		var prio := float(j.get("priority", 0.0))
+		var diggers := int(j.get("diggers", 4))
+		if j.has("path"):
+			var pts := PackedVector2Array()
+			for p: Array in j["path"]:
+				pts.append(Vector2(p[0], p[1]))
+			var radii := PackedFloat32Array(j.get("radii", []))
+			while radii.size() < pts.size():
+				radii.append(float(j.get("radius", 7.0)))
+			job = plan.add_path_job(name, ScenarioEvents.vec2(j.get("origin", j["path"][0])), pts, radii, prio, diggers)
+		elif j.has("lobes"):
+			var lobes := PackedFloat32Array(j["lobes"])
+			var into := ScenarioEvents.vec2(j.get("origin", [lobes[0], lobes[1]]))
+			job = plan.add_blob_job(name, into, lobes, ScenarioEvents.vec2(j.get("face", [into.x, into.y])), prio, diggers)
+		else:
+			var a := ScenarioEvents.vec2(j["from"])
+			job = plan.add_job(name, ScenarioEvents.vec2(j.get("origin", j["from"])), a,
+					ScenarioEvents.vec2(j.get("to", j["from"])), float(j.get("radius", 7.0)), prio, diggers)
 		if job.name == "entrance":
 			plan.open_portal_when_done(job, portal)
 

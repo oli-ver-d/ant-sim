@@ -12,6 +12,7 @@ extends Behaviour
 ##         speed_factor (1.0), give_up_after (s, 90)
 ## scratch_i: the job id (its digger count is held while in this state)
 ## scratch_f0: seconds spent on the current bite
+## target: centre of the cell being bitten
 
 func enter(sim: Simulation, i: int) -> void:
 	sim.scratch_i[i] = -1
@@ -53,10 +54,17 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		Steering.move_to(sim, i, step, move_speed, dt)
 		sim.scratch_f0[i] = 0.0
 		return ""
-	var cell := plan.bite_cell(job, at)
+	# The cell to bite is chosen when a bite starts (a weighted random pick,
+	# see ExcavationPlan.bite_cell) and kept while it lasts.
+	var cell := plan.world.cell_at(sim.target[i])
+	if sim.scratch_f0[i] == 0.0 or not plan.is_job_cell(job, cell) or sim.target[i].distance_squared_to(at) > 4.0 * plan.world.cell_size * plan.world.cell_size:
+		cell = plan.bite_cell(job, at, sim.rng)
+		sim.scratch_f0[i] = 0.0
+		if cell >= 0:
+			sim.target[i] = plan.world.cell_center(cell)
 	if cell < 0:
-		# The face moved on (someone else finished this spot): step toward the end.
-		Steering.move_to(sim, i, job.b, move_speed * 0.5, dt)
+		# The face moved on (someone else finished this spot): step toward where it heads.
+		Steering.move_to(sim, i, job.face_target, move_speed * 0.5, dt)
 		return ""
 	# Bite: face the soil, working the head from side to side.
 	var biting := sim.scratch_f0[i] + dt

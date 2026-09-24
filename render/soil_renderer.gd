@@ -48,11 +48,11 @@ func _rebuild() -> void:
 	for i in world.obstacles.size():
 		if world.obstacles[i] != World.Cell.FREE:
 			bytes[i * 2] = 255
-			bytes[i * 2 + 1] = int(clampf(world.soil[i] / world.soil_hardness, 0.0, 1.0) * 255.0) if has_soil else 255
+			bytes[i * 2 + 1] = int(clampf(world.soil[i] / world.soil_hardness, 0.0, 1.0) * 255.0) if has_soil and world.obstacles[i] == World.Cell.SOIL else 255
 	_image = Image.create_from_data(world.width, world.height, false, Image.FORMAT_RG8, bytes)
 	texture = ImageTexture.create_from_image(_image)
 
 func _texel(cell: int) -> Color:
 	if world.obstacles[cell] == World.Cell.FREE:
 		return Color(0, 0, 0)
-	return Color(1.0, clampf(world.soil_left(cell) / world.soil_hardness, 0.0, 1.0), 0.0)
+	return Color(1.0, clampf(world.soil_left(cell) / world.soil_hardness, 0.0, 1.0) if world.obstacles[cell] == World.Cell.SOIL else 1.0, 0.0)

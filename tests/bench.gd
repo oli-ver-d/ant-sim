@@ -22,10 +22,13 @@ func _initialize() -> void:
 			colony.nest.spawn_ants(sim, ants - colony.population)
 
 	var t0 := Time.get_ticks_usec()
+	var t_last := t0
 	for t in ticks:
 		sim.step()
 		if (t + 1) % (10 * config.tick_rate) == 0:
-			print("  t=%3ds %s" % [(t + 1) / config.tick_rate, _summary(sim)])
+			var now := Time.get_ticks_usec()
+			print("  t=%3ds %.2f ms/tick  %s" % [(t + 1) / config.tick_rate, (now - t_last) / 1000.0 / (10 * config.tick_rate), _summary(sim)])
+			t_last = now
 	var total_ms := (Time.get_ticks_usec() - t0) / 1000.0
 
 	print("%s: %d ants, %d ticks, %d pheromone channels, %d layers" % [scenario, sim.ant_count, ticks, sim.pheromones.channel_count(), sim.layers.size()])

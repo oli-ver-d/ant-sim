@@ -51,3 +51,9 @@ func update_pheromones(tick_count: int) -> void:
 			_blocked_cells = world.blocked_cells()
 			_blocked_version = world.version
 		pheromones.clear_cells(_blocked_cells)
+
+## A route for a new tunnel from `from` to `to` through this layer's soil,
+## around stones and clear of other cavities (see Router for the params).
+## Empty if there is none.
+func route(from: Vector2, to: Vector2, params: Dictionary = {}) -> PackedVector2Array:
+	return Router.route(world, from, to, params)
