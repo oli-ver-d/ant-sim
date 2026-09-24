@@ -94,16 +94,20 @@ func build_params(config: SimConfig, state_index: Dictionary[String, int], colon
 	obstacle_memory = params[&"obstacle_memory"]
 	arrive_distance = params[&"arrive_distance"]
 
-	# One params dictionary per (caste, state): the species' state_params with
+	# One params dictionary per (caste, state): the species' state_params (and
+	# its underground_state_params if the nest digs) with
 	# the caste's own state_params, then the colony's overrides, merged over
 	# them key by key.
 	num_states = state_index.size()
+	var underground := nest != null and nest.underground_layer >= 0
 	state_params_by_index.resize(species.castes.size() * num_states)
 	for c in species.castes.size():
 		var caste_overrides := species.castes[c].state_params
 		for state_id: String in state_index:
 			var merged: Dictionary = {}
 			merged.merge(species.state_params.get(state_id, {}), true)
+			if underground:
+				merged.merge(species.underground_state_params.get(state_id, {}), true)
 			merged.merge(caste_overrides.get(state_id, {}), true)
 			merged.merge(state_overrides.get(state_id, {}), true)
 			state_params_by_index[c * num_states + state_index[state_id]] = _resolve_channels(merged)

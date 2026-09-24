@@ -25,6 +25,10 @@ extends Resource
 @export var state_params: Dictionary = {}
 ## Overrides for SimConfig values plus species-only tunables.
 @export var tunables: Dictionary = {}
+## State params merged over state_params (before caste overrides) when the
+## colony's nest has an underground, e.g. so workers come back in to take
+## nest roles instead of looping outside.
+@export var underground_state_params: Dictionary = {}
 
 func caste_index(caste_id: StringName) -> int:
 	for i in castes.size():

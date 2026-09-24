@@ -12,6 +12,7 @@ static func register(registry: Registry) -> void:
 	registry.register_behaviour("carry_waste", CarryWasteBehaviour.new())
 	registry.register_behaviour("dig", DigBehaviour.new())
 	registry.register_behaviour("carry_spoil", CarrySpoilBehaviour.new())
+	registry.register_behaviour("go_up", GoUpBehaviour.new())
 
 	registry.register_food_source_type("food_pile", FoodPile)
 	registry.register_item_type("crumb", Item)

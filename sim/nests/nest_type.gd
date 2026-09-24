@@ -91,9 +91,13 @@ func pick_caste(sim: Simulation, species: SpeciesDef = null) -> int:
 	var r := sim.rng.randf() * total
 	for i in castes.size():
 		r -= castes[i].spawn_ratio
-		if r <= 0.0:
+		if r <= 0.0 and castes[i].spawn_ratio > 0.0:
 			return i
-	return castes.size() - 1
+	# Rounding left some over: the last caste that is ever spawned.
+	for i in range(castes.size() - 1, -1, -1):
+		if castes[i].spawn_ratio > 0.0:
+			return i
+	return 0
 
 # --- Waste ---------------------------------------------------------------------------
 # Nests may produce refuse that workers carry out to a dump (a midden) on the
@@ -213,3 +217,14 @@ func hash_underground(ctx: HashingContext) -> void:
 	if plan != null:
 		plan.hash_into(ctx)
 		ctx.update(PackedFloat64Array([spoil_mass, spoil_items, packed_spoil]).to_byte_array())
+
+## Places one of the colony's starting ants (scenario population) and
+## returns its index: at the entrance by default; nests with an underground
+## may put them inside instead.
+func spawn_initial(sim: Simulation, caste: int) -> int:
+	return sim.spawn_ant(sim.colonies[colony_id], caste, entrance_position(), sim.rng.randf_range(-PI, PI))
+
+## Called when ant i comes up onto the surface from the underground (the
+## core "go_up" behaviour), e.g. to point out a new worker.
+func ant_surfaced(_sim: Simulation, _i: int) -> void:
+	pass

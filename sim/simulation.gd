@@ -277,7 +277,9 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	var nest_params := def.nest_params.duplicate()
 	nest_params.merge(nest_param_overrides, true)
 	colony.nest.setup(self, colony, nest_params)
-	colony.build_allowed_states(behaviour_index)
+	# A nest that digs has more states and params for its castes (see Colony).
+	if colony.nest.underground_layer >= 0:
+		colony.build_params(config, behaviour_index, overrides)
 	colonies.append(colony)
 	return colony
 

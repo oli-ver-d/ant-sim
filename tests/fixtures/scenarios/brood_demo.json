@@ -1,0 +1,30 @@
+{
+	"name": "brood_demo",
+	"description": "Phase B check: the queen, her retinue and nurses with eggs, larvae and pupae in the royal chamber.",
+	"seed": 5,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1100],
+			"population": {"queen": 1, "minim": 16},
+			"nest_params": {
+				"initial_fungus": 120,
+				"brood_reserve": 10,
+				"underground": {"size": [1000, 1000], "royal_radius": 44},
+				"brood": {"lay_interval": 5, "egg": 40, "larva": 80, "pupa": 60, "callow": 6,
+					"initial": {"egg": 8, "larva": 10, "pupa": 7}}
+			}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [540, 800], "rotation": -20, "length": 240, "width": 110, "shape": "elliptic", "teeth": 20, "seed": 5}
+	],
+	"warmup": 20,
+	"ticks_per_frame": 0.5,
+	"camera": {
+		"surface": [{"t": 0, "pos": [540, 1050], "zoom": 1.4}],
+		"nest": [{"t": 0, "pos": [500, 500], "zoom": 8.0}]
+	},
+	"render": {"layout": {"mode": "split", "colony": 0, "ratio": 0.35}}
+}

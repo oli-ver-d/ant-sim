@@ -3,7 +3,30 @@ extends TestCase
 ## carrying spoil, and single-layer runs staying exactly as they were.
 
 var _config: SimConfig = load("res://sim/default_config.tres")
-var _registry := Registry.create_default()
+var _registry := _make_registry()
+
+## The default registry plus "digger": a minimal species on a BasicNest whose
+## one caste can dig once its nest has an underground, so these core tests
+## don't depend on any real species' nest.
+static func _make_registry() -> Registry:
+	var reg := Registry.create_default()
+	var caste := CasteDef.new()
+	caste.id = &"worker"
+	caste.size = 6.0
+	caste.speed = 32.0
+	caste.states = PackedStringArray(["linger"])
+	caste.underground_states = PackedStringArray(["dig", "carry_spoil"])
+	caste.initial_state = "linger"
+	var home := PheromoneChannelDef.new()
+	home.name = &"home"
+	var def := SpeciesDef.new()
+	def.id = &"digger"
+	def.castes = [caste]
+	def.channels = [home]
+	def.nest_type = "basic_nest"
+	def.state_params = {"dig": {"on_idle": "linger"}}
+	reg.register_species("digger", def)
+	return reg
 
 ## State hashes of every scenario after 300 ticks, recorded before layers
 ## existed (M10). Scenarios that don't opt in must not change at all.
@@ -20,13 +43,13 @@ const SINGLE_LAYER_HASHES := {
 	"two_species": "55da6f2129c046af00d413638853d60c7d2842b124c3f579856757792309b1b6",
 }
 
-## A leafcutter colony with a small underground: shaft at (200, 200), plus
+## A "digger" colony with a small underground: shaft at (200, 200), plus
 ## `under` merged over the defaults (e.g. a "plan").
 func _sim(under: Dictionary = {}) -> Simulation:
 	var u := {"size": [400, 400], "shaft": [200, 200], "shaft_radius": 10}
 	u.merge(under, true)
 	var sim := Simulation.new(_config, _registry, 1)
-	sim.add_colony("leafcutter", Vector2(540, 1200), {"underground": u})
+	sim.add_colony("digger", Vector2(540, 1200), {"underground": u})
 	return sim
 
 func _run_seconds(sim: Simulation, seconds: float) -> void:
@@ -80,7 +103,7 @@ func test_layers_are_isolated() -> void:
 func test_portal_round_trip() -> void:
 	var sim := _sim()
 	var nest := sim.colonies[0].nest
-	var ant := sim.spawn_ant(sim.colonies[0], 1, nest.entrance_position(), 0.0)
+	var ant := sim.spawn_ant(sim.colonies[0], 0, nest.entrance_position(), 0.0)
 	sim.change_state(ant, "carry_spoil")  # a state that never moves on its own without an item
 	check(sim.enter_portal(ant, nest.portal), "entered")
 	check(sim.in_transit(ant), "in transit")
@@ -163,7 +186,7 @@ func test_diggers_dig_and_spoil_reaches_the_surface() -> void:
 	check(cells > 50, "a tunnel of soil planned (%d cells)" % cells)
 	var ants: PackedInt32Array = []
 	for n in 6:
-		var ant := sim.spawn_ant(sim.colonies[0], 1, nest.entrance_position(), 0.0)
+		var ant := sim.spawn_ant(sim.colonies[0], 0, nest.entrance_position(), 0.0)
 		sim.change_state(ant, "dig")
 		ants.append(ant)
 	var surface_carriers := 0
@@ -184,7 +207,7 @@ func test_diggers_dig_and_spoil_reaches_the_surface() -> void:
 	# Determinism with layers.
 	var again := _sim({"plan": [{"name": "tunnel", "from": [200, 200], "to": [300, 200], "radius": 6, "diggers": 6}]})
 	for n in 6:
-		again.change_state(again.spawn_ant(again.colonies[0], 1, again.colonies[0].nest.entrance_position(), 0.0), "dig")
+		again.change_state(again.spawn_ant(again.colonies[0], 0, again.colonies[0].nest.entrance_position(), 0.0), "dig")
 	for t in 120 * _config.tick_rate:
 		again.step()
 	check_eq(again.state_hash(), sim.state_hash(), "same run, same hash")

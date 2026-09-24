@@ -14,7 +14,7 @@ func test_species_def_loads() -> void:
 	check(def != null, "leafcutter registered")
 	if def == null:
 		return
-	check_eq(def.castes.size(), 3, "caste count")
+	check_eq(def.castes.size(), 4, "caste count (minim, media, major, queen)")
 	check_eq(def.channels.size(), 2, "channel count")
 
 func test_determinism() -> void:

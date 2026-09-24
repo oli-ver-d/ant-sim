@@ -11,7 +11,8 @@ extends Node2D
 ## An underground layer: soil and dug space (SoilRenderer), the nest's own
 ## underground renderer ("underground:<nest type>", bind(sim, nest), e.g.
 ## gardens and brood), portal openings, pheromone glow (hidden by default),
-## ground items, ants, carried items, riders, debug. On the surface, nests
+## ground items, ants, carried items, riders, the nest's "underground_top:<type>"
+## renderer (things carried over the ants), debug. On the surface, nests
 ## that dig get a spoil heap (SpoilHeapRenderer) under their own renderer.
 
 var sim: Simulation
@@ -39,6 +40,7 @@ var alpha: float = 1.0:
 
 var _nest_layer: Node2D
 var _food_layer: Node2D
+var _top_layer: Node2D
 var _bound_food: Dictionary[int, bool] = {}
 var _bound_colonies: int = 0
 
@@ -118,6 +120,9 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	rider_renderer.layer = layer
 	rider_renderer.bind(sim)
 	add_child(rider_renderer)
+	# Nest things carried over the ants (e.g. brood in a nurse's jaws).
+	_top_layer = Node2D.new()
+	add_child(_top_layer)
 	if rain_renderer != null:
 		add_child(rain_renderer)
 
@@ -142,8 +147,11 @@ func _process(_delta: float) -> void:
 				heap.bind(sim, nest)
 				_nest_layer.add_child(heap)
 			_attach(_nest_layer, "nest:" + nest.type_id, nest)
-		elif nest.underground_layer == layer and registry.renderers.has("underground:" + nest.type_id):
-			_attach(_nest_layer, "underground:" + nest.type_id, nest)
+		elif nest.underground_layer == layer:
+			if registry.renderers.has("underground:" + nest.type_id):
+				_attach(_nest_layer, "underground:" + nest.type_id, nest)
+			if registry.renderers.has("underground_top:" + nest.type_id):
+				_attach(_top_layer, "underground_top:" + nest.type_id, nest)
 		_bound_colonies += 1
 	if layer != 0:
 		return
@@ -158,5 +166,8 @@ func _attach(target_layer: Node2D, key: String, target: Object) -> void:
 		push_warning("No renderer registered for %s" % key)
 		return
 	var node: Node2D = script.new()
+	# Renderers that declare `view` get this WorldView (e.g. for its alpha).
+	if "view" in node:
+		node.set("view", self)
 	node.call("bind", sim, target)
 	target_layer.add_child(node)

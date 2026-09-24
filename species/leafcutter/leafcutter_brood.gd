@@ -72,6 +72,9 @@ func setup(sim: Simulation, nest: FungusNest, species: SpeciesDef, params: Dicti
 	for s in STAGE_KEYS.size():
 		stage_time[s] = float(params.get(STAGE_KEYS[s], stage_time[s]))
 	max_brood = int(params.get("max_brood", max_brood))
+	care = bool(params.get("care", false))
+	if care:
+		_setup_care(params)
 	lay_ticks.resize(EVENT_LOG)
 	lay_ids.resize(EVENT_LOG)
 	emerge_ticks.resize(EVENT_LOG)
@@ -85,10 +88,12 @@ func setup(sim: Simulation, nest: FungusNest, species: SpeciesDef, params: Dicti
 		for k in n:
 			if count() >= max_brood:
 				break
-			var i := _add(s, nest.pick_caste(sim, species), nest)
+			var i := _add(s, _brood_caste(sim, nest, species), nest)
 			age[i] = stage_time[s] * (k + 0.5) / n
 			if s == Stage.LARVA:
 				growth[i] = age[i] / stage_time[s]
+			if care:
+				_drop_in_pile(i, home_pile(s), nest)
 
 func count() -> int:
 	return stage.size()
@@ -97,6 +102,9 @@ func count_stage(s: int) -> int:
 	return stage.count(s)
 
 func update(sim: Simulation, nest: FungusNest, dt: float) -> void:
+	if care:
+		_update_care(sim, nest, dt)
+		return
 	var colony := sim.colonies[nest.colony_id]
 	starving = nest.fungus <= nest.brood_reserve
 	var larva_bite := nest.ant_cost * dt / stage_time[Stage.LARVA]
@@ -124,7 +132,7 @@ func update(sim: Simulation, nest: FungusNest, dt: float) -> void:
 			and colony.population + count() < nest.max_population):
 		_budget -= 1.0
 		_since_lay = 0.0
-		var n := _add(Stage.EGG, nest.pick_caste(sim), nest)
+		var n := _add(Stage.EGG, _brood_caste(sim, nest, null), nest)
 		var e := eggs_laid % EVENT_LOG
 		lay_ticks[e] = sim.tick_count
 		lay_ids[e] = id[n]
@@ -152,6 +160,8 @@ func hash_into(ctx: HashingContext) -> void:
 	ctx.update(slot.to_byte_array())
 	ctx.update(growth.to_byte_array())
 	ctx.update(caste)
+	if care:
+		_hash_care(ctx)
 
 func _add(s: int, caste_index: int, nest: FungusNest) -> int:
 	id.append(_next_id)
@@ -163,7 +173,10 @@ func _add(s: int, caste_index: int, nest: FungusNest) -> int:
 	chamber.append(0)
 	slot.append(0)
 	var i := stage.size() - 1
-	_place(i, nest)
+	if care:
+		_add_care(nest)
+	else:
+		_place(i, nest)
 	return i
 
 ## Next stage; eggs and larvae move to the chamber for their new stage.
@@ -186,6 +199,10 @@ func _emerge(sim: Simulation, nest: FungusNest, i: int) -> void:
 	emerge_ids[e] = id[i]
 	emerge_ants[e] = ant
 	emerged += 1
+	_remove(i)
+
+## Removes record i.
+func _remove(i: int) -> void:
 	id.remove_at(i)
 	stage.remove_at(i)
 	age.remove_at(i)
@@ -193,6 +210,8 @@ func _emerge(sim: Simulation, nest: FungusNest, i: int) -> void:
 	slot.remove_at(i)
 	growth.remove_at(i)
 	caste.remove_at(i)
+	if care:
+		_remove_care(i)
 
 ## Chooses the chamber and the lowest free slot there for record i's stage.
 func _place(i: int, nest: FungusNest) -> void:
@@ -236,3 +255,227 @@ func _in_chamber(k: int, group: int, skip: int) -> int:
 		if j != skip and chamber[j] == k and _group(stage[j]) == group:
 			n += 1
 	return n
+
+## Caste of new brood: nest.pick_caste(), or with care on, `first_caste`
+## until the nest has raised `first_workers` (a founding colony's first
+## workers are all small).
+func _brood_caste(sim: Simulation, nest: FungusNest, species: SpeciesDef) -> int:
+	if care and first_caste >= 0 and nest.ants_raised + count() < first_workers:
+		return first_caste
+	return nest.pick_caste(sim, species)
+
+# --- Care (nests with an underground) ------------------------------------------------
+# With "care": true (FungusNest turns it on for nests that dig their own
+# underground) brood are things lying in the nest that workers look after:
+#
+#   - each record has a position on the nest's layer and a pile it lies in:
+#     just laid by the queen (QUEEN), or the egg, larva or pupa pile
+#     (FungusNest.pile_centre()), carried by an ant (CARRIED), or put down
+#     somewhere else (LOOSE). Brood away from its stage's pile is moved there
+#     by nurses (eggs from the queen to the egg pile, larvae into the garden,
+#     pupae to a drier spot);
+#   - dirt rises by dirt_rate per second and grooming clears it; brood at
+#     dirt 1 (neglected) stops developing;
+#   - larvae get hungry (hunger_rate per second) and only grow while hunger
+#     is below 1; a nurse feeding one brings gongylidia from the garden
+#     (feed_mass() fungus each, so a larva eats ant_cost over its stage).
+#     A larva hungry for starve_time seconds dies (deaths);
+#   - a callow at the end of its stage waits for a nurse to free it from the
+#     casing (free_callow()), then becomes a real ant where it lies.
+# With nobody to care for them brood stalls: eggs and pupae get dirty,
+# larvae starve. Tasks are claimed by one ant at a time (claimed).
+#
+# params: care, dirt_rate, hunger_rate, starve_time, first_caste, first_workers
+
+enum Pile { QUEEN, EGGS, LARVAE, PUPAE, CARRIED, LOOSE }
+## Distance within which brood counts as lying in its pile (grows with the slot).
+const PILE_REACH := 14.0
+
+var care: bool = false
+var dirt_rate: float = 1.0 / 45.0
+var hunger_rate: float = 1.0 / 22.0
+var starve_time: float = 120.0
+## Caste index of the first workers (-1 = any), until first_workers are raised.
+var first_caste: int = -1
+var first_workers: int = 0
+## Larvae that starved.
+var deaths: int = 0
+
+var pos: PackedVector2Array = []
+var pile: PackedByteArray = []
+## Ant carrying it, or -1.
+var carrier: PackedInt32Array = []
+## Ant that has taken a task on it, or -1.
+var claimed: PackedInt32Array = []
+var dirt: PackedFloat32Array = []
+var hunger: PackedFloat32Array = []
+## Seconds a larva has been at hunger 1.
+var hungry_for: PackedFloat32Array = []
+
+func _setup_care(params: Dictionary) -> void:
+	dirt_rate = float(params.get("dirt_rate", dirt_rate))
+	hunger_rate = float(params.get("hunger_rate", hunger_rate))
+	starve_time = float(params.get("starve_time", starve_time))
+	first_caste = int(params.get("first_caste", first_caste))
+	first_workers = int(params.get("first_workers", first_workers))
+
+## Fungus one feeding brings a larva.
+func feed_mass(nest: FungusNest) -> float:
+	return nest.ant_cost / maxf(1.0, stage_time[Stage.LARVA] * hunger_rate)
+
+## The pile a record at stage s belongs in.
+static func home_pile(s: int) -> int:
+	return Pile.EGGS if s == Stage.EGG else (Pile.LARVAE if s == Stage.LARVA else Pile.PUPAE)
+
+## True if record k lies in its stage's pile (so nobody needs to move it).
+func is_home(k: int, nest: FungusNest) -> bool:
+	var want := home_pile(stage[k])
+	if pile[k] != want:
+		return false
+	var reach := PILE_REACH * (1.0 + sqrt(float(slot[k])))
+	return pos[k].distance_squared_to(nest.pile_centre(want)) <= reach * reach
+
+## True if callow k has finished its stage and waits to be freed.
+func callow_ready(k: int) -> bool:
+	return stage[k] == Stage.CALLOW and age[k] >= stage_time[Stage.CALLOW] - 1e-4
+
+func _add_care(nest: FungusNest) -> void:
+	pos.append(nest.pile_centre(Pile.EGGS))
+	pile.append(Pile.LOOSE)
+	carrier.append(-1)
+	claimed.append(-1)
+	dirt.append(0.0)
+	hunger.append(0.3)
+	hungry_for.append(0.0)
+
+func _remove_care(i: int) -> void:
+	pos.remove_at(i)
+	pile.remove_at(i)
+	carrier.remove_at(i)
+	claimed.remove_at(i)
+	dirt.remove_at(i)
+	hunger.remove_at(i)
+	hungry_for.remove_at(i)
+
+## Puts record k down in pile p, in that pile's lowest free slot.
+func _drop_in_pile(k: int, p: int, nest: FungusNest) -> void:
+	var used := {}
+	for j in stage.size():
+		if j != k and pile[j] == p:
+			used[slot[j]] = true
+	var free := 0
+	while used.has(free):
+		free += 1
+	pile[k] = p
+	slot[k] = free
+	carrier[k] = -1
+	pos[k] = nest.pile_slot(p, free)
+	chamber[k] = maxi(0, nest.chambers_layout.chamber_at(pos[k]))
+
+## Ant `ant` picks record k up.
+func pick_up(k: int, ant: int) -> void:
+	carrier[k] = ant
+	pile[k] = Pile.CARRIED
+
+## The carrier puts record k down at `at`: into its stage's pile if that's
+## where it is, otherwise loose on the floor.
+func put_down(k: int, at: Vector2, nest: FungusNest) -> void:
+	var want := home_pile(stage[k])
+	if at.distance_to(nest.pile_centre(want)) <= PILE_REACH * 3.0:
+		_drop_in_pile(k, want, nest)
+		return
+	carrier[k] = -1
+	pile[k] = Pile.LOOSE
+	pos[k] = at
+	slot[k] = 0
+
+## A nurse feeds larva k (the fungus was taken from the garden already).
+func feed(k: int) -> void:
+	hunger[k] = maxf(0.0, hunger[k] - 1.0)
+	hungry_for[k] = 0.0
+
+func groom(k: int) -> void:
+	dirt[k] = 0.0
+
+func _update_care(sim: Simulation, nest: FungusNest, dt: float) -> void:
+	var colony := sim.colonies[nest.colony_id]
+	starving = nest.fungus <= nest.brood_reserve
+	var k := 0
+	while k < stage.size():
+		var s := stage[k]
+		# Carried brood rides in its carrier's jaws.
+		if carrier[k] >= 0:
+			var a := carrier[k]
+			if sim.alive[a] == 0:
+				carrier[k] = -1
+				pile[k] = Pile.LOOSE
+			else:
+				pos[k] = sim.pos[a] + Vector2.from_angle(sim.heading[a]) * sim.caste_of(a).size * 0.5
+		dirt[k] = minf(1.0, dirt[k] + dirt_rate * dt)
+		var grows := dirt[k] < 1.0
+		if s == Stage.LARVA:
+			hunger[k] = minf(1.0, hunger[k] + hunger_rate * dt)
+			if hunger[k] >= 1.0:
+				grows = false
+				hungry_for[k] += dt
+				if hungry_for[k] >= starve_time:
+					deaths += 1
+					_remove(k)
+					continue
+		if s == Stage.CALLOW and age[k] >= stage_time[s] - 1e-4:
+			grows = false
+		if grows:
+			age[k] += dt
+			if s == Stage.LARVA:
+				growth[k] = minf(1.0, age[k] / stage_time[s])
+			if age[k] >= stage_time[s] - 1e-4 and s != Stage.CALLOW:
+				stage[k] = s + 1
+				age[k] = 0.0
+				if s + 1 == Stage.PUPA:
+					growth[k] = 1.0
+				hunger[k] = 0.3
+		k += 1
+	# The queen lays, paced by the garden, at the tip of her abdomen.
+	_since_lay += dt
+	_budget = minf(_budget + nest.brood_rate * nest.fungus * dt, 1.0)
+	var queen := nest.queen_ant
+	if (queen >= 0 and sim.alive[queen] != 0 and _budget >= 1.0
+			and _since_lay >= nest.lay_interval_now(sim, lay_interval) - 1e-6
+			and not starving and count() < max_brood and colony.population + count() < nest.max_population):
+		_budget -= 1.0
+		_since_lay = 0.0
+		var n := _add(Stage.EGG, _brood_caste(sim, nest, null), nest)
+		pile[n] = Pile.QUEEN
+		var tip := sim.pos[queen] - Vector2.from_angle(sim.heading[queen]) * sim.caste_of(queen).size * 0.62
+		pos[n] = tip + Vector2(sim.rng.randf_range(-1.5, 1.5), sim.rng.randf_range(-1.5, 1.5))
+		chamber[n] = 0
+		var e := eggs_laid % EVENT_LOG
+		lay_ticks[e] = sim.tick_count
+		lay_ids[e] = id[n]
+		eggs_laid += 1
+
+## A nurse frees callow k from its casing: it becomes a real ant of its
+## caste where it lies, in `state_id` (e.g. taking a nest role). Logged as
+## an emergence, as without care. Returns the ant (-1 if the sim is full).
+func free_callow(sim: Simulation, nest: FungusNest, k: int, state_id: String) -> int:
+	var colony := sim.colonies[nest.colony_id]
+	var ant := sim.spawn_ant(colony, caste[k], pos[k], sim.rng.randf_range(-PI, PI), nest.underground_layer)
+	if ant >= 0 and state_id != "" and sim.state_id(ant) != state_id:
+		sim.change_state(ant, state_id)
+	nest.ants_raised += 1
+	var e := emerged % EVENT_LOG
+	emerge_ticks[e] = sim.tick_count
+	emerge_ids[e] = id[k]
+	emerge_ants[e] = ant
+	emerged += 1
+	_remove(k)
+	return ant
+
+func _hash_care(ctx: HashingContext) -> void:
+	ctx.update(PackedInt64Array([deaths]).to_byte_array())
+	ctx.update(pos.to_byte_array())
+	ctx.update(pile)
+	ctx.update(carrier.to_byte_array())
+	ctx.update(claimed.to_byte_array())
+	ctx.update(dirt.to_byte_array())
+	ctx.update(hunger.to_byte_array())

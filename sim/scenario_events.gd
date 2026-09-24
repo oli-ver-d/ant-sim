@@ -95,7 +95,8 @@ static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
 		for n in int(population.get(str(colony.species.castes[c].id), 0)):
 			castes.append(c)
 	var rate := float(col.get("release_per_second", 0.0))
-	if rate > 0.0:
+	# Nests with an underground place their ants inside (spawn_initial).
+	if rate > 0.0 and colony.nest.underground_layer < 0:
 		# Fisher-Yates shuffle with the sim's RNG so castes emerge mixed.
 		for k in range(castes.size() - 1, 0, -1):
 			var j := sim.rng.randi_range(0, k)
@@ -105,7 +106,7 @@ static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
 		colony.nest.queue_release(castes, rate)
 	else:
 		for c in castes:
-			sim.spawn_ant(colony, c, colony.nest.entrance_position(), sim.rng.randf_range(-PI, PI))
+			colony.nest.spawn_initial(sim, c)
 	return colony
 
 ## Stamps an obstacle shape into the world. kind_override (a World.Cell value)
