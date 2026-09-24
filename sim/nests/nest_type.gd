@@ -2,7 +2,7 @@ class_name NestType
 extends RefCounted
 ## Base interface for a colony's home. One instance per colony, created from
 ## the Registry by the species' nest_type id. Rendering is hooked up by
-## registering a renderer under "nest:<type_id>" (which may include a cutaway view).
+## registering a renderer under "nest:<type_id>".
 ##
 ## Nests without a fixed entrance (e.g. a moving bivouac) return
 ## has_entrance() == false and can move `position` in update(); nests that are

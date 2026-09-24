@@ -1,6 +1,6 @@
 {
-	"name": "split_no_cutaway",
-	"description": "Asks for the split layout for a nest type without a cutaway view (falls back to full screen).",
+	"name": "split_no_underground",
+	"description": "Asks for the split layout for a nest without an underground layer (falls back to full screen).",
 	"seed": 1,
 	"colonies": [
 		{"species": "harvester", "nest": [540, 1300], "population": {"minor": 10}}

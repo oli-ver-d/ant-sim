@@ -1,7 +1,6 @@
 extends TestCase
 ## M8: the leafcutter fungus nest (garden, colony growth, chambers), the
-## generic waste mechanism (carry_waste + NestType waste API) and the
-## cutaway panel lookup.
+## generic waste mechanism (carry_waste + NestType waste API).
 
 var _config: SimConfig = load("res://sim/default_config.tres")
 var _registry := Registry.create_default()
@@ -92,16 +91,6 @@ func test_nests_without_waste_send_workers_back() -> void:
 	sim.change_state(ant, "carry_waste")
 	_run_seconds(sim, 0.5)
 	check_eq(sim.state_id(ant), "linger", "nothing to carry -> on_none")
-
-func test_cutaway_only_for_nests_that_have_one() -> void:
-	var sim := Simulation.new(_config, _registry, 1)
-	sim.add_colony("leafcutter", Vector2(300, 1200))
-	sim.add_colony("harvester", Vector2(800, 1200))
-	var panel := CutawayPanel.create(sim, _registry, 0, Rect2(0, 0, 400, 300))
-	check(panel != null, "fungus nest has a cutaway view")
-	if panel != null:
-		panel.free()
-	check(CutawayPanel.create(sim, _registry, 1, Rect2(0, 0, 400, 300)) == null, "seed nest has none")
 
 ## fungus_farm: leaf feeds the garden, the colony grows, waste piles up.
 func test_fungus_farm_colony_grows() -> void:

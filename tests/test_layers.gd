@@ -36,7 +36,6 @@ const SINGLE_LAYER_HASHES := {
 	"fungus_farm": "2837e1d69e40eb4767b51ebd8b692085fc269b7814b751742ef8c17ad3274f1f",
 	"leaf_strip": "5c1a81409a55a320eb50af8fdce1366e64c2318b7326fb5542be26dc3c6f3c08",
 	"maze": "076f93a77045531f20407c7ea65436ff5c90a49d43a49798752c817b3cec1616",
-	"nest_life": "3aec395c192478d1a63e516027f535e7275f2e3660cf5098e4992db545bb711c",
 	"rain_reset": "8d10e033483c970be3a0c896bc99fc7a82375bff8fa4b2fbc9d28e29c76da7c4",
 	"trunk_trail": "d85339b22264dd873a9869b83f5c194360f2037c1298312dd81f3a86a6a50a01",
 	"twig_bridge": "5c406223b07ddab3681c5d81217c4e8171e6bf523bdd5f825c624a87e1f568f1",
@@ -253,6 +252,47 @@ func test_nest_layout_modes() -> void:
 	player.toggle_layout()
 	check_eq(player.mode(), "split", "L: split again")
 	check_eq(layout.nest_viewport.size, Vector2i(layout.underground_rect.size), "nest part resized back")
+	player.queue_free()
+
+## Only a nest with an underground layer gets a split layout.
+func test_split_layout_needs_an_underground() -> void:
+	var sim := _sim()
+	sim.add_colony("digger", Vector2(200, 1200))
+	var layout := SplitLayout.create(sim, {"colony": 0, "ratio": 0.5})
+	check(layout != null, "underground nest: split layout")
+	if layout != null:
+		check_eq(layout.surface_viewport.size, Vector2i(1080, 960), "surface half")
+		check_eq(layout.underground_rect, Rect2(0, 960, 1080, 960), "underground half below it")
+		check_eq(layout.nest_viewport.size, Vector2i(1080, 960), "nest viewport fills it")
+		layout.free()
+	check(SplitLayout.create(sim, {"colony": 1}) == null, "no underground: no layout")
+	check(SplitLayout.create(sim, {"colony": 5}) == null, "no such colony: no layout")
+
+## In the split layout the mouse maps to the world on the surface part only.
+func test_split_layout_screen_to_world() -> void:
+	var player := ScenarioPlayer.new()
+	(Engine.get_main_loop() as SceneTree).root.add_child(player)
+	player.setup("res://tests/fixtures/scenarios/dig_demo.json")
+	check(player.is_split(), "split")
+	check(player.view.get_parent() == player.layout.surface_viewport, "world drawn in the surface viewport")
+	check(player.camera.get_parent() == player.layout.surface_viewport, "camera there too")
+	player.advance(1.0 / 60.0)
+	player.camera.force_update_scroll()
+	var entrance := player.sim.colonies[0].nest.entrance_position()
+	var at := player.layout.surface_viewport.canvas_transform * entrance + player.layout.surface_rect.position
+	check(player.shows_world_at(at), "entrance point shows the world (%s)" % at)
+	check(not player.shows_world_at(player.layout.underground_rect.get_center()), "underground part does not")
+	check(player.screen_to_world(at).distance_to(entrance) < 0.5, "screen_to_world")
+	player.queue_free()
+
+## A nest without an underground plays full screen even if the scenario asks
+## for the split layout.
+func test_split_layout_falls_back_without_an_underground() -> void:
+	var player := ScenarioPlayer.new()
+	(Engine.get_main_loop() as SceneTree).root.add_child(player)
+	player.setup("res://tests/fixtures/scenarios/split_no_underground.json")
+	check(not player.is_split(), "full screen")
+	check(player.view.get_parent() == player, "world in the main view")
 	player.queue_free()
 
 ## A "fit": "excavation" keyframe frames the dug area.

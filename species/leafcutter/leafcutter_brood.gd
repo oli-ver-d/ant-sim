@@ -15,15 +15,12 @@ extends RefCounted
 ## A callow ends as a real ant of the caste chosen when the egg was laid.
 ##
 ## Records are parallel packed arrays, one entry per brood item in laying
-## order. Chamber and slot say where it lies (the cutaway view places it
-## from those); chambers are chosen by stage: eggs stay in the royal chamber
-## (0), larvae go to the garden chamber 1 and pupae to 2, each spilling over
-## into 3 and 4 when it holds PER_CHAMBER, falling back to the chambers that
-## exist.
+## order. With care on, chamber and slot say where it lies (see the care
+## notes below); without care brood has no place in the nest.
 ##
 ## Laying and emergence are logged with their tick (ring buffers of the last
-## EVENT_LOG events, indexed by the running totals), so a view can play each
-## event at the right moment.
+## EVENT_LOG events, indexed by the running totals), so views can react to
+## each event (e.g. ring a new worker on the surface).
 ##
 ## params: lay_interval, egg, larva, pupa, callow, max_brood,
 ##         initial: {"egg": n, "larva": n, "pupa": n}
@@ -31,8 +28,6 @@ extends RefCounted
 enum Stage { EGG, LARVA, PUPA, CALLOW }
 const STAGE_KEYS: PackedStringArray = ["egg", "larva", "pupa", "callow"]
 const EVENT_LOG := 32
-## Larvae or pupae a brood chamber holds before the next one is used.
-const PER_CHAMBER := 18
 
 var lay_interval: float = 4.0
 ## Seconds per stage, indexed by Stage.
@@ -123,7 +118,7 @@ func update(sim: Simulation, nest: FungusNest, dt: float) -> void:
 		elif s == Stage.CALLOW:
 			_emerge(sim, nest, i)
 		else:
-			_advance(i, nest)
+			_advance(i)
 			i += 1
 	# The queen lays, paced by the garden.
 	_since_lay += dt
@@ -174,23 +169,17 @@ func _add(s: int, caste_index: int, nest: FungusNest) -> int:
 	caste.append(caste_index)
 	chamber.append(0)
 	slot.append(0)
-	var i := stage.size() - 1
 	if care:
 		_add_care(nest)
-	else:
-		_place(i, nest)
-	return i
+	return stage.size() - 1
 
-## Next stage; eggs and larvae move to the chamber for their new stage.
-func _advance(i: int, nest: FungusNest) -> void:
+## Next stage (without care).
+func _advance(i: int) -> void:
 	var s := stage[i] + 1
 	stage[i] = s
 	age[i] = 0.0
 	if s == Stage.PUPA:
 		growth[i] = 1.0
-	# Callows stay where they pupated until they walk out.
-	if s != Stage.CALLOW:
-		_place(i, nest)
 
 func _emerge(sim: Simulation, nest: FungusNest, i: int) -> void:
 	var colony := sim.colonies[nest.colony_id]
@@ -214,49 +203,6 @@ func _remove(i: int) -> void:
 	caste.remove_at(i)
 	if care:
 		_remove_care(i)
-
-## Chooses the chamber and the lowest free slot there for record i's stage.
-func _place(i: int, nest: FungusNest) -> void:
-	var group := _group(stage[i])
-	var best := 0
-	if group > 0:
-		var wanted: PackedInt32Array = [1, 3] if group == 1 else [2, 4]
-		var options: PackedInt32Array = []
-		for k in wanted:
-			if k < nest.chambers:
-				options.append(k)
-		if options.is_empty():
-			options.append(mini(group, nest.chambers) - 1 if nest.chambers > 1 else 0)
-		# The first chamber with room, or else the least crowded.
-		var fewest := 1 << 30
-		for k in options:
-			var n := _in_chamber(k, group, i)
-			if n < PER_CHAMBER:
-				best = k
-				break
-			if n < fewest:
-				fewest = n
-				best = k
-	chamber[i] = best
-	var used := {}
-	for j in stage.size():
-		if j != i and chamber[j] == best and _group(stage[j]) == group:
-			used[slot[j]] = true
-	var free := 0
-	while used.has(free):
-		free += 1
-	slot[i] = free
-
-## Slot groups: eggs, larvae, and pupae with callows (who keep their pupa's slot).
-static func _group(s: int) -> int:
-	return mini(s, Stage.PUPA)
-
-func _in_chamber(k: int, group: int, skip: int) -> int:
-	var n := 0
-	for j in stage.size():
-		if j != skip and chamber[j] == k and _group(stage[j]) == group:
-			n += 1
-	return n
 
 ## Caste of new brood: nest.pick_caste(), or with care on, `first_caste`
 ## until the nest has raised `first_workers` (a founding colony's first

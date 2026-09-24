@@ -13,7 +13,6 @@ const RUNS := {
 	"fungus_farm": 900,
 	"leaf_strip": 600,
 	"maze": 600,
-	"nest_life": 900,
 	"rain_reset": 600,
 	"trunk_trail": 600,
 	"twig_bridge": 600,

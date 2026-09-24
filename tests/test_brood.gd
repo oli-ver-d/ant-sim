@@ -1,6 +1,5 @@
 extends TestCase
-## M10: the leafcutter brood model (queen, eggs, larvae, pupae, callows) and
-## the split nest layout.
+## M10: the leafcutter brood model (queen, eggs, larvae, pupae, callows).
 
 const Stage := LeafcutterBrood.Stage
 
@@ -42,9 +41,6 @@ func test_initial_brood_present_at_setup() -> void:
 	check_eq(brood.count_stage(Stage.PUPA), 2, "pupae")
 	check_eq(brood.eggs_laid, 0, "initial brood is not logged as laid")
 	check_eq(sim.colonies[0].population, 0, "no ants yet")
-	check(_nest(sim).chambers >= 3, "garden has chambers for every stage")
-	check_eq(brood.chamber[brood.stage.find(Stage.EGG)], 0, "eggs in the royal chamber")
-	check(brood.chamber[brood.stage.find(Stage.PUPA)] != 0, "pupae elsewhere")
 
 func test_brood_off_by_default() -> void:
 	var sim := Simulation.new(_config, _registry, 1)
@@ -167,58 +163,3 @@ func test_fungus_farm_unchanged_without_brood() -> void:
 	check_eq(nest.ants_raised, 6, "ants raised")
 	# Recorded before the brood model was added (M9, 900 ticks).
 	check_eq(sim.state_hash(), "ae3a9d3680930dc15b0659e7052ae9ae5bdad84e1da6b9efbf306df0847cfa57", "state hash")
-
-# --- Split layout --------------------------------------------------------------------
-
-func test_split_layout_only_for_nests_with_a_cutaway() -> void:
-	var sim := Simulation.new(_config, _registry, 1)
-	sim.add_colony("leafcutter", Vector2(300, 1200))
-	sim.add_colony("harvester", Vector2(800, 1200))
-	var layout := SplitLayout.create(sim, _registry, {"colony": 0, "ratio": 0.5})
-	check(layout != null, "fungus nest: split layout")
-	if layout != null:
-		check_eq(layout.surface_viewport.size, Vector2i(1080, 960), "surface half")
-		check_eq(layout.underground_rect, Rect2(0, 960, 1080, 960), "underground half below it")
-		check(layout.underground is FungusCutaway, "the nest's cutaway view, full width")
-		layout.free()
-	check(SplitLayout.create(sim, _registry, {"colony": 1}) == null, "seed nest: no layout")
-	check(SplitLayout.create(sim, _registry, {"colony": 5}) == null, "no such colony: no layout")
-	check(CutawayPanel.create_view(sim, _registry, 1, Rect2(0, 0, 400, 300)) == null, "seed nest: no view")
-
-func test_nest_life_plays_in_the_split_layout() -> void:
-	var data := ScenarioLoader.load_data("nest_life")
-	check_eq(str(data["render"]["layout"]["mode"]), "split", "scenario asks for the split layout")
-	var player := _player("nest_life")
-	check(player.is_split(), "split")
-	check(player.view.get_parent() == player.layout.surface_viewport, "world drawn in the surface viewport")
-	check(player.camera.get_parent() == player.layout.surface_viewport, "camera there too")
-	var nest := _nest(player.sim)
-	check(nest.brood != null and nest.brood.count() > 0, "brood on")
-	# The nest entrance is on the surface part, near its bottom centre.
-	player.advance(1.0 / 60.0)
-	player.camera.force_update_scroll()
-	var at := player.layout.surface_viewport.canvas_transform * nest.entrance_position()
-	var size := Vector2(player.layout.surface_viewport.size)
-	check(absf(at.x - size.x * 0.5) < size.x * 0.1 and at.y > size.y * 0.6, "entrance near bottom centre (%s)" % at)
-	# Screen <-> world on the surface part.
-	check(player.shows_world_at(at + player.layout.surface_rect.position), "entrance point shows the world")
-	check(not player.shows_world_at(Vector2(540, 1500)), "underground part does not")
-	check(player.screen_to_world(at).distance_to(nest.entrance_position()) < 0.5, "screen_to_world")
-	# L toggles back to full screen and again.
-	player.toggle_layout()
-	check(not player.is_split() and player.view.get_parent() == player, "full screen")
-	player.toggle_layout()
-	check(player.is_split(), "split again")
-	player.queue_free()
-
-func test_split_layout_falls_back_without_a_cutaway() -> void:
-	var player := _player("res://tests/fixtures/scenarios/split_no_cutaway.json")
-	check(not player.is_split(), "full screen")
-	check(player.view.get_parent() == player, "world in the main view")
-	player.queue_free()
-
-func _player(scenario: String) -> ScenarioPlayer:
-	var player := ScenarioPlayer.new()
-	(Engine.get_main_loop() as SceneTree).root.add_child(player)
-	player.setup(scenario)
-	return player

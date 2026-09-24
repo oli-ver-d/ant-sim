@@ -26,9 +26,9 @@ godot --path . -- --scenario=basic_forage --seed=42
 
 The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors,
-channel values under the cursor), **S** TikTok/Reels safe zones, **N** nest cutaway inset,
+channel values under the cursor), **S** TikTok/Reels safe zones,
 **L** layout: cycles surface / split (surface on top, the nest underground below) / nest
-(the underground full screen, for nests that dig their own; see `render.layout`),
+(the underground full screen); only for nests that dig their own, see `render.layout`,
 **T** tuning panel, **F** follow the ant under the cursor (again to stop), **C** back to the
 scenario camera, **1–5** speed (1/2/4/8/16× the scenario's pace), **Esc** quit.
 
@@ -47,7 +47,7 @@ Scenario per-colony overrides still take precedence over the sliders.
 `godot --path . -- --scenario=chaos_to_highway --at=12.5`
 
 `--layout=split` (or `normal`, or `nest`) overrides the scenario's layout:
-`godot --path . -- --scenario=fungus_farm --layout=split`. In the split layout the mouse
+`godot --path . -- --scenario=colony_founding --layout=nest`. In the split layout the mouse
 (walls, food, zoom, **F**, the debug readout) works on the surface part. The HUD counts every
 ant of a colony, including its abstract population (see "Scale" below).
 
@@ -59,7 +59,7 @@ tools/test.sh                                   # headless test suite (filter: t
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
 tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
 tools/screenshot.sh two_species 2400 out.png -1 --safe=1 --debug=1 --pheromones=0    # overlays
-tools/screenshot.sh nest_life 0 out.png -1 --layout=split --at=3    # split layout, 3 s in
+tools/screenshot.sh colony_founding 0 out.png -1 --layout=split --at=3    # split layout, 3 s in
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
 godot --headless --path . -s res://tests/bench.gd -- res://tests/fixtures/scenarios/nest_bench.json 900   # per layer
 godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
@@ -119,7 +119,8 @@ tools/ tests/
   so e.g. soldiers return to patrolling instead of foraging.
 - **Nests** (`NestType`): receive delivered items, grow the colony in `update()`, and may
   produce waste that `carry_waste` workers take to `dump_position()`. A nest type can have a
-  surface renderer (`"nest:<type>"`) and a cutaway view (`"cutaway:<type>"`).
+  surface renderer (`"nest:<type>"`), and a nest that digs its own underground layer
+  renderers for it (`"underground:<type>"`, `"underground_top:<type>"`).
 - **Riding**: ants can ride on carried items (`Simulation.mount()`); the core keeps riders
   on their item and makes them get off when it is dropped or delivered.
 - **Obstacles**: ants probe ahead and to both sides near obstacles and turn away; with walls on
@@ -239,9 +240,7 @@ trail self-organises), `leaf_strip` (one giant leaf stripped completely, for tim
 leaf across a stream; one fallen twig is the only way over), `maze` (a leaf behind rows of
 stone walls; explorers find the gaps and a trail settles on one route),
 `fungus_farm` (a young colony over ~17 minutes: the garden grows chamber by chamber, the
-colony grows from 150 to ~850 ants, waste piles up outside; with the cutaway inset),
-`nest_life` (split view, 30 s: foraging on top; underground the queen lays, brood grows from
-egg to pupa in timelapse, and at the end a young worker climbs out and joins the trail),
+colony grows from 150 to ~850 ants, waste piles up outside),
 `colony_founding` (about 80 s, split view over a nest that digs its own underground: a queen
 and four minims sealed in a founding chamber dig up to the surface, foraging begins, and over
 about two simulated hours the colony grows to thousands, gardens filling chamber
@@ -275,19 +274,15 @@ Playback (video) settings:
   `"fit": "excavation"` (with `margin`, `min_zoom`, `max_zoom`) frames everything dug so far,
   easing as the nest grows. For a nest that digs, `"camera": {"surface": [...], "nest": [...]}`
   gives each part of the layout its own keyframes (see `render/camera_director.gd`)
-- `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45,
-  "view": {"intro_spotlight": 5}}` splits the frame: the surface (the world, in a
-  1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
+- `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45}` splits
+  the frame: the surface (the world, in a 1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
   that part) and, full width below it, the colony's nest: its underground layer, top-down and
   fully simulated, with its own camera, for a nest that digs (the nest's size and brood are
-  shown top left); otherwise its side cutaway (`"cutaway:<type>"`). `"view"` sets properties the
-  cutaway view declares. `"mode": "nest"` shows the underground full screen, and
+  shown top left). `"mode": "nest"` shows the underground full screen, and
   `"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]` switches mode at video
-  times. Nests with neither view play full screen. See `render/split_layout.gd`
-- `render`: `{"pheromones": true, "pheromone_opacity": 0.55, "cutaway": {"colony": 0,
-  "rect": [x, y, w, h], "from": 2, "to": 18}}`. The cutaway is an inset (screen pixels of
-  the 1080×1920 frame) showing the colony's nest from the side, for nest types that have a
-  cutaway view (`render/cutaway_panel.gd`); `from`/`to` are video seconds, faded
+  times. Nests without an underground layer play full screen. See `render/split_layout.gd`
+- `render.pheromones` (default true) and `render.pheromone_opacity` (e.g. 0.55): the pheromone
+  overlay
 
 ## Recording
 
@@ -401,7 +396,7 @@ Only what the species really has that the core doesn't:
 | Food source | `FoodSource` (`take()`, `nearest_access_point()`, `is_sensed_at()`, ...) | `seed_pile.gd` | `leaf_source.gd` |
 | Nest | `NestType` or `BasicNest` (`receive_item()`, `update()`, optional waste) | `seed_nest.gd` | `fungus_nest.gd` |
 | Renderer | any `Node2D` with `bind(sim, target)` | `seed_pile_renderer.gd`, `seed_nest_renderer.gd` | `leaf_renderer.gd`, `fungus_nest_renderer.gd` |
-| Cutaway view | a `Control` with `bind(sim, nest)` | none | `fungus_cutaway.gd` |
+| Underground renderer | a `Node2D` with `bind(sim, nest)` on the nest's layer view | none | `fungus_underground.gd` |
 
 Behaviours work on ant indices and the `Simulation` arrays (`sim.pos[i]`, `sim.heading[i]`,
 ...), never on per-ant nodes. Use `Steering.move()` to move (it handles wandering, obstacle
@@ -424,7 +419,7 @@ func register(registry: Registry) -> void:
 	registry.register_renderer("food:seed_pile", SeedPileRenderer)
 	registry.register_renderer("nest:seed_nest", SeedNestRenderer)
 	# registry.register_behaviour("my_state", MyState.new())
-	# registry.register_renderer("cutaway:my_nest", MyCutaway)
+	# registry.register_renderer("underground:my_nest", MyUnderground)
 ```
 
 ### 4. Put it in a scenario and test it
@@ -442,7 +437,7 @@ in `/sim` or `/render`.
   majors, which have no `explore`, hit this in M7 (an assertion caught it). When a caste
   leaves out a core state, override every transition that leads to it.
 - **"Would a second species plausibly need this?"** If yes, it belongs in the core, made
-  generic: riding on items, debris, waste carrying, cutaway panels and bridges all started
+  generic: riding on items, debris, waste carrying, digging and bridges all started
   as leafcutter needs. If no, it stays in the species folder.
 - **New `class_name` scripts** need the class cache refreshed (`tools/test.sh` does it;
   otherwise run `godot --headless --path . --import` once) before other scripts can use them.
@@ -492,31 +487,9 @@ in `/sim` or `/render`.
   `ant_cost` fungus over its stage. With fungus at or below the reserve, larvae stop growing
   (none die) and the queen stops laying. A callow ends with a real ant of the caste chosen
   at laying, spawned at the entrance, so `population` and `ants_raised` only rise at
-  emergence. Records are packed arrays (id, stage, age, chamber, slot, growth, caste): eggs
-  in the royal chamber 0, larvae in chamber 1 and pupae in chamber 2 (each spilling into 3
-  and 4 when full). Laying and emergence are logged with their ticks (ring buffers), and
+  emergence. Records are packed arrays (id, stage, age, growth, caste; with care on
+  also where each lies, see below). Laying and emergence are logged with their ticks (ring buffers), and
   the brood is part of `state_hash()` (runs without it keep their old hashes).
-- `fungus_nest_renderer.gd`: the soil mound (grows with chambers) and the waste dump pile
-  (grows with every load).
-- `fungus_cutaway.gd` + `fungus_garden.gdshader`: the cutaway: soil strata, tunnels and
-  chambers (dug as they appear), the garden as soft off-white lumps filling them from the
-  floor up, green flecks of undigested leaf and the colony size. Its detail depends on its
-  size. As a small inset: tiny ants walk the tunnels. From 700 px wide (the underground half
-  of the split layout): bigger chambers with room above the garden, the entrance lined up
-  under the surface nest, labels inside the safe zone, and `nest_life_view.gd` draws:
-  - the queen (side view, swollen gaster) on the garden of the royal chamber; each egg the
-    simulation lays appears at her abdomen tip at that moment and a nurse carries it to the
-    egg pile;
-  - the brood at its chamber and slot: larvae (white grubs growing as nurses bring them
-    fungus), pupae in rows (pale, legs folded, darkening, eyes first), callows (pale young
-    workers) that a nurse helps out of the casing and that then walk up the tunnels timed by
-    their age, so they leave the view on the tick the simulation spawns them on the surface
-    (where the split layout rings them);
-  - one leaf carrier coming down per fragment delivered (`leaf_items`), dropping it on the
-    garden.
-  Nurses and carriers (`nest_worker.gd`) are render-only agents given tasks from the brood
-  state; they hurry in timelapse, and brood no nurse reaches in time fades to its place.
-  `"view": {"intro_spotlight": 5}` dims everything but the queen for the first seconds.
 
 
 ### Leafcutter nests that dig their own underground
@@ -569,8 +542,8 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
   `dirt_rate`, `hunger_rate`, `starve_time`, `brood_per_worker`, `first_caste`, `first_workers`.
 - Rendering: `FungusUnderground` ("underground:fungus_nest") draws the gardens
   (`garden.gdshader`) and the brood (`brood.gdshader`); `CarriedBroodRenderer`
-  ("underground_top:fungus_nest") the brood in nurses' jaws. The M10 side cutaway still serves
-  nests without an underground (`nest_life`, `fungus_farm`).
+  ("underground_top:fungus_nest") the brood in nurses' jaws.
+
 ## Species: harvester ants
 
 `species/harvester/`, added without touching the core or the leafcutter module:
@@ -601,11 +574,8 @@ All drawing lives in `render/` (plus each species' own renderers):
 - `rain.gdshader` + `rain_renderer.gd`: per shower, wet darkened soil with splash rings under
   everything, and overcast dimming with falling drops over everything. The ground stays wet
   and dries slowly after the rain.
-- `side_ant.gdshader` + `side_ant_renderer.gd`: ants seen from the side, for cutaway views:
-  lit segments with a dark rim, raised-knee legs in a tripod gait, antennae; legs toward
-  whichever side is ground (floors, walls, ceilings); `fold` tucks legs and antennae in.
 - `split_layout.gd`: the split surface/underground layout (see `render.layout`), with a
-  thin seam between the parts and a ring on a surface ant the cutaway names (a new worker).
+  thin seam between the parts and a ring on a surface ant the nest names (a new worker).
 - `soil.gdshader` + `soil_renderer.gd`: an underground layer from above: undug soil as a lit,
   raised mass (warped strata, grain, round grit, pebbles, fine roots, crumbly micro-relief) and
   the dug space as a paler packed floor with ambient occlusion near the walls, a shadow under
