@@ -156,6 +156,7 @@ private:
 	double nest_turn(int64_t p_i, const Colony &p_colony, const double *p_params, const Layer &p_l) const;
 	bool food_near(const Colony &p_colony, const Vector2 &p_at) const;
 	int64_t best_neighbour(const Layer &p_l, const int32_t *p_dist, int64_t p_cell) const;
+	bool line_clear(const Layer &p_l, const Vector2 &p_a, const Vector2 &p_b) const;
 	Vector2 cell_center(const Layer &p_l, int64_t p_cell) const;
 	bool tick_ant(int64_t p_i, int64_t p_tick_count);
 

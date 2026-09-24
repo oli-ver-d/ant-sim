@@ -19,7 +19,8 @@ static func portal_between(sim: Simulation, from: int, to: int) -> Portal:
 ## another layer it first makes for the portal leading there. On the goal's
 ## layer it follows nav field `field` (an id on that layer, -1 = none) until
 ## the field says it is within `direct_within` world units of the field's
-## target, then heads straight for `goal`. Returns true once within `reach`
+## target and nothing blocks the straight line, then heads straight for
+## `goal`. Returns true once within `reach`
 ## of the goal (it doesn't move on that tick).
 static func go(sim: Simulation, i: int, goal_layer: int, goal: Vector2, field: int, move_speed: float,
 		dt: float, reach: float = 3.0, direct_within: float = 0.0) -> bool:
@@ -41,7 +42,7 @@ static func go(sim: Simulation, i: int, goal_layer: int, goal: Vector2, field: i
 		var f: NavGrid.Field = nav.fields.get(field)
 		if f != null:
 			aim = sim.kernel.nav_aim(f.dist, li, at, goal, direct_within)
-	elif nav != null and nav.distance(field, at) > direct_within:
+	elif nav != null and (nav.distance(field, at) > direct_within or not sim.layers[li].world.line_clear(at, goal)):
 		aim = nav.downhill(field, at)
 		if aim == at:
 			aim = goal

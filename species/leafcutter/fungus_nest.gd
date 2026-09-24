@@ -253,9 +253,7 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -
 	royal.nav_field = l.nav().set_target_point(&"chamber:0", royal.centre)
 	# An established nest starts with garden chambers already dug.
 	for n in int(params.get("initial_chambers", 0)):
-		var ch := chambers_layout.propose()
-		if ch != null:
-			chambers_layout.add_dug(ch, l.nav())
+		chambers_layout.plan_chamber(plan, float(n + 1), true)
 	# The entrance shaft of a sealed nest takes extra digging (it goes all
 	# the way up to the surface).
 	if not portal.open:
@@ -282,6 +280,7 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -
 	var layout := chambers_layout
 	garden.add_chamber_where(0, Rect2(spot, Vector2.ZERO).grow(royal.radius * 0.62), func(at: Vector2) -> bool:
 		return at.distance_squared_to(spot) <= r2 and layout.chamber_at(at) == 0 and layout.depth_at(at) >= GARDEN_DEPTH \
+				and not layout.in_alcove(0, at) \
 				and not l.world.is_blocked(at))
 	for c in chambers_layout.list:
 		if c.dug and c.kind == FungusChambers.Kind.GARDEN:
@@ -323,7 +322,8 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 				_add_garden_chamber(c)
 				_seed_new_garden(sim, c.index)
 
-## Chamber c's garden: its open floor, GARDEN_DEPTH cells in from the walls.
+## Chamber c's garden: its open floor, GARDEN_DEPTH cells in from the walls
+## (its alcoves are kept for brood).
 func _add_garden_chamber(c: FungusChambers.Chamber) -> void:
 	var layout := chambers_layout
 	var w := layout.world
@@ -332,7 +332,8 @@ func _add_garden_chamber(c: FungusChambers.Chamber) -> void:
 	for cell in c.cells:
 		bounds = bounds.expand(w.cell_center(cell))
 	garden.add_chamber_where(k, bounds.grow(w.cell_size), func(at: Vector2) -> bool:
-		return layout.chamber_at(at) == k and layout.depth_at(at) >= GARDEN_DEPTH and not w.is_blocked(at))
+		return layout.chamber_at(at) == k and layout.depth_at(at) >= GARDEN_DEPTH and not layout.in_alcove(k, at) \
+				and not w.is_blocked(at))
 
 ## Ants of this colony other than the queen.
 func workers_alive(sim: Simulation) -> int:
@@ -351,9 +352,10 @@ func lay_interval_now(sim: Simulation, base: float) -> float:
 		return base
 	return base * 2.0
 
-## Where the queen sits in the royal chamber.
+## Where the queen sits: her niche off the royal chamber.
 func queen_spot() -> Vector2:
-	return _spot(0, Vector2(-0.22, 0.05))
+	var royal := chambers_layout.royal()
+	return royal.alcoves[0] if not royal.alcoves.is_empty() else _spot(0, Vector2(-0.22, 0.05))
 
 ## The chamber brood lives in: the first garden chamber dug, else the royal one.
 func brood_chamber() -> int:
@@ -362,17 +364,28 @@ func brood_chamber() -> int:
 			return c.index
 	return 0
 
-## Centre of a brood pile (LeafcutterBrood.Pile): eggs beside the queen,
-## larvae in the garden, pupae at a drier spot near the wall.
+## Centre of a brood pile (LeafcutterBrood.Pile): eggs at the mouth of the
+## queen's niche, larvae by the garden, pupae in an alcove (a drier niche)
+## where the chamber has one.
 func pile_centre(p: int) -> Vector2:
+	var royal := chambers_layout.royal()
 	match p:
 		LeafcutterBrood.Pile.EGGS, LeafcutterBrood.Pile.QUEEN:
-			return _spot(0, Vector2(0.3, 0.22))
+			if royal.alcoves.is_empty():
+				return _spot(0, Vector2(0.3, 0.22))
+			return royal.alcoves[0].lerp(royal.centre, 0.5)
 		LeafcutterBrood.Pile.LARVAE:
 			var k := brood_chamber()
+			if k == 0 and royal.alcoves.size() >= 2:
+				return royal.centre.lerp(royal.alcoves[1], 0.35)
 			return _spot(k, Vector2(0.28, -0.35) if k == 0 else Vector2(-0.25, 0.0))
 		_:
 			var k := brood_chamber()
+			var c := chambers_layout.list[k]
+			if k == 0 and royal.alcoves.size() >= 2:
+				return royal.alcoves[1]
+			if not c.alcoves.is_empty():
+				return c.alcoves[0]
 			return _spot(k, Vector2(-0.1, -0.62) if k == 0 else Vector2(0.45, 0.3))
 
 ## A place in chamber k at `rel` from its centre, as a share of the way to
@@ -387,7 +400,10 @@ func _spot(k: int, rel: Vector2) -> Vector2:
 ## Position of slot `s` in pile p: a sunflower spiral out from the centre.
 func pile_slot(p: int, s: int) -> Vector2:
 	var spacing := 1.5 if p == LeafcutterBrood.Pile.EGGS else (3.6 if p == LeafcutterBrood.Pile.LARVAE else 4.4)
-	return pile_centre(p) + Vector2.from_angle(s * 2.39996) * spacing * sqrt(s + 0.5)
+	var at := pile_centre(p) + Vector2.from_angle(s * 2.39996) * spacing * sqrt(s + 0.5)
+	# A small alcove: slots that would be in the wall go to the nearest open spot.
+	var w := chambers_layout.world
+	return at if not w.is_blocked(at) else w.nearest_free(at, 6)
 
 ## A place to harvest gongylidia near `near`: the best of a few cells of
 ## the nearest garden that has fungus (GardenGrid.harvest_cell).
@@ -410,7 +426,9 @@ func field_toward(at: Vector2) -> int:
 ## straight there), or 0.
 func direct_range(at: Vector2) -> float:
 	var k := chambers_layout.chamber_at(at)
-	return chambers_layout.list[k].radius if k >= 0 else 0.0
+	# Its furthest cell from the centre (callers take 0.9 of it), so every
+	# point in an elongated chamber is within reach.
+	return (chambers_layout.list[k].reach_max + 8.0) if k >= 0 else 0.0
 
 ## Places a colony's starting ant: the queen at her spot in the royal
 ## chamber, workers in the royal chamber taking nest roles.
@@ -537,9 +555,7 @@ func _plan_chambers() -> void:
 	var pressure := garden_pressure()
 	if pressure < 0.8 or undug >= clampi(int(pressure * 2.0), 1, 4):
 		return
-	var ch := chambers_layout.propose()
-	if ch != null:
-		chambers_layout.add(ch, plan, float(ch.index))
+	chambers_layout.plan_chamber(plan, float(chambers_layout.count()))
 
 ## Fungus the dug chambers hold: chamber_capacity per chamber of radius 50,
 ## scaled by area (the royal chamber holds less; the queen and brood live there).
@@ -556,6 +572,11 @@ func garden_capacity() -> float:
 
 ## Centre of the founding garden in the royal chamber.
 func garden_spot() -> Vector2:
+	var royal := chambers_layout.royal()
+	if royal.alcoves.size() >= 2:
+		# The side of the chamber away from the pupae, half way out.
+		var a := (royal.centre - royal.alcoves[1]).angle()
+		return _spot(0, Vector2.from_angle(a) * 0.5)
 	return _spot(0, Vector2(0.3, -0.3))
 
 ## Spreads `mass` of fungus over the gardens from the founding garden's
@@ -881,3 +902,10 @@ func _seed_new_garden(sim: Simulation, k: int) -> void:
 		cells.append(garden.cells[garden.chamber_first[k]])
 	for c in cells:
 		garden.add_fungus(c, moved / cells.size())
+
+## The way the queen faces when resting: into her niche.
+func queen_heading() -> float:
+	var royal := chambers_layout.royal()
+	if royal.alcoves.is_empty():
+		return 0.0
+	return (royal.alcoves[0] - royal.centre).angle()

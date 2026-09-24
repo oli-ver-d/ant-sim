@@ -402,6 +402,9 @@ func _update_care(sim: Simulation, nest: FungusNest, dt: float) -> void:
 		pile[n] = Pile.QUEEN
 		var tip := sim.pos[queen] - Vector2.from_angle(sim.heading[queen]) * sim.caste_of(queen).size * 0.62
 		pos[n] = tip + Vector2(sim.rng.randf_range(-1.5, 1.5), sim.rng.randf_range(-1.5, 1.5))
+		var w := sim.layers[nest.underground_layer].world
+		if w.is_blocked(pos[n]):
+			pos[n] = w.nearest_free(pos[n], 4)
 		chamber[n] = 0
 		var e := eggs_laid % EVENT_LOG
 		lay_ticks[e] = sim.tick_count

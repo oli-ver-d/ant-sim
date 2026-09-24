@@ -745,6 +745,21 @@ int64_t AntKernel::best_neighbour(const Layer &p_l, const int32_t *p_dist, int64
 	return best;
 }
 
+// World.line_clear(): sampled every half cell, as the engine lerps (float).
+bool AntKernel::line_clear(const Layer &p_l, const Vector2 &p_a, const Vector2 &p_b) const {
+	V2 a = v2(p_a);
+	V2 b = v2(p_b);
+	int64_t steps = (int64_t)(distance_to(a, b) / ((double)p_l.cell_size * 0.5)) + 1;
+	for (int64_t s = 0; s <= steps; s++) {
+		float w = (float)((double)s / (double)steps);
+		V2 p{ a.x + (b.x - a.x) * w, a.y + (b.y - a.y) * w };
+		if (world_blocked(p_l, vec(p))) {
+			return false;
+		}
+	}
+	return true;
+}
+
 // World.cell_center()
 Vector2 AntKernel::cell_center(const Layer &p_l, int64_t p_cell) const {
 	return Vector2((float)(((double)(p_cell % p_l.width) + 0.5) * (double)p_l.cell_size),
@@ -754,7 +769,8 @@ Vector2 AntKernel::cell_center(const Layer &p_l, int64_t p_cell) const {
 // Where Travel steers an ant at `p_at` going to `p_goal` along a NavGrid
 // field (its `dist` array) on layer `p_layer`: two cells down the field
 // (NavGrid.downhill()), or straight at the goal once the field says it is
-// within `p_direct_within` (NavGrid.distance()) or can't go further down.
+// within `p_direct_within` (NavGrid.distance()) with a clear line to it
+// (World.line_clear()), or can't go further down.
 Vector2 AntKernel::nav_aim(const PackedInt32Array &p_dist, int64_t p_layer, const Vector2 &p_at, const Vector2 &p_goal,
 		double p_direct_within) const {
 	ERR_FAIL_INDEX_V(p_layer, (int64_t)layers.size(), p_goal);
@@ -773,7 +789,9 @@ Vector2 AntKernel::nav_aim(const PackedInt32Array &p_dist, int64_t p_layer, cons
 	if (cell >= 0 && dist[cell] < NAV_UNREACHED) {
 		distance = (double)((int64_t)dist[cell] * l.cell_size) / (double)NAV_STRAIGHT;
 	}
-	if (!(distance > p_direct_within) || cell < 0) {
+	// Straight at the goal within range, if nothing is in the way (a tunnel
+	// bending into a chamber would put a wall between).
+	if (cell < 0 || (!(distance > p_direct_within) && line_clear(l, p_at, p_goal))) {
 		return p_goal;
 	}
 	Vector2 aim = p_at;
