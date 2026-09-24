@@ -247,6 +247,9 @@ func _parse_args() -> Dictionary:
 func _toggle_debug() -> void:
 	player.view.debug_view.visible = not player.view.debug_view.visible
 	debug_readout.visible = player.view.debug_view.visible
+	# The nest view's too (ant states and traffic heat underground).
+	if player.nest_view != null:
+		player.nest_view.debug_view.visible = player.view.debug_view.visible
 
 ## Records each colony's delivery count once per simulated second, keeping
 ## the last 60, for the "per minute" rate in the HUD.

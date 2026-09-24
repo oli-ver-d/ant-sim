@@ -127,6 +127,9 @@ private:
 		bool nest_native = false;
 		bool has_entrance = false;
 		Vector2 entrance;
+		// With more than one entrance (NestType.extra_portals): the open ones
+		// (NestType.entrances()), else empty.
+		std::vector<Vector2> entrances;
 		double radius = 0.0;
 		double sense_radius = 0.0;
 		// Food sources this colony forages from that were not used up at the
@@ -157,6 +160,8 @@ private:
 	bool food_near(const Colony &p_colony, const Vector2 &p_at) const;
 	int64_t best_neighbour(const Layer &p_l, const int32_t *p_dist, int64_t p_cell) const;
 	bool line_clear(const Layer &p_l, const Vector2 &p_a, const Vector2 &p_b) const;
+	Vector2 nearest_entrance(const Colony &p_colony, const Vector2 &p_at) const;
+	Vector2 lane_aim(const Layer &p_l, const Vector2 &p_at, const Vector2 &p_aim, double p_lane) const;
 	Vector2 cell_center(const Layer &p_l, int64_t p_cell) const;
 	bool tick_ant(int64_t p_i, int64_t p_tick_count);
 
@@ -189,7 +194,8 @@ public:
 	void set_colony(int64_t p_colony, const PackedFloat64Array &p_values, const PackedFloat32Array &p_turn_rate,
 			const PackedFloat32Array &p_phase_per_unit, int64_t p_num_states);
 	void set_state_params(int64_t p_colony, const PackedFloat64Array &p_params);
-	void set_nest(int64_t p_colony, bool p_native, bool p_has_entrance, const Vector2 &p_entrance, double p_radius,
+	void set_nest(int64_t p_colony, bool p_native, bool p_has_entrance, const Vector2 &p_entrance,
+			const PackedVector2Array &p_entrances, double p_radius,
 			double p_sense_radius);
 
 	int64_t run(int64_t p_from, int64_t p_end, int64_t p_tick_count);
@@ -199,10 +205,11 @@ public:
 	double sense_turn(int64_t p_c, const Vector2 &p_at, double p_heading, int64_t p_colony, int64_t p_layer) const;
 	double sense_away(int64_t p_c, const Vector2 &p_at, double p_heading, int64_t p_colony, int64_t p_layer) const;
 	Vector2 nav_aim(const PackedInt32Array &p_dist, int64_t p_layer, const Vector2 &p_at, const Vector2 &p_goal,
-			double p_direct_within) const;
+			double p_direct_within, double p_lane) const;
 	void set_food(int64_t p_colony, const PackedFloat64Array &p_circles);
 	PackedInt32Array carriers_near(const Vector2 &p_at, double p_reach, int64_t p_colony, int64_t p_high_water) const;
 	void lay(int64_t p_i, int64_t p_c);
+	void add_traffic(int64_t p_layer, const PackedFloat32Array &p_values, int64_t p_count, double p_add);
 
 	// Grid helpers (static, no Simulation needed).
 	static PackedInt32Array mask_edges(const PackedByteArray &p_mask, int64_t p_nx, int64_t p_ny, int64_t p_value);

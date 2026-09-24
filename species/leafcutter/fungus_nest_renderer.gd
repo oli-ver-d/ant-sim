@@ -18,6 +18,7 @@ const CHUNK := 50
 var nest: FungusNest
 var _drawn_chambers: int = -1
 var _drawn_open: bool = true
+var _drawn_extra: int = 0
 var _mound: Node2D
 var _chunks: Array[DumpChunk] = []
 
@@ -30,7 +31,11 @@ func bind(_sim: Simulation, target: Object) -> void:
 	add_child(_mound)
 
 func _process(_delta: float) -> void:
-	if nest.chambers != _drawn_chambers or nest.has_entrance() != _drawn_open:
+	var extra := 0
+	for p in nest.extra_portals:
+		extra += 1 if p.open else 0
+	if nest.chambers != _drawn_chambers or nest.has_entrance() != _drawn_open or extra != _drawn_extra:
+		_drawn_extra = extra
 		_drawn_open = nest.has_entrance()
 		_drawn_chambers = nest.chambers
 		_mound.queue_redraw()
@@ -75,6 +80,19 @@ func _draw_mound() -> void:
 		return
 	_mound.draw_circle(Vector2.ZERO, nest.radius * 1.5, SOIL.darkened(0.35))
 	_mound.draw_circle(Vector2.ZERO, nest.radius, Color(0.05, 0.03, 0.02))
+	# Entrances opened later (a nest that grows digs more): each a smaller
+	# rim of crumbs around its own crater.
+	for p in nest.extra_portals:
+		if not p.open:
+			continue
+		var at := p.pos_a - position
+		for n in 40:
+			var q := at + Vector2.from_angle(rng.randf() * TAU) * nest.radius * (1.0 + 0.9 * sqrt(rng.randf()))
+			var r := rng.randf_range(0.8, 1.8)
+			_mound.draw_circle(q + Vector2(0.4, 0.6), r, Color(0, 0, 0, 0.25))
+			_mound.draw_circle(q, r, SOIL.lightened(rng.randf() * 0.25))
+		_mound.draw_circle(at, nest.radius * 1.4, SOIL.darkened(0.35))
+		_mound.draw_circle(at, nest.radius * 0.95, Color(0.05, 0.03, 0.02))
 
 ## Clumps first .. first + count - 1 of the dump. Each clump's look comes from
 ## its own seed, and clump n lands within a radius that grows with n, so

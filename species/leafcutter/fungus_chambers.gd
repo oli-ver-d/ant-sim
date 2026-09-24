@@ -764,3 +764,24 @@ func has_loop() -> bool:
 		if g.level == Level.LINK:
 			return true
 	return false
+
+## The layout's own RNG (for the nest's other placement decisions, so the
+## simulation's random stream is untouched).
+func layout_rng() -> RandomNumberGenerator:
+	return _rng
+
+## The point on a gallery (or the royal chamber's centre) nearest `at`, for a
+## new tunnel to leave from.
+func nearest_tunnel_point(at: Vector2) -> Vector2:
+	var best := royal().centre
+	var best_d := at.distance_to(best)
+	for g in galleries:
+		if g.level == Level.STUB:
+			continue
+		for k in g.points.size() - 1:
+			var q := Geometry2D.get_closest_point_to_segment(at, g.points[k], g.points[k + 1])
+			var d := q.distance_to(at)
+			if d < best_d:
+				best_d = d
+				best = q
+	return best

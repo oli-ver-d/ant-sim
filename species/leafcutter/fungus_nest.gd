@@ -111,6 +111,10 @@ var weeded_mass: float = 0.0
 var queen_reserve: float = 0.0
 var queen_feed_rate: float = 0.15
 var _entrance_planned: bool = false
+## Colony sizes at which another entrance is dug (nest_params "entrances":
+## {"at": [900, 2200], "spacing": 150}), and how far apart entrances are.
+var entrance_steps: PackedInt32Array = []
+var entrance_spacing: float = 150.0
 var _role_timer: float = 0.0
 ## Cached places in chambers (see _spot).
 var _spots: Dictionary[Vector3, Vector2] = {}
@@ -219,6 +223,9 @@ func _prepare_underground(sim: Simulation, under: Dictionary, params: Dictionary
 		u["texture"] = {}
 	if not u.has("overdig"):
 		u["overdig"] = OVERDIG
+	# Busy tunnels become highways, with lanes (see Highways).
+	if not u.has("highways"):
+		u["highways"] = {}
 	chambers_layout = FungusChambers.new()
 	chambers_layout.setup(size, sim.rng.seed, u)
 	var shaft := chambers_layout.shaft
@@ -262,6 +269,16 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary) -
 			if l.world.is_soil(c):
 				l.world.soil[c] *= hard
 	_entrance_planned = portal.open
+	# Tunnels carved at the start are watched for traffic like dug ones.
+	if highways != null:
+		for g in chambers_layout.galleries:
+			highways.watch(g.points, g.radii)
+		for c in chambers_layout.list:
+			if c.dug and c.tunnel.size() >= 2:
+				var w := chambers_layout.tunnel_radius * FungusChambers.CAPILLARY_WIDTH
+				highways.watch(c.tunnel, FungusChambers._taper(c.tunnel, w, w * 0.9))
+	entrance_steps = PackedInt32Array(params.get("entrances", {}).get("at", []))
+	entrance_spacing = float(params.get("entrances", {}).get("spacing", entrance_spacing))
 	chambers = chambers_layout.dug_count()
 	var b: Dictionary = params.get("brood", {}).duplicate()
 	b["care"] = true
@@ -312,6 +329,8 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 		_role_timer = 1.0
 		_count_roles(sim)
 		var workers := workers_alive(sim)
+		if _entrance_planned:
+			_plan_extra_entrances(sim)
 		if not _entrance_planned and workers >= open_entrance_at:
 			_plan_entrance()
 		_plan_chambers()
@@ -909,3 +928,76 @@ func queen_heading() -> float:
 	if royal.alcoves.is_empty():
 		return 0.0
 	return (royal.alcoves[0] - royal.centre).angle()
+
+# --- More entrances ----------------------------------------------------------------------
+
+## Once the colony has passed the next of `entrance_steps`, plans another
+## entrance: a shaft up to the surface, facing food, spaced from the others,
+## reached by a gallery routed from the nearest tunnel. Its portal opens when
+## the shaft is dug (and the surface gets its own spoil heap and trail).
+func _plan_extra_entrances(sim: Simulation) -> void:
+	var done := extra_portals.size()
+	if done >= entrance_steps.size() or sim.colonies[colony_id].total_population() < entrance_steps[done]:
+		return
+	# Facing food: toward the richest source the colony can use, away from
+	# the directions entrances already face.
+	var colony := sim.colonies[colony_id]
+	var main := entrance_position()
+	var rng := chambers_layout.layout_rng()
+	var best := Vector2.ZERO
+	var best_score := -INF
+	for src in sim.food_sources:
+		if src.is_depleted() or not colony.food_types.has(src.type_id):
+			continue
+		var to := src.position - main
+		var score := src.remaining_mass() / (1.0 + to.length() / 300.0)
+		for e in entrances():
+			if e != main:
+				score *= 0.4 + 0.6 * clampf(1.0 - to.normalized().dot((e - main).normalized()), 0.0, 1.0)
+		if score > best_score:
+			best_score = score
+			best = to.normalized()
+	if best == Vector2.ZERO:
+		best = Vector2.from_angle(rng.randf() * TAU)
+	var l := sim.layers[underground_layer]
+	var shaft_r := portal.radius
+	for attempt in 16:
+		var dir := best.rotated(rng.randf_range(-0.7, 0.7))
+		var surface := main + dir * rng.randf_range(entrance_spacing, entrance_spacing * 1.8)
+		var ok := Rect2(Vector2.ZERO, Vector2(sim.world.size)).grow(-40.0).has_point(surface) and not sim.world.is_blocked(surface)
+		for e: Vector2 in [main] + Array(_all_entrances()):
+			ok = ok and surface.distance_to(e) >= entrance_spacing
+		ok = ok and surface.distance_to(spoil_position()) > 50.0 and surface.distance_to(dump_position()) > 50.0
+		var under := portal.pos_b + (surface - main)
+		ok = ok and Rect2(Vector2.ZERO, Vector2(l.world.size)).grow(-60.0).has_point(under)
+		ok = ok and chambers_layout._soil_around(under, shaft_r + 16.0, plan)
+		if not ok:
+			continue
+		var from := chambers_layout.nearest_tunnel_point(under)
+		if from == Vector2.INF:
+			return
+		var pts := chambers_layout.route_tunnel(from, under, plan)
+		if Router.length_of(pts) > from.distance_to(under) * 1.8:
+			continue
+		var w := chambers_layout.tunnel_radius * FungusChambers.MAIN_WIDTH
+		plan.add_path_job("entrance%d_tunnel" % (done + 1), from, pts, FungusChambers._taper(pts, w, w * 0.9), -1.5, 6)
+		# The shaft, all the way up: harder digging (stones in it come out too).
+		for c in l.world.cells_in_segment(under, under, shaft_r):
+			l.world.soften(c, 2.5)
+			if l.world.is_soil(c):
+				l.world.soil[c] *= 2.0
+		var dir_in := (under - pts[pts.size() - 2]).normalized() if pts.size() >= 2 else Vector2.RIGHT
+		var job := plan.add_job("entrance%d" % (done + 1), under - dir_in * (shaft_r + 2.0), under, under,
+				maxf(8.0, shaft_r * 0.8), -1.0, 4)
+		var p := add_entrance(sim, surface, under, shaft_r)
+		plan.open_portal_when_done(job, p)
+		return
+	# Nowhere fits: skip this step.
+	entrance_steps.remove_at(done)
+
+## Surface ends of every extra entrance, open or not.
+func _all_entrances() -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in extra_portals:
+		out.append(p.pos_a)
+	return out

@@ -43,6 +43,8 @@ var _food_layer: Node2D
 var _top_layer: Node2D
 var _bound_food: Dictionary[int, bool] = {}
 var _bound_colonies: int = 0
+## Spoil heaps made per colony (one per entrance).
+var _heaps: Dictionary[int, int] = {}
 
 ## ground_seed varies the soil pattern; debug_readout receives the debug text.
 func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debug_readout: RichTextLabel = null,
@@ -126,7 +128,8 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	if rain_renderer != null:
 		add_child(rain_renderer)
 
-	if debug_readout != null:
+	# The debug view (D); the text readout only where one is given.
+	if sim != null:
 		debug_view = Overlays.DebugView.new()
 		debug_view.layer = layer
 		debug_view.bind(sim, debug_readout)
@@ -142,10 +145,6 @@ func _process(_delta: float) -> void:
 	while _bound_colonies < sim.colonies.size():
 		var nest := sim.colonies[_bound_colonies].nest
 		if layer == 0:
-			if nest.underground_layer >= 0:
-				var heap := SpoilHeapRenderer.new()
-				heap.bind(sim, nest)
-				_nest_layer.add_child(heap)
 			_attach(_nest_layer, "nest:" + nest.type_id, nest)
 		elif nest.underground_layer == layer:
 			if registry.renderers.has("underground:" + nest.type_id):
@@ -153,6 +152,19 @@ func _process(_delta: float) -> void:
 			if registry.renderers.has("underground_top:" + nest.type_id):
 				_attach(_top_layer, "underground_top:" + nest.type_id, nest)
 		_bound_colonies += 1
+	# A spoil heap beside every entrance of nests that dig (more open as they grow).
+	if layer == 0:
+		for colony in sim.colonies:
+			var nest := colony.nest
+			if nest.underground_layer < 0:
+				continue
+			while _heaps.get(colony.id, 0) < 1 + nest.extra_portals.size():
+				var heap := SpoilHeapRenderer.new()
+				heap.entrance = _heaps.get(colony.id, 0)
+				heap.bind(sim, nest)
+				_nest_layer.add_child(heap)
+				_nest_layer.move_child(heap, 0)
+				_heaps[colony.id] = _heaps.get(colony.id, 0) + 1
 	if layer != 0:
 		return
 	for src in sim.food_sources:

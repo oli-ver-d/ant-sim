@@ -371,11 +371,29 @@ void AntKernel::lay_impl(int64_t p_i, int64_t p_c) {
 
 // --- Whole behaviour ticks -----------------------------------------------------------
 
+// NestType.nearest_entrance(): the main entrance, or with several the open
+// one nearest (the first of equally near ones).
+Vector2 AntKernel::nearest_entrance(const Colony &p_colony, const Vector2 &p_at) const {
+	if (p_colony.entrances.empty()) {
+		return p_colony.entrance;
+	}
+	Vector2 best = p_colony.entrance;
+	double best_d = INF_D;
+	for (const Vector2 &e : p_colony.entrances) {
+		double d = distance_squared_to(v2(p_at), v2(e));
+		if (d < best_d) {
+			best_d = d;
+			best = e;
+		}
+	}
+	return best;
+}
+
 // The turn follow_trail and carry_home make on their way home: straight for
 // the entrance once it is in sight, otherwise the trail plus path integration.
 double AntKernel::nest_turn(int64_t p_i, const Colony &p_colony, const double *p_params, const Layer &p_l) const {
 	V2 at = v2(ants.pos[p_i]);
-	V2 entrance = v2(p_colony.entrance);
+	V2 entrance = v2(nearest_entrance(p_colony, vec(at)));
 	double heading = ants.heading[p_i];
 	double turn = 0.0;
 	if (p_colony.has_entrance && distance_squared_to(at, entrance) < p_colony.sense_radius * p_colony.sense_radius) {
@@ -403,7 +421,15 @@ bool AntKernel::tick_ant(int64_t p_i, int64_t p_tick_count) {
 	double timer = (float)((double)ants.timer[p_i] + dt);
 	V2 at = v2(ants.pos[p_i]);
 	auto at_nest = [&]() -> bool {
-		return colony.has_entrance && distance_squared_to(at, v2(colony.entrance)) <= colony.radius * colony.radius;
+		if (colony.entrances.empty()) {
+			return colony.has_entrance && distance_squared_to(at, v2(colony.entrance)) <= colony.radius * colony.radius;
+		}
+		for (const Vector2 &e : colony.entrances) {
+			if (distance_squared_to(at, v2(e)) <= colony.radius * colony.radius) {
+				return true;
+			}
+		}
+		return false;
 	};
 
 	bool food_check = false;
@@ -678,12 +704,17 @@ void AntKernel::set_state_params(int64_t p_colony, const PackedFloat64Array &p_p
 	c.set = true;
 }
 
-void AntKernel::set_nest(int64_t p_colony, bool p_native, bool p_has_entrance, const Vector2 &p_entrance, double p_radius,
+void AntKernel::set_nest(int64_t p_colony, bool p_native, bool p_has_entrance, const Vector2 &p_entrance,
+		const PackedVector2Array &p_entrances, double p_radius,
 		double p_sense_radius) {
 	Colony &c = colony_slot(p_colony);
 	c.nest_native = p_native;
 	c.has_entrance = p_has_entrance;
 	c.entrance = p_entrance;
+	c.entrances.clear();
+	for (int64_t k = 0; k < p_entrances.size(); k++) {
+		c.entrances.push_back(p_entrances[k]);
+	}
 	c.radius = p_radius;
 	c.sense_radius = p_sense_radius;
 }
@@ -772,7 +803,7 @@ Vector2 AntKernel::cell_center(const Layer &p_l, int64_t p_cell) const {
 // within `p_direct_within` (NavGrid.distance()) with a clear line to it
 // (World.line_clear()), or can't go further down.
 Vector2 AntKernel::nav_aim(const PackedInt32Array &p_dist, int64_t p_layer, const Vector2 &p_at, const Vector2 &p_goal,
-		double p_direct_within) const {
+		double p_direct_within, double p_lane) const {
 	ERR_FAIL_INDEX_V(p_layer, (int64_t)layers.size(), p_goal);
 	const Layer &l = layers[p_layer];
 	const int32_t *dist = p_dist.ptr();
@@ -808,7 +839,10 @@ Vector2 AntKernel::nav_aim(const PackedInt32Array &p_dist, int64_t p_layer, cons
 			aim = (step2 < 0 || dist[step2] >= dist[step1]) ? cell_center(l, step1) : cell_center(l, step2);
 		}
 	}
-	return aim == p_at ? p_goal : aim;
+	if (aim == p_at) {
+		return p_goal;
+	}
+	return p_lane > 0.0 ? lane_aim(l, p_at, aim, p_lane) : aim;
 }
 
 // --- Primitives for GDScript behaviours ---------------------------------------------
@@ -937,7 +971,7 @@ void AntKernel::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_colony", "colony", "values", "turn_rate", "phase_per_unit", "num_states"),
 			&AntKernel::set_colony);
 	ClassDB::bind_method(D_METHOD("set_state_params", "colony", "params"), &AntKernel::set_state_params);
-	ClassDB::bind_method(D_METHOD("set_nest", "colony", "native", "has_entrance", "entrance", "radius", "sense_radius"),
+	ClassDB::bind_method(D_METHOD("set_nest", "colony", "native", "has_entrance", "entrance", "entrances", "radius", "sense_radius"),
 			&AntKernel::set_nest);
 	ClassDB::bind_method(D_METHOD("run", "from", "end", "tick_count"), &AntKernel::run);
 	ClassDB::bind_method(D_METHOD("move", "i", "desired_turn", "move_speed", "dt"), &AntKernel::move);
@@ -945,7 +979,8 @@ void AntKernel::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("sense_turn", "c", "at", "heading", "colony", "layer"), &AntKernel::sense_turn);
 	ClassDB::bind_method(D_METHOD("sense_away", "c", "at", "heading", "colony", "layer"), &AntKernel::sense_away);
 	ClassDB::bind_method(D_METHOD("lay", "i", "c"), &AntKernel::lay);
-	ClassDB::bind_method(D_METHOD("nav_aim", "dist", "layer", "at", "goal", "direct_within"), &AntKernel::nav_aim);
+	ClassDB::bind_method(D_METHOD("add_traffic", "layer", "values", "count", "add"), &AntKernel::add_traffic);
+	ClassDB::bind_method(D_METHOD("nav_aim", "dist", "layer", "at", "goal", "direct_within", "lane"), &AntKernel::nav_aim);
 	ClassDB::bind_method(D_METHOD("set_food", "colony", "circles"), &AntKernel::set_food);
 	ClassDB::bind_method(D_METHOD("carriers_near", "at", "reach", "colony", "high_water"), &AntKernel::carriers_near);
 	ClassDB::bind_static_method("AntKernel", D_METHOD("mask_edges", "mask", "nx", "ny", "value"), &AntKernel::mask_edges);
@@ -969,4 +1004,58 @@ void AntKernel::_bind_methods() {
 	BIND_ENUM_CONSTANT(SLOT_SPEED_FACTOR);
 	BIND_ENUM_CONSTANT(SLOT_DURATION);
 	BIND_ENUM_CONSTANT(SLOT_COUNT);
+}
+
+// Simulation._sample_traffic() for one layer: adds p_add to the traffic map
+// cell of every agent on it (not in a portal), in ant order. The map's
+// buffer must be its own (the caller writes one element first).
+void AntKernel::add_traffic(int64_t p_layer, const PackedFloat32Array &p_values, int64_t p_count, double p_add) {
+	ERR_FAIL_INDEX(p_layer, (int64_t)layers.size());
+	const Layer &l = layers[p_layer];
+	float *values = raw<float>(p_values);
+	int64_t n = std::min(p_count, ants.capacity);
+	for (int64_t i = 0; i < n; i++) {
+		if (ants.alive[i] == 0 || ants.layer[i] != p_layer || ants.transit_until[i] != 0) {
+			continue;
+		}
+		Vector2 at = ants.pos[i];
+		int64_t c = (int64_t)((double)at.y * l.inv_cell) * l.width + (int64_t)((double)at.x * l.inv_cell);
+		values[c] = (float)((double)values[c] + p_add);
+	}
+}
+
+// Travel.lane_aim(): moves `p_aim` toward the lane right of the tunnel's
+// middle (probing the tunnel's width square to the way).
+Vector2 AntKernel::lane_aim(const Layer &p_l, const Vector2 &p_at, const Vector2 &p_aim, double p_lane) const {
+	const double LANE_PROBE = 36.0;
+	const double LANE_MIN_WIDTH = 14.0;
+	const double LANE_OFFSET = 0.3;
+	const double LANE_MAX_SHIFT = 12.0;
+	V2 at = v2(p_at);
+	V2 aim = v2(p_aim);
+	V2 dir = sub(aim, at);
+	double dist = length(dir);
+	if (dist < 0.001) {
+		return p_aim;
+	}
+	float d = (float)dist;
+	V2 fwd{ dir.x / d, dir.y / d };
+	V2 right{ -fwd.y, fwd.x };
+	double step = (double)p_l.cell_size * 0.5;
+	double r_free = 0.0;
+	while (r_free < LANE_PROBE && !world_blocked(p_l, vec(add(at, mul(right, r_free + step))))) {
+		r_free += step;
+	}
+	double l_free = 0.0;
+	while (l_free < LANE_PROBE && !world_blocked(p_l, vec(sub(at, mul(right, l_free + step))))) {
+		l_free += step;
+	}
+	double width = r_free + l_free;
+	if (width < LANE_MIN_WIDTH || r_free >= LANE_PROBE || l_free >= LANE_PROBE) {
+		return p_aim;
+	}
+	double k = minf(1.0, (width - LANE_MIN_WIDTH) / LANE_MIN_WIDTH);
+	double shift = clampf((r_free - l_free) * 0.5 + width * LANE_OFFSET, -LANE_MAX_SHIFT, LANE_MAX_SHIFT);
+	float lat = dir.x * right.x + dir.y * right.y;
+	return vec(add(aim, mul(right, (shift - (double)lat) * p_lane * k)));
 }

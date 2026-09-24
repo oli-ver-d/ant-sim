@@ -680,6 +680,7 @@ func begin_step() -> void:
 	for colony in colonies:
 		colony.nest.release_waiting(self, dt)
 		colony.nest.update(self, dt)
+		colony.nest.update_underground(self, dt)
 	if tick_count % POOL_EVERY == 0 and _pools_on:
 		balance_pools()
 	var lookahead := 0.0
@@ -770,6 +771,9 @@ func _step_ants_layered(from: int, end: int) -> void:
 ## Finishes the tick in progress: pheromone update and render snapshots.
 func end_step() -> void:
 	assert(in_tick() and _cursor >= _tick_ants, "end_step() before all ants were updated")
+	# Traffic is sampled while the kernel still holds this tick's arrays.
+	if tick_count % TrafficMap.SAMPLE_EVERY == 0:
+		_sample_traffic()
 	if native_bound:
 		native_bound = false
 		if not native.end_tick():
@@ -779,6 +783,8 @@ func end_step() -> void:
 	# Keeps trails from soaking through walls on the surface (see SimLayer).
 	for l in layers:
 		l.update_pheromones(tick_count)
+		if l.traffic != null:
+			l.traffic.decay()
 	profile_usec["pheromones"] += Time.get_ticks_usec() - t2
 
 	_sync_riders()
@@ -787,6 +793,27 @@ func end_step() -> void:
 	shown_pos = pos
 	shown_heading = heading
 	_cursor = -1
+
+## Adds each agent's time to its layer's traffic map (layers that count
+## traffic, see TrafficMap), in ant order; natively when the kernel runs.
+func _sample_traffic() -> void:
+	for l in layers:
+		var tm := l.traffic
+		if tm == null:
+			continue
+		var add := tm.sample_add(dt)
+		if native_bound:
+			tm.values[0] = tm.values[0]
+			kernel.add_traffic(l.index, tm.values, high_water, add)
+		else:
+			var inv := tm.inv_cell
+			var w := tm.width
+			for i in high_water:
+				if alive[i] == 0 or layer[i] != l.index or transit_until[i] != 0:
+					continue
+				var at := pos[i]
+				tm.values[int(at.y * inv) * w + int(at.x * inv)] += add
+		tm.version += 1
 
 ## Hash of the full simulation state, for determinism checks.
 func state_hash() -> String:

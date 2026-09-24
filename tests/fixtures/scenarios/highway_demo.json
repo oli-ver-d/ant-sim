@@ -1,0 +1,31 @@
+{
+	"name": "highway_demo",
+	"description": "M13c check: an established nest with busy tunnels: traffic counted, sections widened into highways, lanes in wide galleries, a second entrance dug at a population step.",
+	"seed": 21,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1000],
+			"population": {"queen": 1, "minim": 160, "media": 260, "major": 10},
+			"nest_params": {
+				"initial_fungus": 500, "initial_chambers": 6, "chamber_capacity": 90, "max_chambers": 20,
+				"entrances": {"at": [300], "spacing": 140},
+				"underground": {"size": [1200, 1200], "royal_radius": 40, "garden_life": 1500,
+					"highways": {"check_every": 4, "threshold": 15, "sustain": 2}},
+				"brood": {"lay_interval": 3, "initial": {"egg": 10, "larva": 20, "pupa": 10}}
+			}
+		}
+	],
+	"food": [
+		{"type": "leaf", "pos": [380, 760], "rotation": -30, "length": 320, "width": 150, "shape": "elliptic", "teeth": 24, "seed": 3},
+		{"type": "leaf", "pos": [800, 820], "rotation": 40, "length": 320, "width": 150, "shape": "lanceolate", "teeth": 22, "seed": 8}
+	],
+	"warmup": 60,
+	"ticks_per_frame": [{"t": 0, "tpf": 0.5}, {"t": 4, "tpf": 6}],
+	"camera": {
+		"surface": [{"t": 0, "pos": [540, 950], "zoom": 1.2}],
+		"nest": [{"t": 0, "fit": "excavation", "margin": 60, "max_zoom": 3}]
+	},
+	"render": {"layout": {"mode": "split", "colony": 0, "ratio": 0.4}}
+}

@@ -26,15 +26,61 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	if params.has("underground"):
 		setup_underground(sim, params["underground"])
 
-## A nest with an underground has an entrance once its portal is open.
+## A nest with an underground has an entrance once one of its portals is open.
 func has_entrance() -> bool:
-	return portal == null or portal.open
+	if portal == null or portal.open:
+		return true
+	for p in extra_portals:
+		if p.open:
+			return true
+	return false
 
 func entrance_position() -> Vector2:
 	return position
 
 func is_at_nest(pos: Vector2) -> bool:
-	return has_entrance() and pos.distance_squared_to(entrance_position()) <= radius * radius
+	if extra_portals.is_empty():
+		return has_entrance() and pos.distance_squared_to(entrance_position()) <= radius * radius
+	for e in entrances():
+		if pos.distance_squared_to(e) <= radius * radius:
+			return true
+	return false
+
+## Surface ends of the open entrances: the main one (entrance_position())
+## first, then any added with add_entrance().
+func entrances() -> PackedVector2Array:
+	if _entrances_changes != Portal.changes or _entrances_count != extra_portals.size():
+		_entrances_changes = Portal.changes
+		_entrances_count = extra_portals.size()
+		_entrances = PackedVector2Array()
+		if portal == null or portal.open:
+			_entrances.append(entrance_position())
+		for p in extra_portals:
+			if p.open:
+				_entrances.append(p.pos_a)
+	if extra_portals.is_empty() and portal == null:
+		_entrances = PackedVector2Array([entrance_position()])
+	return _entrances
+
+## The open entrance nearest `pos` (the first of equally near ones; the main
+## entrance if there is only one).
+func nearest_entrance(pos: Vector2) -> Vector2:
+	if extra_portals.is_empty():
+		return entrance_position()
+	var best := entrance_position()
+	var best_d := INF
+	for e in entrances():
+		var d := pos.distance_squared_to(e)
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+## Extra entrances (portals besides `portal`, see add_entrance()).
+var extra_portals: Array[Portal] = []
+var _entrances: PackedVector2Array = []
+var _entrances_changes: int = -1
+var _entrances_count: int = -1
 
 ## Takes ownership of a delivered item. The Simulation destroys the item afterwards.
 func receive_item(_sim: Simulation, _item: Item) -> void:
@@ -145,7 +191,7 @@ func receive_waste(_sim: Simulation, item: Item) -> void:
 #                {"name": "cave", "origin": [x, y], "lobes": [cx, cy, rx, ry, angle, ...],
 #                 "face": [x, y]}, ...],
 #       "texture": {"clay": 0.16, "roots": 0.05, "stones": 5, ...}, "overdig": 4.5,
-#       "ragged": 6}
+#       "ragged": 6, "highways": {"threshold": 0.6, "max_radius": 14, "lanes": 0.8, ...}}
 #
 # "shaft" is where the entrance comes down (default: the layer's centre);
 # "carve" shapes are dug out from the start (default: the shaft bottom, if
@@ -153,7 +199,9 @@ func receive_waste(_sim: Simulation, item: Item) -> void:
 # (points with a radius each) or blobs of ellipses (see ExcavationPlan and
 # DigShape). "texture" gives the soil clay, roots and stones (World.
 # add_soil_texture, kept clear of the shaft and the carved shapes);
-# "overdig" makes dug outlines rough and "ragged" the digging face uneven.
+# "overdig" makes dug outlines rough and "ragged" the digging face uneven;
+# "highways" widens busy tunnels and counts traffic (Highways, TrafficMap)
+# and sets the layer's lanes.
 # A sealed nest ("open": false) has no entrance until the job named
 # "entrance" (if any) is finished.
 
@@ -162,6 +210,8 @@ var underground_layer: int = -1
 ## The entrance shaft (surface <-> underground), or null.
 var portal: Portal
 var plan: ExcavationPlan
+## Busy tunnels widened into highways (underground "highways"), or null.
+var highways: Highways
 ## Where spoil is dropped on the surface, relative to the entrance.
 var spoil_offset: Vector2 = Vector2(-70, 40)
 ## Soil carried out and dropped on the spoil heap so far.
@@ -242,6 +292,9 @@ func setup_underground(sim: Simulation, params: Dictionary) -> void:
 					ScenarioEvents.vec2(j.get("to", j["from"])), float(j.get("radius", 7.0)), prio, diggers)
 		if job.name == "entrance":
 			plan.open_portal_when_done(job, portal)
+	if params.get("highways", false) is Dictionary:
+		highways = Highways.new()
+		highways.setup(sim, plan, params["highways"])
 
 ## What the nest wants dug (null without an underground).
 func excavation_plan() -> ExcavationPlan:
@@ -251,10 +304,59 @@ func excavation_plan() -> ExcavationPlan:
 func spoil_position() -> Vector2:
 	return entrance_position() + spoil_offset
 
-## A load of spoil dropped on the heap. The Simulation destroys the item.
-func receive_spoil(_sim: Simulation, item: Item) -> void:
+## Where spoil carried up through portal `portal_id` is dropped: the main
+## heap for the main entrance, a heap beside each extra one.
+func spoil_position_for(portal_id: int) -> Vector2:
+	for k in extra_portals.size():
+		if extra_portals[k].id == portal_id:
+			return spoil_position_of(k + 1)
+	return spoil_position()
+
+## The spoil heap of entrance e (0 = the main one, k = extra_portals[k - 1]):
+## an extra entrance's heap lies on its outer side, away from the main one.
+func spoil_position_of(e: int) -> Vector2:
+	if e <= 0 or e > extra_portals.size():
+		return spoil_position()
+	var at := extra_portals[e - 1].pos_a
+	var out := (at - entrance_position()).normalized()
+	return at + out.rotated(0.7) * spoil_offset.length() * 0.8
+
+## A load of spoil dropped on a heap (that of the entrance it came up
+## through: portal id, -1 = the main one). The Simulation destroys the item.
+func receive_spoil(_sim: Simulation, item: Item, portal_id: int = -1) -> void:
 	spoil_mass += item.mass
 	spoil_items += 1
+	var e := 0
+	for k in extra_portals.size():
+		if extra_portals[k].id == portal_id:
+			e = k + 1
+	while spoil_by_entrance.size() <= e:
+		spoil_by_entrance.append(0)
+	spoil_by_entrance[e] += 1
+
+## Pellets dropped on each entrance's heap (0 = the main one).
+var spoil_by_entrance: PackedInt32Array = [0]
+
+## Adds a closed entrance: a portal from `surface` down to `under` on the
+## nest's layer. Open it by finishing a job (ExcavationPlan
+## .open_portal_when_done), e.g. a shaft dug up from a tunnel.
+func add_entrance(sim: Simulation, surface: Vector2, under: Vector2, r: float) -> Portal:
+	var p := sim.add_portal(0, surface, underground_layer, under, r)
+	p.open = false
+	extra_portals.append(p)
+	return p
+
+## Spoil pellets on entrance e's heap.
+func spoil_count(e: int) -> int:
+	if e == 0:
+		return spoil_items - _extra_spoil()
+	return spoil_by_entrance[e] if e < spoil_by_entrance.size() else 0
+
+func _extra_spoil() -> int:
+	var n := 0
+	for k in range(1, spoil_by_entrance.size()):
+		n += spoil_by_entrance[k]
+	return n
 
 ## A new spoil pellet for `dug` work of soil (the digger picks it up). A
 ## pellet weighs SPOIL_WEIGHT per unit of work, so carrying it slows a
@@ -270,6 +372,8 @@ func make_spoil(sim: Simulation, dug: float) -> Item:
 func hash_underground(ctx: HashingContext) -> void:
 	if plan != null:
 		plan.hash_into(ctx)
+		if highways != null:
+			highways.hash_into(ctx)
 		ctx.update(PackedFloat64Array([spoil_mass, spoil_items, packed_spoil]).to_byte_array())
 
 ## Places one of the colony's starting ants (scenario population) and
@@ -314,3 +418,9 @@ func spawn_from_pool(sim: Simulation, caste: int, l: int) -> int:
 ## the first one larger. None by default.
 func stats_lines(_sim: Simulation) -> PackedStringArray:
 	return PackedStringArray()
+
+## Underground upkeep, once a tick after update() (the Simulation calls it):
+## highways.
+func update_underground(sim: Simulation, dt: float) -> void:
+	if highways != null:
+		highways.update(sim, dt)

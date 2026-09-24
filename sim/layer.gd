@@ -57,3 +57,16 @@ func update_pheromones(tick_count: int) -> void:
 ## Empty if there is none.
 func route(from: Vector2, to: Vector2, params: Dictionary = {}) -> PackedVector2Array:
 	return Router.route(world, from, to, params)
+
+## How busy each cell is (see TrafficMap), or null until enable_traffic().
+var traffic: TrafficMap
+## Lane keeping in wide tunnels (0 = off): how strongly ants following a nav
+## field keep to the right-hand side of their way (see Travel.lane_aim), so
+## ants going out and coming back pass in two streams.
+var lanes: float = 0.0
+
+## Starts counting traffic on this layer (idempotent; the first half-life wins).
+func enable_traffic(half_life: float, dt: float) -> TrafficMap:
+	if traffic == null:
+		traffic = TrafficMap.new(world, half_life, dt)
+	return traffic

@@ -81,7 +81,8 @@ func push_colony(colony: Colony) -> void:
 func push_nests() -> void:
 	for colony in _sim.colonies:
 		var nest := colony.nest
-		kernel.set_nest(colony.id, _plain_entrance(nest), nest.has_entrance(), nest.entrance_position(),
+		var extra := PackedVector2Array() if nest.extra_portals.is_empty() else nest.entrances()
+		kernel.set_nest(colony.id, _plain_entrance(nest), nest.has_entrance(), nest.entrance_position(), extra,
 				nest.radius, nest.sense_radius)
 	_portal_changes = Portal.changes
 
@@ -206,7 +207,7 @@ static func _defines_entrance_once(script: Script) -> bool:
 	for m: Dictionary in script.get_script_method_list():
 		counts[m["name"]] = counts.get(m["name"], 0) + 1
 	# A method a subclass overrides is listed once per script that defines it.
-	for method: String in ["has_entrance", "entrance_position", "is_at_nest"]:
+	for method: String in ["has_entrance", "entrance_position", "is_at_nest", "entrances", "nearest_entrance"]:
 		if counts.get(method, 0) != 1:
 			return false
 	return true

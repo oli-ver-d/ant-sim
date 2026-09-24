@@ -1,7 +1,7 @@
 class_name SpoilHeapRenderer
 extends Node2D
-## The heap of dug-out soil beside a nest entrance (NestType.spoil_position()),
-## one crumb per pellet carried up (NestType.spoil_items), in the ochres and
+## The heap of dug-out soil beside a nest entrance (NestType.spoil_position_of()),
+## one crumb per pellet carried up through it (NestType.spoil_count), in the ochres and
 ## browns of the soil below. Crumb n lands within a radius that grows with n,
 ## so earlier crumbs never move and the heap spreads by accretion; later
 ## crumbs sit a little higher, so the middle builds up lighter.
@@ -17,22 +17,24 @@ const COLORS: PackedColorArray = [Color(0.4, 0.28, 0.17), Color(0.46, 0.34, 0.22
 		Color(0.5, 0.39, 0.26)]
 
 var nest: NestType
+## Which entrance's heap (0 = the main one; see NestType.spoil_position_of).
+var entrance: int = 0
 var _chunks: Array[HeapChunk] = []
 var _base: Node2D
 
 func bind(_sim: Simulation, target: Object) -> void:
 	nest = target as NestType
-	position = nest.spoil_position()
+	position = nest.spoil_position_of(entrance)
 	_base = Node2D.new()
 	_base.draw.connect(_draw_base)
 	add_child(_base)
 
 func _process(_delta: float) -> void:
-	var crumbs := mini(nest.spoil_items, MAX_CRUMBS)
+	var crumbs := mini(nest.spoil_count(entrance), MAX_CRUMBS)
 	while _chunks.size() * CHUNK < crumbs:
 		var chunk := HeapChunk.new()
 		chunk.first = _chunks.size() * CHUNK
-		chunk.seed_base = nest.colony_id * 6151 + 29
+		chunk.seed_base = nest.colony_id * 6151 + 29 + entrance * 7727
 		_chunks.append(chunk)
 		add_child(chunk)
 	for chunk in _chunks:
@@ -51,7 +53,7 @@ static func _radius(n: int) -> float:
 
 ## A soft, darker footprint under the crumbs (unit circle, scaled).
 func _draw_base() -> void:
-	if nest.spoil_items == 0:
+	if nest.spoil_count(entrance) == 0:
 		return
 	for k in 4:
 		var t := float(k) / 3.0
