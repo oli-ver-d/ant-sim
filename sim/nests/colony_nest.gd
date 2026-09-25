@@ -28,7 +28,7 @@ extends NestType
 ## _idle_role()).
 ##
 ## params: radius, sense_radius, ant_cost, brood_reserve, brood_rate,
-##         max_population, max_chambers, dump, brood (optional, see Brood),
+##         max_population, max_chambers, brood (optional, see Brood),
 ##         underground (optional, see NestType and NestChambers) with, for it:
 ##         open_entrance_at, brood_per_nurse, retinue_max, dig_fraction,
 ##         inside_share, queen_groom_time, initial_chambers, entrances,
@@ -42,8 +42,6 @@ var max_chambers: int = 5
 ## Chambers dug (with an underground), or the chambers the store fills.
 var chambers: int = 1
 var ants_raised: int = 0
-## Where refuse is dumped, relative to the nest's position.
-var dump_offset: Vector2 = Vector2(120, 40)
 ## Egg-to-worker brood model, or null for a species' own growth.
 var brood: Brood
 ## Item type nurses carry to larvae (see make_brood_food()).
@@ -102,11 +100,6 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	brood_rate = params.get("brood_rate", brood_rate)
 	max_population = int(params.get("max_population", max_population))
 	max_chambers = int(params.get("max_chambers", max_chambers))
-	if params.has("dump"):
-		dump_offset = ScenarioEvents.vec2(params["dump"])
-
-func dump_position() -> Vector2:
-	return position + dump_offset
 
 # --- What the colony lives on (species nests override) ---------------------------------
 
@@ -346,6 +339,12 @@ func field_toward(at: Vector2) -> int:
 		return chambers_layout.list[k].nav_field
 	return portal.nav_field
 
+## Underground by the nest's nav fields (see NestType.walk_to).
+func walk_to(sim: Simulation, i: int, goal_layer: int, goal: Vector2, move_speed: float, dt: float, reach: float = 3.0) -> bool:
+	if goal_layer != underground_layer or chambers_layout == null:
+		return super.walk_to(sim, i, goal_layer, goal, move_speed, dt, reach)
+	return Travel.go(sim, i, goal_layer, goal, field_toward(goal), move_speed, dt, reach, direct_range(goal) * 0.9)
+
 ## Radius of the chamber containing `at` (how close to it an ant can head
 ## straight there), or 0.
 func direct_range(at: Vector2) -> float:
@@ -548,7 +547,7 @@ func _plan_extra_entrances(sim: Simulation) -> void:
 		ok = ok and not sim.world.prop_near(surface, radius * ENTRANCE_REACH.get(entrance_style, 2.4))
 		for e: Vector2 in [main] + Array(_all_entrances()):
 			ok = ok and surface.distance_to(e) >= entrance_spacing
-		ok = ok and surface.distance_to(spoil_position()) > 50.0 and surface.distance_to(dump_position()) > 50.0
+		ok = ok and surface.distance_to(spoil_position()) > 50.0 and not near_midden(surface, 50.0)
 		var under := portal.pos_b + (surface - main)
 		ok = ok and Rect2(Vector2.ZERO, Vector2(l.world.size)).grow(-60.0).has_point(under)
 		ok = ok and chambers_layout._soil_around(under, shaft_r + 8.0, plan)

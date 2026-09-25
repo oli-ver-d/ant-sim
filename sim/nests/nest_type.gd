@@ -30,6 +30,7 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 		entrance_style = "hole"
 	clear_radius = float(ent.get("clear_radius", clear_radius))
 	clears_plants = bool(ent.get("clears_plants", clears_plants))
+	_setup_refuse(params)
 	if params.has("underground"):
 		setup_underground(sim, params["underground"])
 
@@ -226,14 +227,64 @@ func pick_caste(sim: Simulation, species: SpeciesDef = null) -> int:
 			return i
 	return 0
 
-# --- Waste ---------------------------------------------------------------------------
-# Nests may produce refuse that workers carry out to a dump (a midden) on the
-# surface; see the core carry_waste behaviour. The base nest makes none.
+# --- Refuse ----------------------------------------------------------------------------
+# Nests may produce refuse that workers carry out to a midden on the surface
+# (the core carry_waste and carry_spent behaviours; dead nestmates with
+# carry_corpse). The base nest makes none.
+#
+# Middens (Midden) are sited when the first load is ready, and again when
+# the one in use is full, up to "sites" of them: the best of a ring of
+# points "distance" from the entrance, scored away from trails (the
+# colony's pheromones there and halfway out) and from the directions of
+# food, clear of entrances, spoil heaps, props, walls and other nests, and
+# next to the last midden. The scoring is deterministic and draws no random
+# numbers. An explicit "dump" keeps one fixed site (position + dump).
+#
+#   "midden": {"style": "pile", "distance": [100, 200], "sites": 2,
+#              "capacity": 30, "avoid_trails": true}, "dump": [120, 40]
+#
+# Styles: see Midden. A "ring" lies at the edge of the cleared disc
+# (clear_radius) if the nest keeps one, else at the nearer distance.
 
-## Mass of waste carried out and dumped so far.
+## Mass of refuse carried out and dropped on middens so far.
 var dumped_mass: float = 0.0
-## Number of waste loads dumped so far.
+## Number of loads dropped on middens so far.
 var dumped_items: int = 0
+## The nest's middens in the order they were sited; the last is in use.
+var middens: Array[Midden] = []
+var midden_style: String = "pile"
+## Nearest and furthest distance of a midden from the entrance.
+var midden_distance: Vector2 = Vector2(100, 200)
+var midden_sites: int = 2
+var midden_capacity: float = 30.0
+var midden_avoid_trails: bool = true
+## Where refuse goes before a midden is sited, and with "dump" the one
+## fixed site, relative to the nest's position.
+var dump_offset: Vector2 = Vector2(120, 40)
+var fixed_dump: bool = false
+## Bumped when a midden is sited (renderers watch each midden's version).
+var middens_version: int = 0
+## Angles tried round the entrance, and the weights of the siting scores.
+const MIDDEN_ANGLES := 32
+const MIDDEN_TRAIL_WEIGHT := 2.0
+const MIDDEN_FOOD_WEIGHT := 2.0
+## How far round a candidate site trails are looked for.
+const MIDDEN_TRAIL_REACH := 40.0
+
+func _setup_refuse(params: Dictionary) -> void:
+	var m: Dictionary = params.get("midden", {})
+	midden_style = str(m.get("style", midden_style))
+	if not Midden.STYLES.has(midden_style):
+		push_warning("Unknown midden style \"%s\" (use %s)" % [midden_style, ", ".join(Midden.STYLES)])
+		midden_style = "pile"
+	if m.has("distance"):
+		midden_distance = ScenarioEvents.vec2(m["distance"])
+	midden_sites = maxi(1, int(m.get("sites", midden_sites)))
+	midden_capacity = float(m.get("capacity", midden_capacity))
+	midden_avoid_trails = bool(m.get("avoid_trails", midden_avoid_trails))
+	if params.has("dump"):
+		dump_offset = ScenarioEvents.vec2(params["dump"])
+		fixed_dump = true
 
 ## True if there is waste ready to be carried out.
 func has_waste() -> bool:
@@ -244,15 +295,246 @@ func has_waste() -> bool:
 func take_waste(_sim: Simulation) -> Item:
 	return null
 
-## Where waste is dumped.
+## Where refuse goes: the midden in use (before one is sited, the default
+## dump beside the nest).
 func dump_position() -> Vector2:
-	return position
+	return middens[-1].position if not middens.is_empty() else position + dump_offset
 
-## Called when a load of waste is dropped at the dump. The Simulation destroys
-## the item afterwards; the dump keeps only the totals.
+## The midden new loads go to, siting one first if there is none yet or the
+## one in use is full (and another may be sited).
+func midden_for(sim: Simulation) -> Midden:
+	if middens.is_empty() or (not fixed_dump and middens[-1].is_full() and middens.size() < midden_sites):
+		var at := position + dump_offset if fixed_dump else site_midden(sim)
+		if at == Vector2.INF:
+			if not middens.is_empty():
+				return middens[-1]
+			at = position + dump_offset
+		var m := Midden.new(at, entrance_position(), midden_style, midden_capacity)
+		m.index = middens.size()
+		middens.append(m)
+		middens_version += 1
+	return middens[-1]
+
+## Where a worker should drop the load it is setting off with, from two
+## uniform random numbers (drawn by the caller from sim.rng).
+func refuse_target(sim: Simulation, u1: float, u2: float) -> Vector2:
+	var m := midden_for(sim)
+	var at := m.drop_point(u1, u2)
+	return at if not sim.world.is_blocked(at) else m.position
+
+## Called when a load of refuse is dropped at `at`: a deposit on the midden
+## it lies on (the one in use may have filled up since the worker set off),
+## judged by distance from each one's middle over its size. The caller
+## destroys the item afterwards.
+func drop_refuse(sim: Simulation, item: Item, at: Vector2) -> void:
+	var best := midden_for(sim)
+	var best_d := at.distance_to(best.centre()) / best.radius()
+	for m in middens:
+		var d := at.distance_to(m.centre()) / m.radius()
+		if d < best_d - 1e-6:
+			best_d = d
+			best = m
+	best.add(sim.registry.refuse_kind_for(item.type_id), at, item.mass, sim.time(), sim.registry)
+	receive_waste(sim, item)
+
+## Keeps the totals of what was dropped (see drop_refuse()).
 func receive_waste(_sim: Simulation, item: Item) -> void:
 	dumped_mass += item.mass
 	dumped_items += 1
+
+## True if `at` is within `margin` of a midden (or of the default dump
+## while there is none).
+func near_midden(at: Vector2, margin: float) -> bool:
+	if middens.is_empty():
+		return at.distance_to(dump_position()) <= margin
+	for m in middens:
+		if at.distance_to(m.centre()) <= margin + m.radius():
+			return true
+	return false
+
+## The best place for a new midden, or Vector2.INF if nowhere will do.
+func site_midden(sim: Simulation) -> Vector2:
+	var from := entrance_position()
+	var world := sim.world
+	var colony := sim.colonies[colony_id]
+	var field := sim.layers[0].pheromones
+	var bounds := Rect2(Vector2.ZERO, Vector2(world.size)).grow(-30.0)
+	var foods: Array[Vector2] = []
+	for src in sim.food_sources:
+		if colony.food_types.has(src.type_id) and not src.is_depleted():
+			foods.append(src.position)
+	var dists: Array[float] = []
+	if midden_style == "ring":
+		dists.append(clear_radius + 6.0 if clear_radius > 0.0 else midden_distance.x)
+	else:
+		for k in 3:
+			dists.append(lerpf(midden_distance.x, midden_distance.y, k * 0.5))
+	var sites := entrance_sites()
+	var best := Vector2.INF
+	var best_score := -INF
+	for a in MIDDEN_ANGLES:
+		var dir := Vector2.from_angle(a * TAU / MIDDEN_ANGLES)
+		for d in dists:
+			var p := from + dir * d
+			if not _midden_fits(sim, p, sites, bounds):
+				continue
+			var score := -0.5 * (d - dists[0]) / maxf(midden_distance.y - midden_distance.x, 1.0)
+			if midden_avoid_trails:
+				# On the site, halfway out, and round it (weighted less).
+				var trail := 0.0
+				for c: int in colony.channels.values():
+					trail += field.sample(c, p) + field.sample(c, from.lerp(p, 0.5))
+					for k in 8:
+						trail += 0.5 * field.sample(c, p + Vector2.from_angle(k * TAU / 8.0) * MIDDEN_TRAIL_REACH)
+				score -= MIDDEN_TRAIL_WEIGHT * trail / (1.0 + trail)
+			for f in foods:
+				# Best on the far side from food.
+				var toward := (dir.dot((f - from).normalized()) + 1.0) * 0.5
+				score -= MIDDEN_FOOD_WEIGHT * toward * toward / foods.size()
+				if p.distance_to(f) < 100.0:
+					score -= 2.0
+			if world.prop_near(p, 28.0):
+				score -= 0.5
+			if not middens.is_empty():
+				score += 1.0 - minf(1.0, p.distance_to(middens[-1].position) / 150.0)
+			if score > best_score + 1e-6:
+				best_score = score
+				best = p
+	return best
+
+func _midden_fits(sim: Simulation, p: Vector2, sites: Array[EntranceSite], bounds: Rect2) -> bool:
+	if not bounds.has_point(p) or sim.world.is_blocked(p) or sim.world.prop_near(p, 12.0):
+		return false
+	for s in sites:
+		if p.distance_to(s.position) < s.reach(entrance_style) + 20.0:
+			return false
+	for e in spoil_by_entrance.size():
+		if underground_layer >= 0 and p.distance_to(spoil_position_of(e)) < 45.0:
+			return false
+	for m in middens:
+		if p.distance_to(m.centre()) < m.radius() * 2.0 + 10.0:
+			return false
+	for c in sim.colonies:
+		if c.id != colony_id and p.distance_to(c.nest.position) < c.nest.radius * ENTRANCE_REACH.get(c.nest.entrance_style, 2.4) + 60.0:
+			return false
+	return true
+
+## Rots what lies on the middens, and the colony's dead (see "Corpses");
+## the Simulation calls it once a tick.
+func update_refuse(sim: Simulation, dt: float) -> void:
+	for m in middens:
+		m.update(sim.time(), sim.registry)
+	if corpses_on:
+		update_corpses(sim, dt)
+
+# --- Corpses ----------------------------------------------------------------------------
+# Opt-in (colony params worker_lifespan > 0 or brood_corpses): workers die of
+# old age and larvae that starve are left where they died as corpse items;
+# nestmates nearby in an idle state (the species' pool_states) take them
+# out to a midden (carry_corpse). Off, nothing here runs, draws random
+# numbers or changes a hash.
+
+## True if the colony leaves corpses (set by the Simulation from params).
+var corpses_on: bool = false
+## Seconds a worker lives (0 = for ever); each lives 0.7..1.3 times it.
+var worker_lifespan: float = 0.0
+## Corpses (item ids) lying where they fell, not yet taken.
+var corpses: PackedInt32Array = []
+## Workers and brood that died.
+var worker_deaths: int = 0
+var corpses_taken: int = 0
+var _corpse_timer: float = 0.0
+## How far an idle nestmate notices a corpse, and the most taken per second.
+const CORPSE_SEE := 90.0
+const CORPSES_PER_SECOND := 8
+
+## A dead ant or larva as an item on the ground at `at` on layer `on_layer`
+## (to be carried out).
+func leave_corpse(sim: Simulation, type_id: String, mass: float, at: Vector2, on_layer: int, caste: int = -1) -> Item:
+	var item := sim.create_item(type_id, mass)
+	if item is Corpse:
+		(item as Corpse).colony_id = colony_id
+		(item as Corpse).caste_id = caste
+	var def := sim.colonies[colony_id].species.castes[caste] if caste >= 0 else null
+	item.radius = def.size * 0.3 if def != null else 1.6
+	item.color = def.color.darkened(0.3) if def != null else Color(0.85, 0.82, 0.7)
+	sim.place_on_ground(item, at, float(item.id % 628) * 0.01, on_layer)
+	corpses.append(item.id)
+	return item
+
+## Once a second: workers past their lifespan die; idle nestmates near a
+## corpse are sent to take it out.
+func update_corpses(sim: Simulation, dt: float) -> void:
+	_corpse_timer += dt
+	if _corpse_timer < 1.0 - 1e-6:
+		return
+	_corpse_timer = 0.0
+	if worker_lifespan > 0.0:
+		_age_workers(sim)
+	var sent := 0
+	var k := 0
+	while k < corpses.size() and sent < CORPSES_PER_SECOND:
+		var item: Item = sim.items.get(corpses[k])
+		if item == null or item.carrier >= 0:
+			corpses.remove_at(k)
+			continue
+		k += 1
+		if item.reserved_by >= 0 and sim.alive[item.reserved_by] != 0 and sim.state_id(item.reserved_by) == "carry_corpse":
+			continue
+		item.reserved_by = -1
+		var ant := _corpse_taker(sim, item)
+		if ant >= 0:
+			item.reserved_by = ant
+			var was := sim.state[ant]
+			sim.change_state(ant, "carry_corpse")
+			sim.scratch_i[ant] = item.id
+			sim.scratch_f1[ant] = was
+			sent += 1
+
+func _age_workers(sim: Simulation) -> void:
+	var colony := sim.colonies[colony_id]
+	var now := sim.time()
+	for i in sim.high_water:
+		if sim.alive[i] == 0 or sim.colony_id[i] != colony_id or sim.transit_until[i] != 0:
+			continue
+		var caste := colony.species.castes[sim.caste_id[i]]
+		if caste.carry_capacity <= 0.0:
+			continue
+		# Each ant's own span, from a hash of its slot and birth (no RNG).
+		var h := float(hash(Vector2i(i, int(sim.born_at[i] * 30.0))) % 1000) / 1000.0
+		if now - sim.born_at[i] < worker_lifespan * (0.7 + 0.6 * h):
+			continue
+		var at := sim.pos[i]
+		var l := sim.layer[i]
+		var c := sim.caste_id[i]
+		sim.remove_ant(i)
+		worker_deaths += 1
+		leave_corpse(sim, "corpse", 0.05 * caste.size / 5.0, at, l, c)
+
+## The nearest idle nestmate (in one of the pool_states, carrying nothing)
+## on the corpse's layer within CORPSE_SEE, or -1.
+func _corpse_taker(sim: Simulation, item: Item) -> int:
+	var colony := sim.colonies[colony_id]
+	var state: int = sim.behaviour_index.get("carry_corpse", -1)
+	var best := -1
+	var best_d := CORPSE_SEE * CORPSE_SEE
+	for i in sim.high_water:
+		if sim.alive[i] == 0 or sim.colony_id[i] != colony_id or sim.layer[i] != item.layer:
+			continue
+		if sim.carried[i] >= 0 or sim.riding[i] >= 0 or sim.transit_until[i] != 0:
+			continue
+		if colony.pool_state_mask[sim.state[i]] == 0 or not colony.allows(sim.caste_id[i], state):
+			continue
+		var d := sim.pos[i].distance_squared_to(item.position)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+## One tick of ant i walking to `goal` on layer `goal_layer`; true once
+## within `reach`. Nests with an underground steer by their nav fields.
+func walk_to(sim: Simulation, i: int, goal_layer: int, goal: Vector2, move_speed: float, dt: float, reach: float = 3.0) -> bool:
+	return Travel.go(sim, i, goal_layer, goal, -1, move_speed, dt, reach)
 
 # --- Underground ---------------------------------------------------------------------
 # A nest may dig its own underground (nest_params "underground"): a layer of

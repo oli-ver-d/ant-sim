@@ -43,7 +43,7 @@ func _process(_delta: float) -> void:
 	while _chunks.size() * CHUNK < clumps:
 		var chunk := DumpChunk.new()
 		chunk.first = _chunks.size() * CHUNK
-		chunk.dump = nest.dump_offset
+		chunk.dump = nest.dump_position() - nest.position
 		chunk.seed_base = nest.colony_id * 7919 + 11
 		_chunks.append(chunk)
 		add_child(chunk)

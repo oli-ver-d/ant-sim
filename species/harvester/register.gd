@@ -12,6 +12,7 @@ func register(registry: Registry) -> void:
 	registry.register_item_type("seed", Item)
 	registry.register_item_type("seed_meal", Item)
 	registry.register_item_type("chaff", Item)
+	registry.register_refuse_item("chaff", "husk")
 	registry.register_nest_type("seed_nest", SeedNest)
 	registry.register_nest_type("granary_nest", GranaryNest)
 	registry.register_renderer("food:seed_pile", SeedPileRenderer)

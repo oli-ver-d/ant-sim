@@ -373,6 +373,8 @@ func _update_care(sim: Simulation, nest: ColonyNest, dt: float) -> void:
 				hungry_for[k] += dt
 				if hungry_for[k] >= starve_time:
 					deaths += 1
+					if nest.corpses_on and colony.params[&"brood_corpses"]:
+						nest.leave_corpse(sim, "brood_corpse", 0.02 + 0.03 * growth[k], pos[k], nest.underground_layer)
 					_remove(k)
 					continue
 		if s == Stage.CALLOW and age[k] >= stage_time[s] - 1e-4:

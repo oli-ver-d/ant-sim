@@ -73,6 +73,8 @@ const CRUMB := 0.03
 func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	brood_food_type = "seed_meal"
 	dump_offset = Vector2(90, 55)
+	# Chaff goes on a ring at the edge of the cleared disc.
+	midden_style = "ring"
 	# Most harvesters forage; a few keep the granaries when nothing is short.
 	inside_share = 0.15
 	# A crater of chaff and grit in a disc cleared of plants.

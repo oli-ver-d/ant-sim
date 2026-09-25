@@ -123,11 +123,14 @@ nest_params = {
 "brood_reserve": 30.0,
 "chamber_capacity": 150.0,
 "digest_rate": 0.02,
-"dump": [120.0, 40.0],
 "fungus_yield": 0.6,
 "initial_fungus": 60.0,
 "max_chambers": 5,
 "max_population": 3000,
+"midden": {
+"capacity": 150.0,
+"sites": 3
+},
 "radius": 14.0,
 "sense_radius": 70.0,
 "upkeep_per_ant": 0.0002,
@@ -211,7 +214,6 @@ state_params = {
 "speed_factor": 0.4
 },
 "carry_waste": {
-"dump_spread": 18.0,
 "on_done": "linger",
 "on_none": "linger"
 },

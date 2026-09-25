@@ -80,6 +80,8 @@ var scratch_f0: PackedFloat32Array = []
 var scratch_f1: PackedFloat32Array = []
 var scratch_i: PackedInt32Array = []
 var target: PackedVector2Array = []
+## Simulated time each ant was spawned (NestType worker_lifespan).
+var born_at: PackedFloat32Array = []
 ## Walk-cycle phase for rendering (advances with distance travelled).
 var anim_phase: PackedFloat32Array = []
 ## Layer the ant is on (index into `layers`).
@@ -174,6 +176,7 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	since_obstacle.resize(capacity)
 	scratch_f0.resize(capacity)
 	scratch_f1.resize(capacity)
+	born_at.resize(capacity)
 	anim_phase.resize(capacity)
 	prev_pos.resize(capacity)
 	shown_pos.resize(capacity)
@@ -324,6 +327,8 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 	# A nest that digs has more states and params for its castes (see Colony).
 	if colony.nest.underground_layer >= 0:
 		colony.build_params(config, behaviour_index, overrides)
+	colony.nest.worker_lifespan = colony.params[&"worker_lifespan"]
+	colony.nest.corpses_on = colony.leaves_corpses()
 	colonies.append(colony)
 	if native != null:
 		native.push_colony(colony)
@@ -422,6 +427,7 @@ func spawn_ant(colony: Colony, caste: int, at: Vector2, heading_rad: float, on_l
 	scratch_f0[i] = 0.0
 	scratch_f1[i] = 0.0
 	scratch_i[i] = -1
+	born_at[i] = time()
 	target[i] = Vector2.ZERO
 	anim_phase[i] = rng.randf() * TAU
 	layer[i] = on_layer
@@ -691,6 +697,7 @@ func begin_step() -> void:
 		colony.nest.release_waiting(self, dt)
 		colony.nest.update(self, dt)
 		colony.nest.update_underground(self, dt)
+		colony.nest.update_refuse(self, dt)
 	if tick_count % POOL_EVERY == 0 and _pools_on:
 		balance_pools()
 	var lookahead := 0.0

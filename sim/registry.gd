@@ -24,6 +24,11 @@ var item_types: Dictionary[String, Script] = {}
 var nest_types: Dictionary[String, Script] = {}
 ## Scenery prop types (PropType scripts), instantiated once per Scenery.
 var scenery_types: Dictionary[String, Script] = {}
+## Refuse kinds middens hold (RefuseKind), and the kind each item type
+## becomes when dropped on a midden (others become REFUSE_DEFAULT).
+var refuse_kinds: Dictionary[String, RefuseKind] = {}
+var refuse_of_item: Dictionary[String, String] = {}
+const REFUSE_DEFAULT := "remnant"
 ## Species definitions (SpeciesDef resources) by species id.
 var species: Dictionary[String, Resource] = {}
 ## Renderer scripts keyed by "<kind>:<type id>", e.g. "food:food_pile",
@@ -61,6 +66,23 @@ func register_scenery_type(id: String, script: Script) -> bool:
 
 func register_species(id: String, def: Resource) -> bool:
 	return _add(species, "species", id, def)
+
+## A refuse kind (see RefuseKind) and the item types that become it on a
+## midden.
+func register_refuse_kind(id: String, half_life: float, size: float, from_items: PackedStringArray = []) -> bool:
+	if not _add(refuse_kinds, "refuse kind", id, RefuseKind.new(id, half_life, size)):
+		return false
+	for t in from_items:
+		refuse_of_item[t] = id
+	return true
+
+## Item type `item_type` becomes refuse kind `kind` on a midden.
+func register_refuse_item(item_type: String, kind: String) -> void:
+	refuse_of_item[item_type] = kind
+
+## The refuse kind an item of type `item_type` becomes on a midden.
+func refuse_kind_for(item_type: String) -> String:
+	return refuse_of_item.get(item_type, REFUSE_DEFAULT)
 
 func get_behaviour(id: String) -> Behaviour:
 	assert(behaviours.has(id), "Unknown behaviour: %s" % id)

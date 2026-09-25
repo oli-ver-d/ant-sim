@@ -161,5 +161,6 @@ func test_fungus_farm_unchanged_without_brood() -> void:
 	check(nest.brood == null, "fungus_farm has no brood")
 	check_eq(sim.colonies[0].population, 156, "population")
 	check_eq(nest.ants_raised, 6, "ants raised")
-	# Recorded before the brood model was added (M9, 900 ticks).
-	check_eq(sim.state_hash(), "ae3a9d3680930dc15b0659e7052ae9ae5bdad84e1da6b9efbf306df0847cfa57", "state hash")
+	# Recorded before the brood model was added (M9, 900 ticks); re-recorded in
+	# M15f when waste started going to a sited midden.
+	check_eq(sim.state_hash(), "cba22b0a7eb2ec52dac60767242f70e2b0d2384d8bb659d26935827fe2a15879", "state hash")

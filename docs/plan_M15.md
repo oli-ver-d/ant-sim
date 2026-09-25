@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a, M15b, M15c, M15d, M15e done; next M15f.
+Status: M15a-M15f done; next M15g.
 
 ## Where things stand (before M15)
 
@@ -613,3 +613,69 @@ Changed from the plan / notes for the next phases:
   `SpoilHeapRenderer._radius(spoil_count(index)) * 1.3` for its heap, and
   `cleared_radius(sim)` for a clearing nest. Closed extra entrances aren't sites; use
   `extra_portals` for planned ones.
+
+### M15f (done)
+
+Done:
+- `sim/nests/midden.gd` (`Midden`): site `position`, `anchor` (entrance) and `outward`, `style`
+  (`pile` / `ring` / `scatter`, `Midden.STYLES`), `capacity`, `received` / `loads`; deposits in
+  packed arrays `dep_pos`, `dep_kind` (index into `kinds`, RefuseKind ids), `dep_mass` (as
+  dropped), `dep_time`, `dep_id` (drop number, never reused; arrays stay in drop order);
+  `stain` (64 x 64 cells of 4 units centred on the site, `stain_origin()`), `stain_mass`,
+  `decayed`, `version`, `present` (mass lying there: deposits + stain at the last sweep, plus
+  loads since). `radius()` = 7 + 2.2 sqrt(present), so piles shrink as they rot; a pile's `centre()` moves outward
+  as it grows; `drop_point(u1, u2)` per style (pile: the nest-facing side, ring: an arc of a band
+  at `ring_radius` widening as it fills, scatter: a stretch across the way out). `update()`
+  sweeps every 5 s: deposits with < 20% left merge into the stain (remainder) + `decayed`;
+  more than 1,500 merges the oldest. `deposit_mass(t)`, `decayed_mass(t)` for conservation.
+- `sim/nests/refuse_kind.gd` (`RefuseKind`: half_life, size per sqrt(mass)).
+  `Registry.register_refuse_kind(id, half_life, size, items)`, `register_refuse_item`,
+  `refuse_kind_for(item_type)` (default `remnant`). Core kinds: soil_clump (never rots; spoil,
+  pebble, twig), husk (2400 s), corpse (900 s), brood_corpse (400 s), remnant (900 s; crumb).
+  Leafcutter `spent_substrate` (1200 s; waste, pulp); harvester maps chaff -> husk.
+- `NestType` "Refuse": `middens`, `midden_for(sim)` (sites on first use and when the last is
+  full, up to `sites`), `refuse_target(sim, u1, u2)`, `drop_refuse(sim, item, at)` (deposit on
+  the midden with the least distance-from-middle over radius, + `receive_waste` totals), `site_midden(sim)` (32 angles x 3 distances, or
+  one for ring = `clear_radius + 6`; hard: bounds, walls, props within 12, entrance reach + 20,
+  spoil heaps 45, other middens, other nests; soft: colony pheromone on the site, halfway out
+  and on a 40-unit ring round it; far side from food; props nearby; next to the last midden;
+  first best in iteration order wins, no RNG), `near_midden()`, `update_refuse()` (called by
+  `Simulation.begin_step` after `update_underground`). Params `"midden"` and `"dump"` moved from
+  `ColonyNest` to `NestType` (`dump_offset` is now the pre-siting fallback; `fixed_dump` only
+  with an explicit `"dump"`). Leafcutter lost its species `"dump"` and `dump_spread`; the
+  granary nest defaults to `ring`. Capacity (default 30): 150 for both species (leafcutter
+  also 3 sites), since fungus_farm drops ~1,000 mass in 25 min and harvester_founding ~480
+  in an hour.
+- `carry_waste` / `carry_spent` draw the same two `sim.rng` numbers at the same moments, now
+  fed to `refuse_target`; the deposit is placed at the chosen target point.
+- Corpses: `SimConfig.worker_lifespan` (0) and `brood_corpses` (false), structural. When on
+  (`Colony.leaves_corpses()`), `carry_corpse` is allowed for castes with carry capacity, so
+  it never counts in other runs' hashed state ranks. `NestType.update_corpses` once a second:
+  workers older than lifespan x (0.7..1.3, hash of slot and `Simulation.born_at`, new array)
+  die (`remove_ant`) and leave a `Corpse` item (`sim/items/corpse.gd`: colony_id, caste_id);
+  starved larvae leave a `brood_corpse` (`Brood._update_care`); the nearest idle ant (state in
+  the species' `pool_states`, within 90 units, same layer) is sent (`carry_corpse`: walk to it
+  via `NestType.walk_to` (ColonyNest uses nav fields underground), up to the surface, drop on a
+  midden, back to the state it came from).
+- Tests: `tests/test_midden.gd` (12). `test_brood::test_fungus_farm_unchanged_without_brood`
+  900-tick hash re-recorded (waste lands by the pile rule now; the 300-tick
+  `SINGLE_LAYER_HASHES` are unchanged).
+- Renderers: only `FungusNestRenderer`'s dump chunks now use `dump_position()` (the sited
+  midden); the granary midden already did. Both are interim until M15g.
+
+Changed from the plan / notes for the next phases:
+- No "downhill / low ground" preference: the ground map has no elevation. Material isn't used.
+- Worker death is by age with a hashed spread, not random; ants brought back from the
+  abstract pool get a fresh `born_at` (abstract ants never die). Queens (carry capacity 0)
+  never die. Worker death is demo-only (open question default); no scenario turns it on yet.
+- No underground refuse chamber and no midden workers pushing deposits (optional, skipped).
+- Midden siting reads pheromones when the first load is ready, so a colony whose waste starts
+  before its trails form may site toward a later trail; the food-direction term covers most
+  of that (food known from the start).
+- For M15g: draw from `nest.middens` (watch `nest.middens_version` for new sites and each
+  `Midden.version`); deposits by `dep_id` (append-only; merged ones disappear, so a chunked
+  renderer should rebuild a chunk when an id in it is gone), size from
+  `registry.refuse_kinds[kind].radius_of(mass_left)`, age = `sim.time() - dep_time`; stain
+  grid from `stain` / `stain_origin()` / `STAIN_CELL`. Corpse deposits have no caste once
+  merged into a midden (only kind); keep a caste per deposit if M15g needs caste colours
+  (e.g. a `dep_extra` int array filled from `Corpse.caste_id` in `drop_refuse`).

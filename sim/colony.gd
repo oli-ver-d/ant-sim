@@ -159,6 +159,15 @@ func build_allowed_states(state_index: Dictionary[String, int]) -> void:
 			for s in list:
 				assert(state_index.has(s), "Caste %s lists unknown state %s" % [caste.id, s])
 				allowed_states[c * num_states + state_index[s]] = 1
+		# Only colonies that leave corpses take them out (so the state
+		# doesn't count in the hashes of the others).
+		if leaves_corpses() and caste.carry_capacity > 0.0 and state_index.has("carry_corpse"):
+			allowed_states[c * num_states + state_index["carry_corpse"]] = 1
+
+## True if workers die of old age or dead brood is left as corpses
+## (params worker_lifespan, brood_corpses).
+func leaves_corpses() -> bool:
+	return float(params.get(&"worker_lifespan", 0.0)) > 0.0 or bool(params.get(&"brood_corpses", false))
 
 ## True if caste c may be in state s (a state index).
 func allows(c: int, s: int) -> bool:

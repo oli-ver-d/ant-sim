@@ -8,7 +8,7 @@ extends Resource
 ## Settings fixed when a Simulation is created (sizes of grids and arrays,
 ## tick length) or owned by the scenario: live tuning can't change these.
 const STRUCTURAL: PackedStringArray = ["world_size", "cell_size", "tick_rate", "ticks_per_frame",
-		"max_ants", "diffuse_every_n_ticks"]
+		"max_ants", "diffuse_every_n_ticks", "worker_lifespan", "brood_corpses"]
 
 @export_group("World")
 ## World size in world units (1 unit = 1 px at default zoom).
@@ -63,6 +63,13 @@ const STRUCTURAL: PackedStringArray = ["world_size", "cell_size", "tick_rate", "
 @export var deposit_base: float = 1.0
 ## Seconds after touching its source (nest/food) at which an ant's deposit has halved.
 @export var deposit_half_life: float = 8.0
+
+@export_group("Refuse")
+## Seconds a worker lives (each 0.7..1.3 times it; 0 = for ever). Dead
+## workers are left as corpses that nestmates carry to a midden.
+@export var worker_lifespan: float = 0.0
+## Larvae that starve are left as corpses to carry out (else they vanish).
+@export var brood_corpses: bool = false
 
 ## Species or scenario overrides, keyed by property name. Looked up by get_param().
 func get_param(key: StringName, overrides: Dictionary = {}) -> Variant:

@@ -67,6 +67,7 @@ godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000 -1 --no-native   # GDScript ants only
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300    # a nest's growth: chambers, highways, entrances, ms/tick
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300 2  # the same with 2-unit underground cells
+godot --headless --path . -s res://tests/midden_probe.gd -- fungus_farm 1800 300     # middens: sites, deposits, mass on them / stain / rotted
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
 tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
@@ -104,12 +105,13 @@ sim/          core engine (no rendering, no species-specific code)
                       GroundMap: surface ground materials (render-only weights grid)
   behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
                       dig, carry_spoil, go_up; for nests with a queen: queen, nest_role, nurse,
-                      tend_queen, carry_spent
+                      tend_queen, carry_spent; carry_corpse (colonies that leave corpses)
   food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest,
                       ColonyNest (a queen, brood, roles, chambers: base for species nests),
                       Brood + BroodCare (egg to worker, nursing), NestChambers (chambers and
                       galleries), ExcavationPlan (digging jobs), DigShape (job shapes),
-                      Highways (widening busy tunnels)
+                      Highways (widening busy tunnels), Midden + RefuseKind (refuse);
+                      Corpse (a dead ant as an item)
   native_ants.gd      drives the native ant kernel (optional; see "Native ant kernel")
 native/       the native ant kernel (GDExtension, C++): src/ant_kernel.cpp, godot-cpp submodule
 species/<name>/       one folder per species; register.gd is discovered automatically
@@ -135,8 +137,8 @@ tools/ tests/
 - **Castes** can override the species' state params per state (`CasteDef.state_params`),
   so e.g. soldiers return to patrolling instead of foraging.
 - **Nests** (`NestType`): receive delivered items, grow the colony in `update()`, and may
-  produce waste that `carry_waste` workers take to `dump_position()`. A nest type can have a
-  surface renderer (`"nest:<type>"`), and a nest that digs its own underground layer
+  produce waste that `carry_waste` / `carry_spent` workers take to a midden (see Refuse). A
+  nest type can have a surface renderer (`"nest:<type>"`), and a nest that digs its own underground layer
   renderers for it (`"underground:<type>"`, `"underground_top:<type>"`).
 - **Colony nests** (`ColonyNest`, a `NestType`): what nests with a queen share, so a species
   nest adds only what its colony lives on. The queen, brood that develops egg to worker and
@@ -145,6 +147,23 @@ tools/ tests/
   species nest provides the food store (`food_stock()`, `food_point()`, `take_food_at()`,
   `make_brood_food()`...), `space_pressure()` and any roles of its own. `FungusNest`
   (leafcutter gardens) and `GranaryNest` (harvester granaries) are both built on it.
+- **Refuse**: a nest's refuse goes to middens (`Midden`, `NestType` "Refuse"). The first is
+  sited when the first load is ready, another next to it when it is full (nest param
+  `"midden"`: `style` pile / ring / scatter, `distance`, `sites`, `capacity`,
+  `avoid_trails`): the best of a ring of points round the entrance, away from the colony's
+  trails and the directions of food, clear of entrances, spoil heaps, props, walls and other
+  nests, scored deterministically (no RNG draws). `"dump": [x, y]` keeps one fixed site.
+  Each load becomes a deposit (position, refuse kind, mass, time) in packed arrays; kinds are
+  registered with a half-life and size (`Registry.register_refuse_kind`, item types mapped to
+  them; core: `soil_clump`, `husk`, `corpse`, `brood_corpse`, `remnant`; leafcutter
+  `spent_substrate`). Deposits rot; mostly rotted ones (and the oldest beyond 1,500) merge
+  into the midden's `stain` grid, so mass stays conserved (dropped = deposits + stain +
+  rotted). Middens are not hashed; only where ants walk to them is.
+- **Corpses** (opt-in, colony params): with `worker_lifespan` > 0 workers die of old age
+  (each 0.7-1.3x it, from a hash, not the RNG), and with `brood_corpses` starved larvae are
+  left as `Corpse` items; idle nestmates nearby (the species' `pool_states`) take them to a
+  midden (`carry_corpse`, only allowed in colonies that leave corpses, so other runs hash as
+  before).
 - **Riding**: ants can ride on carried items (`Simulation.mount()`); the core keeps riders
   on their item and makes them get off when it is dropped or delivered.
 - **Obstacles**: ants probe ahead and to both sides near obstacles and turn away; with walls on
@@ -563,7 +582,7 @@ in `/sim` or `/render`.
   - **minims** start in `assign_role`: `hitchhiker_fraction` of them go out (`explore` ->
     `seek_ride`) and climb onto fragments leaving the leaf (`hitchhike`, using the core's
     generic riding); the rest `linger` near the nest and take turns at midden work
-    (`carry_waste`: carry a load of waste from the nest to the dump).
+    (`carry_waste`: carry a load of waste from the nest to a midden).
   - **medias** cut and carry.
   - **majors** `patrol_trail`: walk the foraging trail, and when debris sits on strong trail
     (`debris_trail_threshold`) `clear_debris` carries it off toward weaker trail.
@@ -571,7 +590,8 @@ in `/sim` or `/render`.
   digests it (faster the bigger it is) into fungus and waste, the colony eats the fungus,
   and surplus fungus becomes brood: more garden, more ants. Starved, the garden shrinks and
   growth stops. The garden fills chambers, and a new one is dug when they're nearly full.
-  Waste goes to a dump beside the entrance (`dump` offset). All rates are `nest_params`.
+  Waste goes to a midden pile sited away from the trails (see Refuse; a `dump` offset fixes it).
+  All rates are `nest_params`.
 - `fungus_nest_renderer.gd`: the soil mound (grows with chambers) and the waste dump pile
   (grows with every load).
 - `Brood` (core, `sim/nests/brood.gd`): the optional brood model (`nest_params.brood`). Without it new
@@ -657,7 +677,7 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
 - **The leaf line**: medias bring fragments down (`carry_down`) and drop them at the edge of the
   garden where fungus grows with room to spare; gardeners (`garden`) cut them into pulp a bite at
   a time (the fragment shrinks), plant it on the garden, weed spent material and mould, and carry
-  it out to the dump beside the entrance (`carry_spent`). A delivery counts when a fragment
+  it out to a midden (`carry_spent`). A delivery counts when a fragment
   arrives underground; leaf mass counts as delivered as it is planted (food mass stays conserved).
 - nest params for this: `underground` (NestType's, plus `royal_radius`, `chamber_min_radius`,
   `chamber_max_radius`, `tunnel_radius`, `shaft_distance`, `shaft_hardness`, `garden_life`,
@@ -702,7 +722,7 @@ the harvester's own:
   larvae (`ant_cost` per larva). The queen lays paced by `brood_rate` × the seed stored.
 - **Chaff**: every seed eaten leaves `husk` × its mass as chaff by its heap; workers keeping the
   granaries (`tend_granary`) gather it in loads (`chaff_load`) and carry it out (`carry_spent`)
-  to the midden beside the entrance. With nothing to carry they sort the heaps; up to
+  to a ring midden at the edge of the cleared disc. With nothing to carry they sort the heaps; up to
   `inside_share` (0.15) of the minors stay in for this, everyone else forages.
 - **Room**: a new chamber is planned when the granaries are nearly full (`granary_capacity`
   per chamber of radius 40, by area) or the colony has outgrown its chambers

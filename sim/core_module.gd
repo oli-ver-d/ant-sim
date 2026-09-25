@@ -19,6 +19,8 @@ static func register(registry: Registry) -> void:
 	registry.register_behaviour("nurse", NurseBehaviour.new())
 	registry.register_behaviour("tend_queen", TendQueenBehaviour.new())
 	registry.register_behaviour("carry_spent", CarrySpentBehaviour.new())
+	# Registered last: only colonies that leave corpses may use it.
+	registry.register_behaviour("carry_corpse", CarryCorpseBehaviour.new())
 
 	registry.register_food_source_type("food_pile", FoodPile)
 	registry.register_item_type("crumb", Item)
@@ -26,6 +28,14 @@ static func register(registry: Registry) -> void:
 	registry.register_item_type("pebble", Item)
 	registry.register_item_type("waste", Item)
 	registry.register_item_type("spoil", Item)
+	registry.register_item_type("corpse", Corpse)
+	registry.register_item_type("brood_corpse", Corpse)
+	# What middens hold (half-life in s, 0 = never rots; size per sqrt(mass)).
+	registry.register_refuse_kind("soil_clump", 0.0, 3.0, ["spoil", "pebble", "twig"])
+	registry.register_refuse_kind("husk", 2400.0, 4.0)
+	registry.register_refuse_kind("corpse", 900.0, 9.0, ["corpse"])
+	registry.register_refuse_kind("brood_corpse", 400.0, 9.0, ["brood_corpse"])
+	registry.register_refuse_kind("remnant", 900.0, 4.0, ["crumb"])
 	registry.register_nest_type("basic_nest", BasicNest)
 	registry.register_scenery_type("rock", RockProp)
 	registry.register_scenery_type("log", LogProp)
