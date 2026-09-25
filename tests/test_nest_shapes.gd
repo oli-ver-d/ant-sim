@@ -250,7 +250,7 @@ func test_chamber_lookup_matches_shape() -> void:
 			check(layout.chamber_at(edge + Vector2.from_angle(0.7) * w.cell_size * 1.5) != c.index, "point_in 1 at its edge")
 	# The queen and brood places are inside their chambers.
 	check_eq(layout.chamber_at(nest.queen_spot()), 0, "queen in the royal chamber")
-	check(layout.chamber_at(nest.pile_centre(LeafcutterBrood.Pile.LARVAE)) >= 0, "larvae in a chamber")
+	check(layout.chamber_at(nest.pile_centre(Brood.Pile.LARVAE)) >= 0, "larvae in a chamber")
 	check(nest.garden.chamber_count[0] > 20, "a founding garden")
 
 ## Digging never opens a pocket ants can't walk into (a cell open to the rest

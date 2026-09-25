@@ -13,6 +13,12 @@ static func register(registry: Registry) -> void:
 	registry.register_behaviour("dig", DigBehaviour.new())
 	registry.register_behaviour("carry_spoil", CarrySpoilBehaviour.new())
 	registry.register_behaviour("go_up", GoUpBehaviour.new())
+	# Nests with a queen that dig their own underground (ColonyNest).
+	registry.register_behaviour("queen", QueenBehaviour.new())
+	registry.register_behaviour("nest_role", NestRoleBehaviour.new())
+	registry.register_behaviour("nurse", NurseBehaviour.new())
+	registry.register_behaviour("tend_queen", TendQueenBehaviour.new())
+	registry.register_behaviour("carry_spent", CarrySpentBehaviour.new())
 
 	registry.register_food_source_type("food_pile", FoodPile)
 	registry.register_item_type("crumb", Item)

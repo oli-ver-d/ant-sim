@@ -1,7 +1,7 @@
 class_name TendQueenBehaviour
 extends Behaviour
 ## The queen's retinue: walk to her and circle her slowly, stopping now and
-## then to groom her (FungusNest.queen_groomed_at; a queen left ungroomed
+## then to groom her (ColonyNest.queen_groomed_at; a queen left ungroomed
 ## lays more slowly). After `stint` seconds -> `on_done`.
 ##
 ## params: stint (s, 70), on_done ("nest_role")
@@ -14,7 +14,7 @@ func enter(sim: Simulation, i: int) -> void:
 func tick(sim: Simulation, i: int, dt: float) -> String:
 	var colony := sim.colonies[sim.colony_id[i]]
 	var p := colony.params_for(sim.caste_id[i], sim.state[i])
-	var nest := colony.nest as FungusNest
+	var nest := colony.nest as ColonyNest
 	if sim.timer[i] > float(p.get("stint", 70.0)):
 		return p.get("on_done", "nest_role")
 	var q := nest.queen_ant

@@ -1,7 +1,7 @@
 class_name CarrySpentBehaviour
 extends Behaviour
-## Carry a load of spent garden material (weeded out by a gardener) up out
-## of the nest and drop it on the waste dump beside the entrance
+## Carry a load of refuse (spent material or husks a worker took inside) up
+## out of the nest and drop it on the waste dump beside the entrance
 ## (NestType.dump_position(), within `dump_spread`), then -> `on_done`.
 ##
 ## params: on_done ("nest_role"), dump_spread (world units, 18)

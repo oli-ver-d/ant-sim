@@ -3,8 +3,8 @@ extends TestCase
 ## roles, the founding sequence and emergence in a leafcutter nest that digs
 ## its own underground.
 
-const Stage := LeafcutterBrood.Stage
-const Pile := LeafcutterBrood.Pile
+const Stage := Brood.Stage
+const Pile := Brood.Pile
 
 var _config: SimConfig = load("res://sim/default_config.tres")
 var _registry := Registry.create_default()
@@ -102,7 +102,7 @@ func test_queen_egg_flow() -> void:
 		var before := brood.eggs_laid
 		sim.step()
 		if brood.eggs_laid > before:
-			var k := brood.index_of(brood.lay_ids[(brood.eggs_laid - 1) % LeafcutterBrood.EVENT_LOG])
+			var k := brood.index_of(brood.lay_ids[(brood.eggs_laid - 1) % Brood.EVENT_LOG])
 			laid_near = laid_near and brood.pos[k].distance_to(sim.pos[q]) < sim.caste_of(q).size
 			at_queen += 1
 	check(brood.eggs_laid >= 8, "the queen laid (%d)" % brood.eggs_laid)

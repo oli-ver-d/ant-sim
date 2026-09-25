@@ -68,6 +68,8 @@ godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 3
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300 2  # the same with 2-unit underground cells
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
+tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
+godot --headless --path . -s res://tests/fingerprint_probe.gd -- colony_founding 9000   # a run's fingerprint by state names (refactors)
 ```
 
 Tests are scripts in `tests/` named `test_*.gd` that `extend TestCase` and have
@@ -96,9 +98,12 @@ sim/          core engine (no rendering, no species-specific code)
   traffic_map.gd      decaying per-cell count of the ants passing
   scenario_loader.gd  JSON scenario -> Simulation
   behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
-                      dig, carry_spoil, go_up
+                      dig, carry_spoil, go_up; for nests with a queen: queen, nest_role, nurse,
+                      tend_queen, carry_spent
   food/ items/ nests/ FoodSource + FoodPile, Item + Debris, NestType + BasicNest,
-                      ExcavationPlan (digging jobs), DigShape (job shapes),
+                      ColonyNest (a queen, brood, roles, chambers: base for species nests),
+                      Brood + BroodCare (egg to worker, nursing), NestChambers (chambers and
+                      galleries), ExcavationPlan (digging jobs), DigShape (job shapes),
                       Highways (widening busy tunnels)
   native_ants.gd      drives the native ant kernel (optional; see "Native ant kernel")
 native/       the native ant kernel (GDExtension, C++): src/ant_kernel.cpp, godot-cpp submodule
@@ -128,6 +133,13 @@ tools/ tests/
   produce waste that `carry_waste` workers take to `dump_position()`. A nest type can have a
   surface renderer (`"nest:<type>"`), and a nest that digs its own underground layer
   renderers for it (`"underground:<type>"`, `"underground_top:<type>"`).
+- **Colony nests** (`ColonyNest`, a `NestType`): what nests with a queen share, so a species
+  nest adds only what its colony lives on. The queen, brood that develops egg to worker and
+  needs nurses (`Brood`, `BroodCare`), nest roles, chambers and galleries dug as the nest runs
+  short of room (`NestChambers`), founding sealed in, more entrances as the colony grows. The
+  species nest provides the food store (`food_stock()`, `food_point()`, `take_food_at()`,
+  `make_brood_food()`...), `space_pressure()` and any roles of its own. `FungusNest`
+  (leafcutter gardens) and `GranaryNest` (harvester granaries) are both built on it.
 - **Riding**: ants can ride on carried items (`Simulation.mount()`); the core keeps riders
   on their item and makes them get off when it is dropped or delivered.
 - **Obstacles**: ants probe ahead and to both sides near obstacles and turn away; with walls on
@@ -288,11 +300,16 @@ colony grows from 150 to ~850 ants, waste piles up outside),
 and four minims sealed in a founding chamber dig a ragged tunnel up to the surface, foraging
 begins, and over about two simulated hours the colony grows to thousands: galleries branch,
 gardens fill lobed chambers hanging off them, busy tunnels widen into highways with two-way
-traffic, and a second and third entrance open, each with its own heap of dug soil).
+traffic, and a second and third entrance open, each with its own heap of dug soil),
+`harvester_founding` (the same story for harvester ants, about 80 s over ~110 simulated
+minutes: a queen, four minors and her cache of seeds sealed in dig up to the surface; foragers
+carry seeds down into granaries that fill heap by heap, husks of eaten seeds go out to a
+midden, and the nest grows chamber by chamber with more entrances).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
-- `colonies`: species, nest position, population per caste, optional `release_per_second`
+- `colonies`: species, nest position, population per caste, optional `nest_type` (instead of
+  the species' own, e.g. `"granary_nest"`), optional `release_per_second`
   (ants emerge gradually instead of all at once), optional `nest_params`
   and per-colony tweaks: `params` (SimConfig keys and species tunables), `state_params`
   (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`)
@@ -443,7 +460,7 @@ Only what the species really has that the core doesn't:
 |---|---|---|---|
 | Behaviour state | `Behaviour` (`tick()` returns the next state id or `""`) | none | `cut_leaf`, `hitchhike`, `patrol_trail` |
 | Food source | `FoodSource` (`take()`, `nearest_access_point()`, `is_sensed_at()`, ...) | `seed_pile.gd` | `leaf_source.gd` |
-| Nest | `NestType` or `BasicNest` (`receive_item()`, `update()`, optional waste) | `seed_nest.gd` | `fungus_nest.gd` |
+| Nest | `NestType` or `BasicNest` (`receive_item()`, `update()`, optional waste); `ColonyNest` for a queen, brood and a dug nest | `seed_nest.gd`, `granary_nest.gd` | `fungus_nest.gd` |
 | Renderer | any `Node2D` with `bind(sim, target)` | `seed_pile_renderer.gd`, `seed_nest_renderer.gd` | `leaf_renderer.gd`, `fungus_nest_renderer.gd` |
 | Underground renderer | a `Node2D` with `bind(sim, nest)` on the nest's layer view | none | `fungus_underground.gd` |
 
@@ -522,7 +539,7 @@ in `/sim` or `/render`.
   Waste goes to a dump beside the entrance (`dump` offset). All rates are `nest_params`.
 - `fungus_nest_renderer.gd`: the soil mound (grows with chambers) and the waste dump pile
   (grows with every load).
-- `leafcutter_brood.gd`: the optional brood model (`nest_params.brood`). Without it new
+- `Brood` (core, `sim/nests/brood.gd`): the optional brood model (`nest_params.brood`). Without it new
   workers appear at the entrance at once, as before. With it the queen lays eggs that develop
   egg → larva → pupa → callow → worker:
   ```json
@@ -543,9 +560,13 @@ in `/sim` or `/render`.
 
 ### Leafcutter nests that dig their own underground
 
+The queen, brood care, nest roles, chamber architecture and extra entrances below are the
+core's `ColonyNest` (harvester granary nests use them too); the gardens, the leaf line and the
+founding queen's manuring are the leafcutter's own.
+
 With `nest_params.underground` a `FungusNest` is a fully simulated underground, seen from above
 in the split layout's nest part (or full screen). Every ant there is an agent doing real work:
-- **Architecture** (`fungus_chambers.gd`, from the seed with its own RNG):
+- **Architecture** (`NestChambers` in the core, shared with harvesters; from the seed with its own RNG):
   - *Chambers* are slightly flattened blobs of 2–5 overlapping lobes, about half with a side
     alcove (a niche for brood); later chambers skew larger. The royal chamber is larger and
     bean-shaped, with a niche for the queen and her retinue and an alcove for pupae.
@@ -574,7 +595,7 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
   chamber, laying each egg at the tip of her abdomen. Her retinue (`tend_queen`) grooms her; left
   ungroomed she lays at half pace. Laying is paced by the garden (as in M10) and limited to what
   the workers can care for (`brood_per_worker`).
-- **Brood that needs care** (`leafcutter_brood.gd`, care mode): each egg, larva, pupa and callow
+- **Brood that needs care** (`Brood`, care mode): each egg, larva, pupa and callow
   lies somewhere (a pile, or carried) and gets dirty; neglected brood stops developing, larvae
   get hungry and only grow when fed, and starve after `starve_time`. Nurses (`nurse`, the shared
   `BroodCare` tasks) carry eggs from the queen to the egg pile, larvae into the garden and pupae
@@ -619,13 +640,43 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
 
 ## Species: harvester ants
 
-`species/harvester/`, added without touching the core or the leafcutter module:
-- `harvester.tres`: minors (near-black) and big-headed majors (dark red); violet/teal
-  trails; uses only the core's generic behaviours.
+`species/harvester/`, added (M3) without touching the core or the leafcutter module:
+- `harvester.tres`: minors (near-black) and big-headed majors (dark red), and a queen for
+  nests that dig; violet/teal trails. On the surface they use only the core's generic
+  behaviours.
 - `seed_pile.gd` + renderer: a cluster of individual seeds; foragers walk to the nearest
   one, so the pile thins out seed by seed.
 - `seed_nest.gd` + renderer: a `BasicNest` that counts seeds; drawn as a cleared sandy
-  disc with a growing pile of husks.
+  disc with a growing pile of husks. The species' default nest.
+
+### Harvester nests that dig their own granaries
+
+A scenario colony with `"nest_type": "granary_nest"` and `nest_params.underground` gets a
+`GranaryNest` (`granary_nest.gd`), built on the core's `ColonyNest` like the leafcutter nest:
+the queen in the royal chamber, brood that nurses care for, nest roles, chambers and galleries
+dug as the nest needs room, founding sealed in, busy tunnels widening, more entrances. What is
+the harvester's own:
+- **Seeds are stored, one by one**: a forager home with a seed carries it down (`store_seed`)
+  and drops it on the heap in a granary, the first with room (the first chamber dug is the
+  brood chamber; every other one is a granary). Each stored seed is a record (where it lies,
+  its mass, its look) and is drawn where it was put, so heaps grow seed by seed.
+- **Founding**: the queen starts sealed in with a cache of seeds (`initial_seeds`) in the royal
+  chamber, and feeds her first brood from it until the first forager comes home.
+- **Eating**: the colony eats `upkeep_per_ant` per ant per second from the fullest granary,
+  seed by seed (a seed shrinks as it is eaten); nurses chew seed meal off the heaps for the
+  larvae (`ant_cost` per larva). The queen lays paced by `brood_rate` × the seed stored.
+- **Chaff**: every seed eaten leaves `husk` × its mass as chaff by its heap; workers keeping the
+  granaries (`tend_granary`) gather it in loads (`chaff_load`) and carry it out (`carry_spent`)
+  to the midden beside the entrance. With nothing to carry they sort the heaps; up to
+  `inside_share` (0.15) of the minors stay in for this, everyone else forages.
+- **Room**: a new chamber is planned when the granaries are nearly full (`granary_capacity`
+  per chamber of radius 40, by area) or the colony has outgrown its chambers
+  (`ants_per_chamber`).
+- Rendering: `GranaryUnderground` ("underground:granary_nest") draws each chamber's heap of
+  seeds and the chaff around it, plus the core brood renderer; `GranaryNestRenderer` the
+  cleared disc round each open entrance (wider as the colony grows) and the husk midden.
+- nest params: ColonyNest's (see the leafcutter section) and `initial_seeds`, `seed_mass`,
+  `upkeep_per_ant`, `granary_capacity`, `ants_per_chamber`, `husk`, `chaff_load`, `disc_radius`.
 
 ## Visual style
 

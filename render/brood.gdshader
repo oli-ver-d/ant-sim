@@ -1,5 +1,5 @@
 shader_type canvas_item;
-// Leafcutter brood seen from above, one MultiMesh instance each:
+// Brood seen from above, one MultiMesh instance each:
 //   egg     a glossy cream ellipse, slightly translucent
 //   larva   a curled C-shaped grub, segmented, with a small amber head capsule;
 //           plumper as it grows, duller when hungry
@@ -9,7 +9,7 @@ shader_type canvas_item;
 //   callow  the casing split, a pale amber young worker inside
 // Dirt shows as a grey-green fuzz of speckles.
 //
-// Per-instance data (packed by FungusUnderground):
+// Per-instance data (packed by BroodRenderer):
 //   COLOR.rgb   tint (pupa/callow body colour of its caste), COLOR.a  alpha
 //   CUSTOM.x    stage (0 egg, 1 larva, 2 pupa, 3 callow)
 //   CUSTOM.y    progress through the stage (0-1), or larva growth

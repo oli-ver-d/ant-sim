@@ -1,16 +1,16 @@
 class_name QueenBehaviour
 extends Behaviour
-## The queen: stays at her spot in the royal chamber (FungusNest.queen_spot),
-## her head into her niche, shifting slowly about it while she lays (LeafcutterBrood lays each egg at
+## The queen: stays at her spot in the royal chamber (ColonyNest.queen_spot),
+## her head into her niche, shifting slowly about it while she lays (Brood lays each egg at
 ## the tip of her abdomen). While the colony has no workers yet (a founding
-## queen, FungusNest.queen_cares) she tends her brood herself, within the
+## queen, ColonyNest.queen_cares) she tends her brood herself, within the
 ## royal chamber, at her slow pace.
 
 func exit(sim: Simulation, i: int) -> void:
-	BroodCare.abandon(sim, i, sim.colonies[sim.colony_id[i]].nest as FungusNest)
+	BroodCare.abandon(sim, i, sim.colonies[sim.colony_id[i]].nest as ColonyNest)
 
 func tick(sim: Simulation, i: int, dt: float) -> String:
-	var nest := sim.colonies[sim.colony_id[i]].nest as FungusNest
+	var nest := sim.colonies[sim.colony_id[i]].nest as ColonyNest
 	if nest.chambers_layout == null:
 		return ""
 	if nest.queen_cares(sim):

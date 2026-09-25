@@ -1,7 +1,7 @@
 extends TestCase
 ## M10: the leafcutter brood model (queen, eggs, larvae, pupae, callows).
 
-const Stage := LeafcutterBrood.Stage
+const Stage := Brood.Stage
 
 var _config: SimConfig = load("res://sim/default_config.tres")
 var _registry := Registry.create_default()

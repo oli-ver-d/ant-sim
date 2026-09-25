@@ -86,9 +86,9 @@ func test_sustained_traffic_widens_tunnels() -> void:
 		# Nobody quiet got widened: every widening lies along the busy tunnel.
 		for p in job.shape.points:
 			check(
-					FungusChambers._polyline_distance(busy, p) < 12.0, "along the busy tunnel")
+					NestChambers._polyline_distance(busy, p) < 12.0, "along the busy tunnel")
 	for s in hw.sections:
-		if FungusChambers._polyline_distance(quiet, s.points[0]) < 1.0 and FungusChambers._polyline_distance(quiet, s.points[s.points.size() - 1]) < 1.0:
+		if NestChambers._polyline_distance(quiet, s.points[0]) < 1.0 and NestChambers._polyline_distance(quiet, s.points[s.points.size() - 1]) < 1.0:
 			check_eq(s.level, 0, "the quiet tunnel stays narrow")
 	# Dig the widening out at once, then keep the traffic up: at full width
 	# it ends up with a bypass.

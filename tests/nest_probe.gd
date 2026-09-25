@@ -34,10 +34,12 @@ func _initialize() -> void:
 				open += 1 if p.open else 0
 			var line := "t=%5ds %6.2f ms/tick  ants %5d" % [roundi(sim.time()), (now - t_last) / 1000.0 / per,
 					sim.colonies[0].total_population()]
-			if nest is FungusNest:
-				var layout := (nest as FungusNest).chambers_layout
+			if nest is ColonyNest:
+				var cn := nest as ColonyNest
+				var layout := cn.chambers_layout
 				line += "  chambers %2d/%2d  galleries %2d  links %d" % [layout.dug_count(), layout.count(),
 						layout.galleries.size(), layout.links.size()]
+				line += "  brood %3d  food %6.1f  space %.2f" % [cn.brood.count(), cn.food_stock(), cn.space_pressure()]
 			if nest.highways != null:
 				line += "  widened %d  bypasses %d" % [nest.highways.widened, nest.highways.bypasses]
 			line += "  entrances %d/%d  nav fields %d  dug %d cells" % [1 + open, 1 + nest.extra_portals.size(),

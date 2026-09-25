@@ -7,7 +7,8 @@ var _registry := Registry.create_default()
 func test_harvester_module_registered() -> void:
 	check(_registry.loaded_modules.has("harvester"), "harvester module discovered")
 	var def := _registry.species.get("harvester") as SpeciesDef
-	check(def != null and def.castes.size() == 2, "harvester species with 2 castes")
+	check(def != null and def.castes.size() == 3, "harvester species with 3 castes (minor, major, queen)")
+	check(def.castes[2].spawn_ratio == 0.0, "the queen is never spawned as a worker")
 	check(_registry.food_source_types.has("seed_pile"), "seed_pile registered")
 	check(_registry.nest_types.has("seed_nest"), "seed_nest registered")
 

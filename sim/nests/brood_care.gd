@@ -1,14 +1,14 @@
 class_name BroodCare
 extends RefCounted
 ## Brood care work, shared by nurses and a founding queen (see
-## LeafcutterBrood's care notes). An ant takes the most urgent unclaimed task
+## Brood's care notes). An ant takes the most urgent unclaimed task
 ## and works it through:
 ##
 ##   FREE   a callow at the end of its stage: help it out of the casing
 ##   CARRY  an egg just laid by the queen, or brood lying away from its
 ##          stage's pile: pick it up and carry it there
-##   FEED   a hungry larva: fetch gongylidia (a bite of fungus) from the
-##          garden, bring it, feed it
+##   FEED   a hungry larva: fetch a bite of food from the nest's stores
+##          (ColonyNest.food_point), bring it, feed it
 ##   GROOM  dirty brood: lick it clean
 ##
 ## Per-ant state (the ant's state is free to use these while it cares):
@@ -30,12 +30,12 @@ const FILTHY := 0.75
 ## Seconds between looks for work when there is none.
 const LOOK_EVERY := 1.0
 
-const Stage := LeafcutterBrood.Stage
-const Pile := LeafcutterBrood.Pile
+const Stage := Brood.Stage
+const Pile := Brood.Pile
 
 ## One tick of care. Returns false if the ant has no task (none was found).
 ## only_chamber >= 0 limits it to brood in that chamber (the queen stays home).
-static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_speed: float,
+static func tick(sim: Simulation, i: int, dt: float, nest: ColonyNest, move_speed: float,
 		only_chamber: int = -1) -> bool:
 	var brood := nest.brood
 	var code := int(sim.scratch_f1[i])
@@ -58,7 +58,7 @@ static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_spee
 				if _walk(sim, i, nest, brood.pos[k], move_speed, dt, 2.5):
 					brood.pick_up(k, i)
 					_set_task(sim, i, task, 1)
-			elif _walk(sim, i, nest, nest.pile_centre(LeafcutterBrood.home_pile(brood.stage[k])), move_speed * 0.85, dt, 4.0):
+			elif _walk(sim, i, nest, nest.pile_centre(Brood.home_pile(brood.stage[k])), move_speed * 0.85, dt, 4.0):
 				brood.put_down(k, sim.pos[i], nest)
 				_finish(sim, i, k)
 		Task.FEED:
@@ -68,14 +68,12 @@ static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_spee
 			elif step == 1:
 				_work(sim, i, dt, sim.target[i] + Vector2(1, 0))
 				if sim.scratch_f0[i] >= HARVEST_TIME:
-					var m := nest.take_fungus_at(sim.target[i], brood.feed_mass(nest))
+					var m := nest.take_food_at(sim.target[i], brood.feed_mass(nest))
 					if m <= 0.0:
 						# Too little here: try another spot next time.
 						abandon(sim, i, nest)
 						return true
-					var bite := sim.create_item("gongylidia", m)
-					bite.radius = 1.3
-					bite.color = Color(0.95, 0.94, 0.86)
+					var bite := nest.make_brood_food(sim, m)
 					sim.pick_up(i, bite)
 					_set_task(sim, i, task, 2)
 			elif step == 2:
@@ -108,8 +106,8 @@ static func tick(sim: Simulation, i: int, dt: float, nest: FungusNest, move_spee
 	return true
 
 ## Drops whatever task the ant has: brood it carries is put down where it
-## is, fungus it carries goes back to the garden.
-static func abandon(sim: Simulation, i: int, nest: FungusNest) -> void:
+## is, food it carries goes back to the stores.
+static func abandon(sim: Simulation, i: int, nest: ColonyNest) -> void:
 	var brood := nest.brood
 	var k := brood.index_of(sim.scratch_i[i]) if int(sim.scratch_f1[i]) >> 2 != Task.NONE else -1
 	if k >= 0:
@@ -118,8 +116,8 @@ static func abandon(sim: Simulation, i: int, nest: FungusNest) -> void:
 		if brood.claimed[k] == i:
 			brood.claimed[k] = -1
 	var item := sim.item_of(i)
-	if item != null and item.type_id == "gongylidia":
-		nest.return_fungus(sim.pos[i], item.mass)
+	if item != null and item.type_id == nest.brood_food_type:
+		nest.return_food(sim.pos[i], item.mass)
 		sim.carried[i] = -1
 		item.carrier = -1
 		sim.destroy_item(item.id)
@@ -129,14 +127,14 @@ static func has_task(sim: Simulation, i: int) -> bool:
 	return int(sim.scratch_f1[i]) >> 2 != Task.NONE
 
 ## Claims the most urgent unclaimed task (nearest first among equals).
-static func _pick(sim: Simulation, i: int, nest: FungusNest, only_chamber: int) -> bool:
+static func _pick(sim: Simulation, i: int, nest: ColonyNest, only_chamber: int) -> bool:
 	var brood := nest.brood
 	var at := sim.pos[i]
 	var best := -1
 	var best_task := Task.NONE
 	var best_rank := 0
 	var best_d := INF
-	var can_feed := nest.fungus > nest.reserve()
+	var can_feed := nest.food_stock() > nest.reserve()
 	for k in brood.count():
 		if brood.claimed[k] >= 0 or brood.carrier[k] >= 0:
 			continue
@@ -177,7 +175,7 @@ static func _pick(sim: Simulation, i: int, nest: FungusNest, only_chamber: int) 
 	sim.scratch_i[i] = brood.id[best]
 	_set_task(sim, i, best_task, 0)
 	if best_task == Task.FEED:
-		sim.target[i] = nest.harvest_point(sim, brood.pos[best])
+		sim.target[i] = nest.food_point(sim, brood.pos[best])
 	return true
 
 static func _set_task(sim: Simulation, i: int, task: int, step: int) -> void:
@@ -194,12 +192,12 @@ static func _finish(sim: Simulation, i: int, k: int) -> void:
 	_clear(sim, i)
 
 static func nest_brood_release(sim: Simulation, i: int, k: int) -> void:
-	var nest := sim.colonies[sim.colony_id[i]].nest as FungusNest
+	var nest := sim.colonies[sim.colony_id[i]].nest as ColonyNest
 	if nest.brood.claimed[k] == i:
 		nest.brood.claimed[k] = -1
 
 ## Walks toward `goal` in the nest; true once within `reach`.
-static func _walk(sim: Simulation, i: int, nest: FungusNest, goal: Vector2, move_speed: float, dt: float, reach: float) -> bool:
+static func _walk(sim: Simulation, i: int, nest: ColonyNest, goal: Vector2, move_speed: float, dt: float, reach: float) -> bool:
 	return Travel.go(sim, i, nest.underground_layer, goal, nest.field_toward(goal), move_speed, dt, reach,
 			nest.direct_range(goal) * 0.9)
 

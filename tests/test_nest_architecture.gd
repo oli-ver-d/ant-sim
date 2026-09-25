@@ -1,5 +1,5 @@
 extends TestCase
-## M13b: the leafcutter nest's architecture (FungusChambers): lobed,
+## M13b: the leafcutter nest's architecture (NestChambers): lobed,
 ## irregular chambers with alcoves, a hierarchy of galleries that chambers
 ## hang off, stubs, cross-links making loops; gardens and brood in them.
 
@@ -15,7 +15,7 @@ func _nest_sim(chambers: int, seed_value: int = 7) -> Simulation:
 			"brood": {"lay_interval": 6, "initial": {"egg": 6, "larva": 8, "pupa": 6}}}}]}
 	return ScenarioLoader.build(data, _registry, _config)
 
-func _layout(sim: Simulation) -> FungusChambers:
+func _layout(sim: Simulation) -> NestChambers:
 	return (sim.colonies[0].nest as FungusNest).chambers_layout
 
 func test_chambers_are_irregular_lobed_blobs() -> void:
@@ -25,7 +25,7 @@ func test_chambers_are_irregular_lobed_blobs() -> void:
 	var irregular := 0
 	var alcoves := 0
 	for c in layout.list:
-		if c.kind != FungusChambers.Kind.GARDEN:
+		if c.kind != NestChambers.Kind.CHAMBER:
 			continue
 		check(c.lobes.size() >= 10, "chamber %d has 2+ lobes" % c.index)
 		# Area against the circle through its furthest cell from the centre.
@@ -51,25 +51,25 @@ func test_chambers_hang_off_branching_galleries() -> void:
 	var levels := {}
 	for g in layout.galleries:
 		levels[g.level] = levels.get(g.level, 0) + 1
-	check(levels.get(FungusChambers.Level.MAIN, 0) >= 2, "main galleries (%s)" % levels)
-	check(levels.get(FungusChambers.Level.SECONDARY, 0) >= 3, "secondary tunnels (%s)" % levels)
+	check(levels.get(NestChambers.Level.MAIN, 0) >= 2, "main galleries (%s)" % levels)
+	check(levels.get(NestChambers.Level.SECONDARY, 0) >= 3, "secondary tunnels (%s)" % levels)
 	var branch_off_tunnel := 0
 	for g in layout.galleries:
 		if g.parent >= 0:
 			branch_off_tunnel += 1
 			# It starts on its parent gallery.
 			var p := layout.galleries[g.parent]
-			check(FungusChambers._polyline_distance(p.points, g.points[0]) < 2.0, "gallery %d starts on its parent" % g.index)
+			check(NestChambers._polyline_distance(p.points, g.points[0]) < 2.0, "gallery %d starts on its parent" % g.index)
 	check(branch_off_tunnel >= 3, "tunnels branch off tunnels (%d)" % branch_off_tunnel)
 	for c in layout.list:
-		if c.kind == FungusChambers.Kind.GARDEN:
+		if c.kind == NestChambers.Kind.CHAMBER:
 			check(c.gallery >= 0, "chamber %d hangs off a gallery" % c.index)
 			var g := layout.galleries[c.gallery]
-			check(FungusChambers._polyline_distance(g.points, c.tunnel[0]) < 2.0, "its capillary leaves from the gallery")
+			check(NestChambers._polyline_distance(g.points, c.tunnel[0]) < 2.0, "its capillary leaves from the gallery")
 	# Widths: mains wider than secondaries, capillaries narrowest; tapering.
 	for g in layout.galleries:
 		check(g.radii[g.radii.size() - 1] <= g.radii[0] + 1e-4, "gallery %d tapers" % g.index)
-		if g.level == FungusChambers.Level.MAIN and g.parent < 0:
+		if g.level == NestChambers.Level.MAIN and g.parent < 0:
 			check(g.radii[0] > layout.tunnel_radius * 1.2, "main galleries are wide")
 
 func test_cross_links_make_loops() -> void:
@@ -128,7 +128,7 @@ func test_gardens_and_brood_in_irregular_chambers() -> void:
 	var layout := nest.chambers_layout
 	var w := layout.world
 	for c in layout.list:
-		if c.dug and c.kind == FungusChambers.Kind.GARDEN:
+		if c.dug and c.kind == NestChambers.Kind.CHAMBER:
 			check(nest.garden.chamber_count[c.index] > 100, "chamber %d has a garden (%d cells)" % [c.index, nest.garden.chamber_count[c.index]])
 			var off := 0
 			for gc in nest.garden.cells.slice(nest.garden.chamber_first[c.index], nest.garden.chamber_first[c.index] + nest.garden.chamber_count[c.index]):
@@ -139,7 +139,7 @@ func test_gardens_and_brood_in_irregular_chambers() -> void:
 	check_eq(layout.chamber_at(nest.queen_spot()), 0, "the queen in the royal chamber")
 	check(layout.in_alcove(0, nest.queen_spot()), "in her niche")
 	var k := nest.brood_chamber()
-	var pupae := nest.pile_centre(LeafcutterBrood.Pile.PUPAE)
+	var pupae := nest.pile_centre(Brood.Pile.PUPAE)
 	check_eq(layout.chamber_at(pupae), k, "pupae in the brood chamber")
 	if not layout.list[k].alcoves.is_empty():
 		check(layout.in_alcove(k, pupae), "pupae kept in an alcove")
@@ -175,13 +175,13 @@ func test_colony_founding_grows() -> void:
 	check(nest.chambers_layout.has_loop(), "with loops")
 
 ## A chamber whose way in hangs off a gallery that was abandoned gets a new
-## capillary from the nearest dug tunnel (FungusChambers.rescue).
+## capillary from the nearest dug tunnel (NestChambers.rescue).
 func test_orphaned_digging_is_reconnected() -> void:
 	var sim := _nest_sim(6)
 	var nest := sim.colonies[0].nest as FungusNest
 	var layout := nest.chambers_layout
 	var plan := nest.plan
-	var ch: FungusChambers.Chamber = null
+	var ch: NestChambers.Chamber = null
 	for n in 12:
 		var c := layout.plan_chamber(plan, 50.0 + n)
 		if c != null and layout.galleries[c.gallery].job >= 0 and not plan.is_open(plan.job_by_id(c.tunnel_job)):

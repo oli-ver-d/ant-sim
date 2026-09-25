@@ -1,9 +1,9 @@
-class_name FungusChambers
+class_name NestChambers
 extends RefCounted
-## The chambers and tunnels of a leafcutter nest that digs its own
-## underground (see FungusNest, nest_params "underground"): the royal chamber
-## in the middle, where the queen lives in a niche and the founding garden
-## grows, and garden chambers the colony digs as it grows.
+## The chambers and tunnels of a nest that digs its own underground (see
+## ColonyNest, nest_params "underground"): the royal chamber in the middle,
+## where the queen lives in a niche, and the chambers the colony digs as it
+## grows (the species nest decides what each holds).
 ##
 ## Architecture (all placed from the scenario seed with this object's own
 ## RNG, so the simulation's random stream is untouched):
@@ -22,8 +22,8 @@ extends RefCounted
 ##     some with a side alcove (a niche where brood is kept). Later chambers
 ##     skew larger. The royal chamber is larger and bean-shaped, with a niche
 ##     for the queen and her retinue and an alcove for pupae.
-##   - digging follows need (FungusNest plans a chamber when the gardens
-##     fill up): plan_chamber() first plans a gallery when few free sites are
+##   - digging follows need (the nest plans a chamber when it runs short of
+##     room): plan_chamber() first plans a gallery when few free sites are
 ##     left, so galleries are dug ahead of the chambers that will hang off
 ##     them, and the nest spreads outward into a web.
 ##
@@ -34,7 +34,7 @@ extends RefCounted
 ## Stones inside a chamber's outline are dug out with it (World.soften), so
 ## chamber floors are clear; tunnels go around them.
 
-enum Kind { ROYAL, GARDEN }
+enum Kind { ROYAL, CHAMBER }
 enum Level { MAIN, SECONDARY, CAPILLARY, STUB, LINK }
 
 class Chamber:
@@ -121,7 +121,7 @@ var links: Array[Vector2i] = []
 ## Bottom of the entrance shaft (the portal's underground end).
 var shaft: Vector2
 var layer_size: Vector2
-## Chamber radius range for new garden chambers.
+## Chamber radius range for new chambers.
 var min_radius: float = 38.0
 var max_radius: float = 62.0
 ## The secondary tunnel radius; mains are MAIN_WIDTH times it, capillaries
@@ -339,7 +339,7 @@ func _inner(cell: int, k: int) -> bool:
 
 # --- Planning ----------------------------------------------------------------------
 
-## Plans the next garden chamber and returns it, or null if nothing fits:
+## Plans the next chamber and returns it, or null if nothing fits:
 ## first a gallery if few free sites are left along the galleries, then the
 ## chamber at a free junction (a capillary from the gallery, then the
 ## chamber), and now and then a dead-end stub or a cross-link. `priority`
@@ -389,7 +389,7 @@ func _free_sites() -> int:
 			n += 1
 	return n
 
-## A garden chamber at a free junction that fits, or null. Candidates are
+## A chamber at a free junction that fits, or null. Candidates are
 ## tried in a seeded order: stub ends first, then slots on the galleries
 ## nearer the middle; ones that don't fit are marked used.
 func _site(plan: ExcavationPlan) -> Chamber:
@@ -446,10 +446,10 @@ func _chamber_at_junction(g: Gallery, s: float, side: int, plan: ExcavationPlan)
 	var dir := normal.rotated(_rng.randf_range(-0.35, 0.35))
 	var ch := Chamber.new()
 	ch.index = n
-	ch.kind = Kind.GARDEN
+	ch.kind = Kind.CHAMBER
 	ch.parent = 0
 	ch.centre = door + dir * r * 0.9
-	_garden_lobes(ch, r, dir.angle())
+	_chamber_lobes(ch, r, dir.angle())
 	# Move it so the door sits just outside its outline.
 	for attempt in 2:
 		var d := DigShape.ellipses_distance(ch.lobes, door)
@@ -465,7 +465,7 @@ func _chamber_at_junction(g: Gallery, s: float, side: int, plan: ExcavationPlan)
 ## Gives chamber ch (at ch.centre, entered from direction `facing`) its
 ## lobes: a flattened main lobe across the way in, 1-4 overlapping lobes,
 ## and sometimes an alcove on the far side.
-func _garden_lobes(ch: Chamber, r: float, facing: float) -> void:
+func _chamber_lobes(ch: Chamber, r: float, facing: float) -> void:
 	var c := ch.centre
 	var aspect := _rng.randf_range(1.1, 1.5)
 	var turn := facing + PI * 0.5 + _rng.randf_range(-0.5, 0.5)

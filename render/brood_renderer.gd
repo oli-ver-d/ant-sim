@@ -1,20 +1,21 @@
 class_name BroodRenderer
 extends MultiMeshInstance2D
-## Draws the brood of a FungusNest with care on (LeafcutterBrood), one
+## Draws the brood of a ColonyNest with care on (Brood), one
 ## MultiMesh instance each, with brood.gdshader: eggs, larvae that grow,
 ## pupae that darken as they mature, callows in their split casings. Dirty
 ## brood looks fuzzy, hungry larvae dull.
 ##
 ## Brood lying in the nest is drawn under the ants; with `carried_only` the
 ## renderer draws just the brood being carried, in its carrier's jaws, over
-## the ants (CarriedBroodRenderer, registered as "underground_top:fungus_nest").
+## the ants (CarriedBroodRenderer, which species register as
+## "underground_top:<nest type>").
 
 const STRIDE := 16
 const EGG_SIZE := 2.8
-const Stage := LeafcutterBrood.Stage
+const Stage := Brood.Stage
 
 var sim: Simulation
-var nest: FungusNest
+var nest: ColonyNest
 var carried_only: bool = false
 ## The WorldView drawing this (set when attached; gives the tick interpolation).
 var view: WorldView
@@ -24,14 +25,14 @@ var _caste_color: PackedColorArray = []
 
 func bind(simulation: Simulation, target: Object) -> void:
 	sim = simulation
-	nest = target as FungusNest
+	nest = target as ColonyNest
 	multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	multimesh.use_colors = true
 	multimesh.use_custom_data = true
 	multimesh.mesh = AntRenderer._unit_quad()
 	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://species/leafcutter/brood.gdshader")
+	mat.shader = preload("res://render/brood.gdshader")
 	material = mat
 	for c in sim.colonies[nest.colony_id].species.castes:
 		_caste_size.append(c.size)

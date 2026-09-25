@@ -1,0 +1,87 @@
+{
+	"name": "harvester_founding",
+	"description": "A harvester queen and a handful of minors sealed in a founding chamber with her cache of seeds: they dig up to the surface, clear a disc around the entrance and start bringing seeds home, down into granaries that fill heap by heap. The colony grows chamber by chamber, husks pile up on the midden, busy tunnels widen and more entrances open. Split view, about 90 minutes in 80 s.",
+	"seed": 11,
+	"duration": 80,
+	"colonies": [
+		{
+			"species": "harvester",
+			"nest_type": "granary_nest",
+			"nest": [540, 1060],
+			"population": {"queen": 1, "minor": 4},
+			"nest_params": {
+				"radius": 12,
+				"initial_seeds": 30,
+				"brood_reserve": 1.5,
+				"brood_rate": 0.02,
+				"ant_cost": 0.5,
+				"upkeep_per_ant": 0.00008,
+				"granary_capacity": 40,
+				"ants_per_chamber": 140,
+				"open_entrance_at": 4,
+				"max_chambers": 30,
+				"max_population": 5000,
+				"entrances": {"at": [600, 1500, 2800], "spacing": 160},
+				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 34,
+					"chamber_min_radius": 30, "chamber_max_radius": 48, "tunnel_radius": 6.5},
+				"brood": {"lay_interval": 1.4, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 600,
+					"first_workers": 6, "brood_per_worker": 1.2, "initial": {"egg": 3, "larva": 3, "pupa": 2}}
+			}
+		}
+	],
+	"max_agents": {"surface": 900, "nest": 700},
+	"food": [
+		{"type": "seed_pile", "pos": [420, 820], "radius": 34, "count": 250, "seed": 3},
+		{"type": "seed_pile", "pos": [700, 900], "radius": 30, "count": 200, "seed": 8}
+	],
+	"events": [
+		{"t": 400, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [560, 620], "radius": 38, "count": 300, "seed": 12}},
+		{"t": 900, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [260, 1300], "radius": 40, "count": 350, "seed": 21}},
+		{"t": 900, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [850, 1340], "radius": 40, "count": 350, "seed": 30}},
+		{"t": 1500, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [220, 580], "radius": 46, "count": 450, "seed": 41}},
+		{"t": 1500, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [880, 520], "radius": 46, "count": 450, "seed": 44}},
+		{"t": 2200, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [540, 1620], "radius": 50, "count": 550, "seed": 52}},
+		{"t": 2200, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [520, 320], "radius": 50, "count": 550, "seed": 57}},
+		{"t": 2900, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [180, 1720], "radius": 50, "count": 600, "seed": 63}},
+		{"t": 2900, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [900, 1700], "radius": 50, "count": 600, "seed": 66}},
+		{"t": 3600, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [180, 200], "radius": 54, "count": 650, "seed": 71}},
+		{"t": 3600, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [880, 220], "radius": 54, "count": 650, "seed": 74}},
+		{"t": 4300, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [140, 1000], "radius": 54, "count": 650, "seed": 84}},
+		{"t": 4300, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [950, 1050], "radius": 54, "count": 650, "seed": 87}},
+		{"t": 5000, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [330, 760], "radius": 56, "count": 700, "seed": 91}},
+		{"t": 5000, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [760, 1380], "radius": 56, "count": 700, "seed": 93}},
+		{"t": 5700, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [780, 760], "radius": 56, "count": 700, "seed": 95}},
+		{"t": 5700, "type": "spawn_food", "food": {"type": "seed_pile", "pos": [300, 1360], "radius": 56, "count": 700, "seed": 97}}
+	],
+	"warmup": 0,
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 0.5},
+		{"t": 7, "tpf": 0.5},
+		{"t": 12, "tpf": 4},
+		{"t": 20, "tpf": 28},
+		{"t": 30, "tpf": 52},
+		{"t": 38, "tpf": 70},
+		{"t": 66, "tpf": 76},
+		{"t": 71, "tpf": 3},
+		{"t": 80, "tpf": 2}
+	],
+	"camera": {
+		"surface": [
+			{"t": 0, "pos": [540, 1060], "zoom": 2.6},
+			{"t": 16, "pos": [540, 1060], "zoom": 2.6},
+			{"t": 32, "pos": [540, 1040], "zoom": 1.4},
+			{"t": 60, "pos": [540, 1000], "zoom": 1.0}
+		],
+		"nest": [
+			{"t": 0, "pos": [700, 700], "zoom": 7.5},
+			{"t": 9, "pos": [700, 700], "zoom": 6.0},
+			{"t": 16, "pos": [700, 700], "zoom": 3.2},
+			{"t": 26, "fit": "excavation", "margin": 70, "max_zoom": 2.6}
+		]
+	},
+	"render": {
+		"pheromone_opacity": 0.35,
+		"layout": {"mode": "split", "colony": 0, "surface": "top", "ratio": 0.42,
+			"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]}
+	}
+}

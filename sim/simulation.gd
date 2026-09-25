@@ -290,7 +290,8 @@ func _tick_transit(i: int) -> void:
 func world_of(i: int) -> World:
 	return layers[layer[i]].world
 
-## overrides: this colony's own tweaks: "params" and "state_params" (see
+## overrides: this colony's own tweaks: "nest_type" (a nest type to use instead
+## of the species' own), "params" and "state_params" (see
 ## Colony.build_params) and "channels": {"home": {"half_life": 60, ...}}
 ## (PheromoneChannelDef properties).
 func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dictionary = {},
@@ -304,10 +305,13 @@ func add_colony(species_id: String, nest_pos: Vector2, nest_param_overrides: Dic
 		for l in range(1, layers.size()):
 			layers[l].pheromones.add_channel(StringName("c%d.%s" % [colony.id, ch.name]), channel_def)
 	colony.build_params(config, behaviour_index, overrides)
-	var nest_script: Script = registry.nest_types.get(def.nest_type)
-	assert(nest_script != null, "Unknown nest type %s" % def.nest_type)
+	var nest_type: String = overrides.get("nest_type", "")
+	if nest_type == "":
+		nest_type = def.nest_type
+	var nest_script: Script = registry.nest_types.get(nest_type)
+	assert(nest_script != null, "Unknown nest type %s" % nest_type)
 	colony.nest = nest_script.new()
-	colony.nest.type_id = def.nest_type
+	colony.nest.type_id = nest_type
 	var nest_params := def.nest_params.duplicate()
 	nest_params.merge(nest_param_overrides, true)
 	colony.nest.setup(self, colony, nest_params)

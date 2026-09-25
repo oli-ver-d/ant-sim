@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="SpeciesDef" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="SpeciesDef" load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://sim/species_def.gd" id="1_species"]
 [ext_resource type="Script" path="res://sim/caste_def.gd" id="2_caste"]
@@ -18,6 +18,7 @@ mandible_size = 0.4
 leg_length = 1.0
 spawn_ratio = 0.8
 states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+underground_states = PackedStringArray("nest_role", "nurse", "tend_queen", "tend_granary", "carry_spent", "store_seed", "dig", "carry_spoil", "go_up")
 initial_state = "explore"
 carry_capacity = 1.0
 
@@ -35,8 +36,27 @@ mandible_size = 0.7
 leg_length = 1.05
 spawn_ratio = 0.2
 states = PackedStringArray("explore", "follow_trail", "go_to_food", "carry_home", "deliver")
+underground_states = PackedStringArray("nest_role", "tend_granary", "carry_spent", "store_seed", "dig", "carry_spoil", "go_up")
 initial_state = "explore"
 carry_capacity = 1.5
+
+[sub_resource type="Resource" id="Caste_queen"]
+script = ExtResource("2_caste")
+id = &"queen"
+size = 17.0
+speed = 7.0
+turn_rate = 1.6
+color = Color(0.3, 0.1, 0.05, 1)
+head_scale = 1.4
+thorax_scale = 1.3
+abdomen_scale = 1.55
+mandible_size = 0.5
+leg_length = 1.0
+spawn_ratio = 0.0
+states = PackedStringArray()
+underground_states = PackedStringArray("queen")
+initial_state = "queen"
+carry_capacity = 0.0
 
 [sub_resource type="Resource" id="Channel_home"]
 script = ExtResource("3_channel")
@@ -59,7 +79,7 @@ color = Color(0.3, 0.95, 0.82, 1)
 script = ExtResource("1_species")
 id = &"harvester"
 display_name = "Harvester ants"
-castes = Array[ExtResource("2_caste")]([SubResource("Caste_minor"), SubResource("Caste_major")])
+castes = Array[ExtResource("2_caste")]([SubResource("Caste_minor"), SubResource("Caste_major"), SubResource("Caste_queen")])
 channels = Array[ExtResource("3_channel")]([SubResource("Channel_home"), SubResource("Channel_food")])
 nest_type = "seed_nest"
 nest_params = {
@@ -70,7 +90,7 @@ nest_params = {
 "sense_radius": 70.0
 }
 food_source_types = PackedStringArray("seed_pile")
-item_types = PackedStringArray("seed")
+item_types = PackedStringArray("seed", "seed_meal", "chaff")
 state_params = {
 "carry_home": {
 "follow_channel": "home",
@@ -100,6 +120,42 @@ state_params = {
 "lay_channel": "home",
 "on_pickup": "carry_home",
 "timeout": 20.0
+},
+"dig": {
+"dig_time": 2.5,
+"on_idle": "nest_role"
+},
+"nurse": {
+"on_done": "nest_role",
+"stint": 90.0
+},
+"tend_queen": {
+"on_done": "nest_role",
+"stint": 70.0
+},
+"tend_granary": {
+"on_done": "nest_role",
+"on_waste": "carry_spent",
+"stint": 90.0
+},
+"carry_spent": {
+"on_done": "nest_role"
+},
+"store_seed": {
+"next": "nest_role"
+},
+"go_up": {
+"next": "explore"
 }
 }
-tunables = {}
+underground_state_params = {
+"carry_home": {
+"on_arrive": "store_seed"
+},
+"follow_trail": {
+"on_arrive": "nest_role"
+}
+}
+tunables = {
+"pool_states": ["explore", "follow_trail", "tend_granary", "nurse", "tend_queen", "nest_role", "go_up", "dig"]
+}

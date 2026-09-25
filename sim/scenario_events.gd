@@ -83,10 +83,12 @@ static func scatter_debris(sim: Simulation, s: Dictionary) -> void:
 ## SpeciesDef order so spawn order doesn't depend on JSON key order.
 ## With "release_per_second" the ants start inside the nest (in a shuffled
 ## order) and emerge gradually instead of all at once.
-## "params", "state_params" and "channels" tweak this colony only (see
+## "nest_type" (e.g. a nest that digs), "params", "state_params" and
+## "channels" tweak this colony only (see
 ## Simulation.add_colony).
 static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
 	var overrides := {"params": col.get("params", {}), "state_params": col.get("state_params", {}),
+			"nest_type": col.get("nest_type", ""),
 			"channels": col.get("channels", {})}
 	var colony := sim.add_colony(col["species"], vec2(col["nest"]), col.get("nest_params", {}), overrides)
 	var population: Dictionary = col.get("population", {})
