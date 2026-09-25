@@ -100,6 +100,7 @@ sim/          core engine (no rendering, no species-specific code)
   scenario_loader.gd  JSON scenario -> Simulation
   scenery/            Scenery (surface props), Prop, PropType + core types: RockProp, LogProp,
                       PlantProp (plant, grass); only blocking footprints reach the World
+                      GroundMap: surface ground materials (render-only weights grid)
   behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
                       dig, carry_spoil, go_up; for nests with a queen: queen, nest_role, nurse,
                       tend_queen, carry_spent
@@ -319,6 +320,14 @@ JSON files in `scenarios/`. Simulation content:
 - `food`: type + type-specific params
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
   `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig
+- `ground`: what the surface is made of: `{"base": "soil", "regions": [{"material": "sand",
+  "shape": "circle", "center": [x, y], "radius": 200, "soft": 60}, ...]}` (or just `"sand"`).
+  Materials: `soil`, `sand`, `gravel`, `moss`, `litter`, `dry` (cracked clay). Regions paint in
+  order; shapes `circle`, `rect` (`"rect": [x, y, w, h]`), `polygon` (`"points"`) or none (the
+  whole world); `"soft"` edge width, `"ragged"` edge noise, `"strength"`, and `"noise": {"scale":
+  300, "cover": 0.3}` to paint only patches. Render only (own seeds, not hashed, no effect on
+  movement); decals (fragments, bark, husks, twiglets, straws) are scattered by material, thick
+  on litter. No `ground` = plain soil, as before (see `GroundMap`)
 - `scenery`: surface props: `{"type": "rock", "center": [x, y], "radius": 40, "flat": 0.8}`,
   `{"type": "log", "points": [[x, y], ...], "width": 30}`, `{"type": "plant", "center": [x, y],
   "radius": 60, "stem": 6}` (the stem blocks, the canopy hangs over the ants), `{"type": "grass",
@@ -692,7 +701,13 @@ the harvester's own:
 ## Visual style
 
 All drawing lives in `render/` (plus each species' own renderers):
-- `ground.gdshader`: static soil (large patches, clods, grain, round specks, shaded pebbles).
+- `ground.gdshader`: static ground: soil (large patches, clods, grain, round specks, shaded
+  pebbles), and with a `ground` map (`GroundMap`, two low-res weight textures `material_a` =
+  sand, gravel, moss, litter and `material_b` = dry clay; soil is the rest) sand (grain, wind
+  ripples), gravel (dense pebble bed), moss (lit cushions), litter (a mat of dried fragments)
+  and cracked dry clay, blended at their edges by a height noise.
+  `render/scenery/ground_cover_renderer.gd`: decals on top (one baked sprite atlas, one
+  MultiMesh, contact shadows), density from the material map.
   Static so it compresses well in video.
 - `ant.gdshader`: one shader for every ant: lit, glossy three-segment body, bilobed head for
   big-headed castes, mandibles, antennae, six legs in a tripod gait, soft drop shadow in

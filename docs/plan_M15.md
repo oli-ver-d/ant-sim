@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a done; next M15b.
+Status: M15a, M15b done; next M15c.
 
 ## Where things stand (before M15)
 
@@ -431,3 +431,39 @@ Changed from the plan / notes for the next phases:
   the ground `ColorRect`; M15e adds worn ground before the scenery base node).
 - For M15c: replace `SceneryRenderer`'s placeholder with baked images per prop (keep the two
   pass nodes); `Prop.outline` is what `test_scenery` should compare the footprint against.
+
+### M15b (done)
+
+Done:
+- `sim/scenery/ground_map.gd` (`GroundMap`): 8-unit texel grid of weights per material
+  (`MATERIALS` = soil, sand, gravel, moss, litter, dry; each cell sums to 1). Built by
+  `GroundMap.from_data(scenario["ground"], world_size, seed)`: `"base"` then `"regions"`
+  painted in order (circle / rect / polygon / none = whole world; `soft`, `ragged` edge noise,
+  `strength`, `noise: {scale, cover, soft}` for patches; the cover fraction is exact, from the
+  noise quantile). Noise is `FastNoiseLite` seeded from the scenario seed + region index (never
+  `sim.rng`). `weight_at(material, at)`, `weights_at(at)`, `version`.
+- `Simulation.ground` (null = no `"ground"` entry = plain soil, exactly as before);
+  `ScenarioLoader` builds it after obstacles, before scenery.
+- `render/ground.gdshader`: `use_materials`, `material_a` (RGBA8: sand, gravel, moss, litter),
+  `material_b` (R8: dry); soil = 1 - the rest. Looks as planned; edges jittered by ~8 units of
+  fbm and height-blended (per-material noise, blend width 0.1), so edges are ragged and fairly
+  crisp. Soil unchanged except a fix: pebbles were lit on the side *away* from `light_dir`
+  (the direction light comes FROM); now lit toward it like walls and ants.
+- `render/scenery/ground_cover_renderer.gd` (`GroundCoverRenderer`, MultiMeshInstance2D) +
+  `ground_cover.gdshader`: 16 procedurally baked sprites in one 192 px atlas (fragments,
+  torn pieces, bark flakes, husks, twiglets, straws, crumbs); static `scatter(ground)` on a
+  5-unit jittered grid, density and kind odds per material (`DENSITY`, `KIND_ODDS`); contact
+  shadow in the shader from the sprite's own alpha. Own RNG from the ground seed. Added by
+  `WorldView` right after the ground rect (only when `sim.ground` exists).
+- `tests/test_ground.gd` (9 tests); `tests/fixtures/scenarios/ground_demo.json` (every
+  material, a noise-patch region, a shower) for stills.
+
+Changed from the plan / notes for the next phases:
+- The material map is uploaded once in `WorldView.setup`; `GroundMap.version` is only watched
+  by the cover renderer. Nothing changes the map at runtime yet (no events); if M15e/M15i need
+  it (cleared discs), re-upload the textures when `version` changes.
+- Rain: `rain.gdshader` unchanged; wet sand turns a flat grey-brown and moss darkens, both
+  still readable. A multiplicative wet darkening would keep sand's hue better if wanted later.
+- For M15c (rocks near moss): read `sim.ground.weight_at("moss", at)` when baking, or bind the
+  same `material_a` texture (world UV = position / world_size) in a prop shader.
+- Existing scenarios have no `"ground"`, so they look as before (and hash as before).

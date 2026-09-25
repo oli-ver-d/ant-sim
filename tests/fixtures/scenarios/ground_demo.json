@@ -1,0 +1,27 @@
+{
+	"name": "ground_demo",
+	"description": "M15b check: every ground material (soil, sand, gravel, moss, litter, dry clay) with ground cover, a shower over one corner, and a foraging colony crossing them.",
+	"seed": 5,
+	"duration": 20,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "sand", "shape": "circle", "center": [290, 360], "radius": 260, "soft": 70},
+			{"material": "gravel", "shape": "rect", "rect": [600, 140, 420, 380], "soft": 50},
+			{"material": "moss", "shape": "polygon", "points": [[60, 820], [420, 760], [520, 1000], [380, 1240], [80, 1180]], "soft": 60},
+			{"material": "dry", "shape": "circle", "center": [810, 980], "radius": 220, "soft": 50},
+			{"material": "litter", "shape": "rect", "rect": [0, 1280, 1080, 640], "soft": 120, "noise": {"scale": 180, "cover": 0.6}},
+			{"material": "moss", "noise": {"scale": 90, "cover": 0.08}, "strength": 0.8}
+		]
+	},
+	"colonies": [
+		{"species": "leafcutter", "nest": [540, 1500], "population": {"minim": 30, "media": 130, "major": 10}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [300, 400], "radius": 26, "amount": 400},
+		{"type": "food_pile", "pos": [800, 900], "radius": 26, "amount": 400}
+	],
+	"events": [
+		{"t": 1, "type": "rain", "duration": 600, "area": {"rect": [700, 1500, 380, 420]}}
+	]
+}

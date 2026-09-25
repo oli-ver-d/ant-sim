@@ -27,6 +27,8 @@ var world: World
 var pheromones: PheromoneField
 ## Surface scenery props (render-side; only blocking footprints reach `world`).
 var scenery: Scenery
+## What the surface ground is made of (render-side, not hashed); null = plain soil.
+var ground: GroundMap
 var layers: Array[SimLayer] = []
 var portals: Array[Portal] = []
 ## True once there is more than one layer (hot paths skip layer lookups otherwise).

@@ -2,7 +2,8 @@ class_name WorldView
 extends Node2D
 ## Builds and owns all renderers for one layer of a Simulation.
 ##
-## The surface (layer 0), bottom to top: ground, wet ground (rain),
+## The surface (layer 0), bottom to top: ground (materials from GroundMap),
+## ground cover decals, wet ground (rain),
 ## obstacles, scenery bases, bridges, nests, pheromone glow, food, ground
 ## items (debris), ants, carried items, ants riding on carried items, scenery
 ## canopy, falling rain, debug.
@@ -65,6 +66,14 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 		ground_mat.set_shader_parameter("seed", ground_seed)
 		ground.material = ground_mat
 		add_child(ground)
+		# Ground materials (sand, gravel, moss, litter, dry clay) and the decals on them.
+		if sim.ground != null:
+			ground_mat.set_shader_parameter("use_materials", true)
+			ground_mat.set_shader_parameter("material_a", ImageTexture.create_from_image(sim.ground.material_a()))
+			ground_mat.set_shader_parameter("material_b", ImageTexture.create_from_image(sim.ground.material_b()))
+			var cover := GroundCoverRenderer.new()
+			cover.bind(sim)
+			add_child(cover)
 
 		# Rain: wet soil goes right on the ground, falling drops on top of everything.
 		var wet_layer := Node2D.new()

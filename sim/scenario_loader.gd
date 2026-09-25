@@ -7,6 +7,7 @@ extends RefCounted
 ##   "colonies":  [{"species": "...", "nest": [x, y], "nest_params": {}, "population": {"<caste>": n}}],
 ##   "food":      [{"type": "food_pile", "pos": [x, y], ...type params}],
 ##   "obstacles": [shape, ...]              (see ScenarioEvents for shapes)
+##   "ground":    {"base": "soil", "regions": [...]}   surface materials (see GroundMap)
 ##   "scenery":   [{"type": "rock" | "log" | "plant" | "grass", ...}]   surface props
 ##                (see Scenery and the PropType scripts in sim/scenery)
 ##   "debris":    [{"type": "twig" | "pebble", "pos": [x, y], ...}]  (see Debris)
@@ -42,6 +43,8 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 	var sim := Simulation.new(config, registry, seed_value)
 	for ob: Dictionary in data.get("obstacles", []):
 		ScenarioEvents.add_obstacle(sim.world, ob)
+	if data.has("ground"):
+		sim.ground = GroundMap.from_data(data["ground"], Vector2(config.world_size), seed_value)
 	for prop: Dictionary in data.get("scenery", []):
 		ScenarioEvents.add_scenery(sim, prop)
 	for food: Dictionary in data.get("food", []):
