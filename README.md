@@ -372,7 +372,7 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
 | M11, one layer (`bench.gd basic_forage 300 3000`) | 26.4 ms per tick (M10 on the same run: 24.0; the layer checks cost up to ~10%) |
 | A nest that digs, ~1,500 ants (`bench.gd res://tests/fixtures/scenarios/nest_bench.json 900`) | 24.9 ms per tick: surface ants 14.4 ms (752 agents, 16.5 µs each), underground ants 7.6 ms (721 agents, 12.8 µs each), nest (gardens, brood, roles) 1.4 ms, pheromones 1.1 ms |
 | `colony_founding`, headless | about 2 ms per tick at 100 ants, 10 ms at 650, 16 ms at 1,000, 22–26 ms at the 1,600 agent cap (the rest abstract) |
-| `FORMAT=avi tools/record.sh colony_founding` | 79 min for the 80 s video (4,800 frames, ~7,200 simulated seconds, ~215,000 ticks; most of it the last 50 s at 70–80 ticks per frame with 1,600 agents); ends at ~3,500 ants |
+| `FORMAT=avi tools/record.sh colony_founding` | 79 min for the 80 s video (4,800 frames, ~7,200 simulated seconds, ~215,000 ticks; most of it the last 50 s at 70–80 ticks per frame with 1,600 agents); ends at ~3,500 ants. With the native kernel and M13: 49 min (47 min capture, 2 min encode), ends at ~3,800 ants |
 | **Native ant kernel** (M12, same machine) | |
 | 3,000 ants, real time, interactive, busy foraging | 60 fps; the simulation takes ~2.5 ms per frame (GDScript: ~27 fps) |
 | `bench.gd basic_forage 600 3000` | 2.5 ms per tick (GDScript: 24.0) |
