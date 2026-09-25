@@ -71,6 +71,9 @@ var decayed: float = 0.0
 ## Each deposit's id: its number in drop order (never reused, so a renderer
 ## can tell new deposits from old ones; the arrays stay in drop order).
 var dep_id: PackedInt32Array = []
+## Extra per-deposit detail for drawing it: the caste of a dead worker
+## (-1 for anything else).
+var dep_extra: PackedInt32Array = []
 ## Bumped whenever deposits or the stain change (for renderers).
 var version: int = 0
 var _swept_at: float = 0.0
@@ -117,8 +120,9 @@ func drop_point(u1: float, u2: float) -> Vector2:
 			var toward := (anchor - c).angle()
 			return c + Vector2.from_angle(toward + (u1 - 0.5) * 3.8) * r * sqrt(u2)
 
-## Adds a deposit of `mass` of refuse kind `kind` at `at`, dropped at `time`.
-func add(kind: String, at: Vector2, mass: float, time: float, registry: Registry) -> void:
+## Adds a deposit of `mass` of refuse kind `kind` at `at`, dropped at `time`
+## (`extra`: see dep_extra).
+func add(kind: String, at: Vector2, mass: float, time: float, registry: Registry, extra: int = -1) -> void:
 	var k := kinds.find(kind)
 	if k < 0:
 		k = kinds.size()
@@ -128,6 +132,7 @@ func add(kind: String, at: Vector2, mass: float, time: float, registry: Registry
 	dep_mass.append(mass)
 	dep_time.append(time)
 	dep_id.append(loads)
+	dep_extra.append(extra)
 	received += mass
 	present += mass
 	loads += 1
@@ -183,6 +188,7 @@ func _merge(time: float, oldest: int, registry: Registry) -> void:
 			dep_mass[keep] = dep_mass[d]
 			dep_time[keep] = dep_time[d]
 			dep_id[keep] = dep_id[d]
+			dep_extra[keep] = dep_extra[d]
 		keep += 1
 	if keep == n:
 		return
@@ -191,6 +197,7 @@ func _merge(time: float, oldest: int, registry: Registry) -> void:
 	dep_mass.resize(keep)
 	dep_time.resize(keep)
 	dep_id.resize(keep)
+	dep_extra.resize(keep)
 	version += 1
 
 ## World position of stain cell (x, y)'s corner.

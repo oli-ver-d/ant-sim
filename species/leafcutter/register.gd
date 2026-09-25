@@ -21,6 +21,7 @@ func register(registry: Registry) -> void:
 	registry.register_item_type("pulp", Item)
 	# Spent garden material rots fast on the midden.
 	registry.register_refuse_kind("spent_substrate", 1200.0, 5.0, ["waste", "pulp"])
+	registry.register_renderer("refuse:spent_substrate", SpentSubstrateLook)
 	registry.register_renderer("food:leaf", LeafRenderer)
 	registry.register_nest_type("fungus_nest", FungusNest)
 	registry.register_renderer("nest:fungus_nest", FungusNestRenderer)

@@ -334,7 +334,8 @@ func drop_refuse(sim: Simulation, item: Item, at: Vector2) -> void:
 		if d < best_d - 1e-6:
 			best_d = d
 			best = m
-	best.add(sim.registry.refuse_kind_for(item.type_id), at, item.mass, sim.time(), sim.registry)
+	var caste := (item as Corpse).caste_id if item is Corpse else -1
+	best.add(sim.registry.refuse_kind_for(item.type_id), at, item.mass, sim.time(), sim.registry, caste)
 	receive_waste(sim, item)
 
 ## Keeps the totals of what was dropped (see drop_refuse()).

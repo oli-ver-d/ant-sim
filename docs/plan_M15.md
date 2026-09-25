@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a-M15f done; next M15g.
+Status: M15a-M15g done; next M15h.
 
 ## Where things stand (before M15)
 
@@ -679,3 +679,49 @@ Changed from the plan / notes for the next phases:
   grid from `stain` / `stain_origin()` / `STAIN_CELL`. Corpse deposits have no caste once
   merged into a midden (only kind); keep a caste per deposit if M15g needs caste colours
   (e.g. a `dep_extra` int array filled from `Corpse.caste_id` in `drop_refuse`).
+
+### M15g (done)
+
+Done:
+- `render/midden_renderer.gd` (`MiddenRenderer`, one per colony, added by `WorldView` right
+  after the nest's own renderer so a cleared disc doesn't wash over a ring midden; entrances on
+  top). Per midden a `View`: its ground (`render/midden.gdshader`, all grounds in one child
+  drawn under every deposit) from a 64x64 RGBA8 data texture (`ground_data()`: r = stain,
+  g = deposit mass left per stain cell, both `1 - exp(-m / k)`), rebuilt on `Midden.version`
+  or every 5 sim s; deposits in `Chunk`s of 48 ids (`dep_id / CHUNK`), redrawn when their
+  count changes (arrival or merge) or, one chunk a frame, every 20 s for ageing; emptied
+  chunks freed.
+- `render/refuse.gdshader`: the per-deposit data rides in the draw colour (rgb tint, a = rot
+  0..1, read in `vertex()` through a varying: in `fragment()` Godot's COLOR already has the
+  texture multiplied in). Rot greys, darkens toward humus; the shadow is cast from the sprite's
+  own alpha, shorter as it rots; wet darkens and adds gloss on lit tops. Deposits are not
+  rotated (the shadow would turn with them); 16 variants per kind instead.
+- `render/refuse_look.gd` (`RefuseLook`: 32 px cells, body within 0.36 of a cell, `blob` /
+  `stroke` / `speck` painters, colour bled into clear pixels before mipmaps, shared static
+  `atlas_for(registry, kind)`, `corpse_tint`), `render/refuse_looks.gd` (`RefuseLooks.SoilClump`,
+  `Husk`, `DeadAnt` (greys, tinted), `DeadLarva`, `Remnant`), registered in `CoreRenderers` as
+  `"refuse:<kind>"`; `species/leafcutter/spent_substrate_look.gd` (mould tufts on some).
+  Unregistered kinds fall back to `refuse:remnant`.
+- Sim (render data only, not hashed): `Midden.dep_extra` (caste of a dead worker, -1 else),
+  kept through merges; `NestType.drop_refuse` fills it from `Corpse.caste_id`.
+- `ItemRenderer` draws `Corpse` items (on the ground and carried) with the same look and caste
+  tint instead of a disc.
+- `RainRenderer.wetness(shower, now)` / `wetness_at(sim, at, now)` (static); middens check it
+  every 15 frames.
+- Removed: `FungusNestRenderer.DumpChunk`, `GranaryNestRenderer._draw_midden`.
+- Tests: `tests/test_midden_render.gd` (7). Fixture `tests/fixtures/scenarios/midden_demo.json`
+  (short-lived workers of both species, a shower over the leafcutter midden at 90 s).
+- Stills checked: fungus_farm at 500 s (close) and 1500 s (three piles, old ones darker, stain
+  showing through the rotting pile), harvester_founding at 2400 s (`--layout=surface`: husk
+  ring at the disc edge), midden_demo at 70 s and 115 s (dead ants, wet).
+
+Changed from the plan / notes for the next phases:
+- Canvas draws of an atlas per chunk, not MultiMesh: loads arrive slowly and chunks redraw
+  rarely, so it is cheap; no frame probe was run with a full midden (fungus_farm at 1500 s has
+  ~2,700 deposits on three middens). Worth a `bench`/frame check in M15i when timing videos.
+- No separate "raised rim" pass: the mound shading and cast shadow come from the height
+  channel. Husks don't bleach in the sun (tint can only darken); they grey and darken slowly
+  (half-life 2400 s). Husks aren't species-coloured (one straw palette).
+- For M15h keep-clear: a midden's drawn extent is its stain grid (256 units square round
+  `Midden.position`), but the visible pile is `centre()` + `radius()`; ring middens spread
+  along the band (`drop_point`).

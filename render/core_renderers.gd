@@ -11,3 +11,9 @@ static func register(registry: Registry) -> void:
 	registry.register_renderer("prop:log", LogLook)
 	registry.register_renderer("prop:plant", PlantLook)
 	registry.register_renderer("prop:grass", PlantLook)
+	# Refuse on middens (MiddenRenderer).
+	registry.register_renderer("refuse:soil_clump", RefuseLooks.SoilClump)
+	registry.register_renderer("refuse:husk", RefuseLooks.Husk)
+	registry.register_renderer("refuse:corpse", RefuseLooks.DeadAnt)
+	registry.register_renderer("refuse:brood_corpse", RefuseLooks.DeadLarva)
+	registry.register_renderer("refuse:remnant", RefuseLooks.Remnant)

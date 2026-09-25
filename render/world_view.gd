@@ -5,7 +5,8 @@ extends Node2D
 ## The surface (layer 0), bottom to top: ground (materials from GroundMap),
 ## ground cover decals, wet ground (rain), obstacles, worn ground (surface
 ## traffic, WornGroundRenderer), scenery bases, bridges, nests (spoil heaps,
-## the nest's own renderer, then its entrances: EntranceRenderer), pheromone glow, food, ground
+## the nest's own renderer, its middens: MiddenRenderer,
+## then its entrances: EntranceRenderer), pheromone glow, food, ground
 ## items (debris), ants, carried items, ants riding on carried items, scenery
 ## canopy (plant blades and their shadow: CanopyRenderer), falling rain, debug.
 ## Food and nest renderers are looked up in the Registry by type id
@@ -175,7 +176,11 @@ func _process(_delta: float) -> void:
 		var nest := sim.colonies[_bound_colonies].nest
 		if layer == 0:
 			_attach(_nest_layer, "nest:" + nest.type_id, nest)
-			# Every nest's entrances, over its own renderer (cleared disc, midden).
+			# Its middens, over its own renderer (a cleared disc reaches them).
+			var middens := MiddenRenderer.new()
+			middens.bind(sim, nest)
+			_nest_layer.add_child(middens)
+			# Then its entrances.
 			var entrances := EntranceRenderer.new()
 			entrances.bind(sim, nest)
 			_nest_layer.add_child(entrances)

@@ -156,7 +156,8 @@ tools/ tests/
   Each load becomes a deposit (position, refuse kind, mass, time) in packed arrays; kinds are
   registered with a half-life and size (`Registry.register_refuse_kind`, item types mapped to
   them; core: `soil_clump`, `husk`, `corpse`, `brood_corpse`, `remnant`; leafcutter
-  `spent_substrate`). Deposits rot; mostly rotted ones (and the oldest beyond 1,500) merge
+  `spent_substrate`) and drawn by a look registered as `"refuse:<kind>"` (see Visual style).
+  Deposits rot; mostly rotted ones (and the oldest beyond 1,500) merge
   into the midden's `stain` grid, so mass stays conserved (dropped = deposits + stain +
   rotted). Middens are not hashed; only where ants walk to them is.
 - **Corpses** (opt-in, colony params): with `worker_lifespan` > 0 workers die of old age
@@ -729,7 +730,8 @@ the harvester's own:
   (`ants_per_chamber`).
 - Rendering: `GranaryUnderground` ("underground:granary_nest") draws each chamber's heap of
   seeds and the chaff around it, plus the core brood renderer; `GranaryNestRenderer` the
-  cleared disc round each open entrance (wider as the colony grows) and the husk midden.
+  cleared disc round each open entrance (wider as the colony grows); the husk midden is drawn
+  by the core `MiddenRenderer`.
 - nest params: ColonyNest's (see the leafcutter section) and `initial_seeds`, `seed_mass`,
   `upkeep_per_ant`, `granary_capacity`, `ants_per_chamber`, `husk`, `chaff_load`, `disc_radius`.
 
@@ -782,10 +784,24 @@ All drawing lives in `render/` (plus each species' own renderers):
   shades and tints whatever ground is drawn under it (the screen texture), so it sits on any
   material. A sealed entrance is a soil plug. Openings widen with the ants through them
   (`Portal.uses`, render only); extra ones start small. Species renderers keep only their
-  extras (the harvester's cleared disc and midden, the leafcutter's loose soil and dump).
+  extras (the harvester's cleared disc, the leafcutter's loose soil).
 - `spoil_heap_renderer.gd`: each entrance's spoil heap is a fan on its outward side, wider
   across than along and bent round the entrance, in subsoil colours tinted toward the ground
   material under it; for crater and mound entrances some crumbs spill back to the rim.
+- `midden_renderer.gd` + `midden.gdshader` + `refuse.gdshader`: each midden, drawn over its
+  nest's own renderer. Under it, the ground it has stained (the `Midden.stain` grid and the
+  deposits' mass per cell, a 64x64 data texture): a dark, humus-rich patch with a wandering
+  edge that reaches past the pile, and the mound the deposits make, its slopes lit and shaded
+  with a soft cast shadow. On it, every deposit as a sprite of its kind's look (`RefuseLook`,
+  registered as `"refuse:<kind>"`; core `RefuseLooks`: soil clumps, split husks, curled dead
+  workers with folded legs, dead larvae, crumbs; leafcutter `SpentSubstrateLook`: spongy
+  grey-brown clumps with white mould), 16 variants baked once into an atlas, sized by the mass
+  it has left. As deposits rot they lose colour, darken toward humus, shrink and cast a
+  shorter shadow, so an old midden is a dark stain with the latest refuse on top. Dead workers
+  are tinted with their caste's colour and size (`Midden.dep_extra`), and corpses not yet
+  carried out (`ItemRenderer`) use the same look. Wet middens (a shower over them) darken and
+  their refuse is glossy. Deposits are drawn in chunks by id, redrawn only when one arrives or
+  rots away, or (one chunk a frame) every 20 s for ageing.
 - `worn_ground_renderer.gd` + `worn_ground.gdshader`: the surface `TrafficMap` (turned on by
   the view: not hashed, no random numbers) smoothed and multiplied over the ground, so busy
   ground is packed darker: an apron round each entrance and faint paths along the busiest

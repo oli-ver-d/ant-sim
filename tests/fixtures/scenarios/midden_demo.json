@@ -1,0 +1,21 @@
+{
+	"name": "midden_demo",
+	"description": "M15g check: short-lived workers (worker_lifespan 40 s) of two species whose dead are carried to middens (dead ants curled up in their caste colours, rotting into the stain), and a shower over the leafcutter midden at 90 s (wet, glossy refuse).",
+	"seed": 4,
+	"duration": 240,
+	"colonies": [
+		{"species": "leafcutter", "nest": [360, 1000], "nest_type": "basic_nest",
+			"population": {"minim": 40, "media": 60, "major": 12},
+			"params": {"worker_lifespan": 40}},
+		{"species": "harvester", "nest": [760, 1000], "nest_type": "basic_nest",
+			"population": {"minor": 60, "major": 12},
+			"params": {"worker_lifespan": 40}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [360, 600], "radius": 26, "amount": 800},
+		{"type": "food_pile", "pos": [760, 600], "radius": 26, "amount": 800}
+	],
+	"events": [
+		{"t": 90, "type": "rain", "duration": 30, "area": {"center": [360, 1150], "radius": 200}, "wash_half_life": 2}
+	]
+}

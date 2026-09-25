@@ -47,7 +47,10 @@ func _draw() -> void:
 			rot = lerp_angle(sim.prev_heading[i], sim.shown_heading[i], alpha)
 			at = sim.prev_pos[i].lerp(sim.shown_pos[i], alpha) + Vector2.from_angle(rot) * sim.caste_of(i).size * Item.HOLD_OFFSET
 		var shadow := CARRIED_SHADOW_OFFSET if carried else GROUND_SHADOW_OFFSET
-		if item.shape != null:
+		if item is Corpse:
+			_draw_corpse(item as Corpse, at, shadow)
+			continue
+		elif item.shape != null:
 			var tex: ImageTexture = _textures.get(id)
 			if tex == null:
 				tex = ImageTexture.create_from_image(item.shape)
@@ -61,7 +64,27 @@ func _draw() -> void:
 		else:
 			draw_circle(at + shadow, item.radius, SHADOW)
 			draw_circle(at, item.radius, item.color)
+	draw_set_transform(Vector2.ZERO)
 	# Forget textures of destroyed items.
 	for id: int in _textures.keys():
 		if not sim.items.has(id):
 			_textures.erase(id)
+
+## A dead worker or larva, drawn with its refuse kind's look (as it will lie
+## on the midden, see MiddenRenderer), in its caste's colour.
+func _draw_corpse(corpse: Corpse, at: Vector2, shadow: Vector2) -> void:
+	var look := RefuseLook.atlas_for(sim.registry, sim.registry.refuse_kind_for(corpse.type_id))
+	var tint := Color.WHITE
+	var radius := corpse.radius
+	if look[1] and corpse.caste_id >= 0 and corpse.colony_id >= 0:
+		var def := sim.colonies[corpse.colony_id].species.castes[corpse.caste_id]
+		tint = RefuseLook.corpse_tint(def.color)
+		radius = def.size * 0.45
+	var side := radius / RefuseLook.BODY
+	var cell := float(RefuseLook.PX)
+	var src := Rect2((corpse.id % RefuseLook.VARIANTS) * cell, 0, cell, cell)
+	var rect := Rect2(-side * 0.5, -side * 0.5, side, side)
+	draw_set_transform(at + shadow * 0.6)
+	draw_texture_rect_region(look[0], rect, src, SHADOW)
+	draw_set_transform(at)
+	draw_texture_rect_region(look[0], rect, src, tint)

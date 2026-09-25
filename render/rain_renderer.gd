@@ -42,9 +42,7 @@ func _process(delta: float) -> void:
 		var start := float(shower["start"])
 		var until := float(shower["until"])
 		var intensity := clampf((now - start) / FADE_IN, 0.0, 1.0) * clampf(1.0 - (now - until) / FADE_OUT, 0.0, 1.0)
-		var wet := clampf((now - start) / SOAK_TIME, 0.0, 1.0)
-		if now > until:
-			wet *= pow(0.5, (now - until) / DRY_HALF_LIFE)
+		var wet := wetness(shower, now)
 		for rect: ColorRect in _rects[k]:
 			rect.visible = wet > 0.005 or intensity > 0.0
 			var mat := rect.material as ShaderMaterial
@@ -77,3 +75,26 @@ func _make_rect(shower: Dictionary, layer: int) -> ColorRect:
 	rect.material = mat
 	rect.visible = false
 	return rect
+
+## How wet a shower has left its ground at sim time `now` (0 dry .. 1 soaked).
+static func wetness(shower: Dictionary, now: float) -> float:
+	var start := float(shower["start"])
+	var until := float(shower["until"])
+	var wet := clampf((now - start) / SOAK_TIME, 0.0, 1.0)
+	if now > until:
+		wet *= pow(0.5, (now - until) / DRY_HALF_LIFE)
+	return wet
+
+## How wet the ground at `at` is at sim time `now` (the wettest shower over it).
+static func wetness_at(sim: Simulation, at: Vector2, now: float) -> float:
+	var wet := 0.0
+	for shower in sim.rain:
+		var area: Dictionary = shower["area"]
+		var inside := true
+		if area.has("rect"):
+			inside = ScenarioEvents.rect2(area["rect"]).has_point(at)
+		elif area.has("center"):
+			inside = at.distance_to(ScenarioEvents.vec2(area["center"])) <= float(area["radius"])
+		if inside:
+			wet = maxf(wet, wetness(shower, now))
+	return wet
