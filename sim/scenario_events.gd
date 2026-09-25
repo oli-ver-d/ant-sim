@@ -9,6 +9,8 @@ extends RefCounted
 ##   {"t": 30, "type": "spawn_food",      "food": {"type": "...", "pos": [x, y], ...}}
 ##   {"t": 30, "type": "add_obstacle",    "obstacle": {shape...}}
 ##   {"t": 30, "type": "remove_obstacle", "obstacle": {shape...}}   (clears those cells)
+##   {"t": 30, "type": "add_scenery",     "scenery": {prop...} | [{prop...}, ...]}  (see Scenery)
+##   {"t": 30, "type": "remove_scenery",  "name": "..."} | {"at": [x, y]}  (props by name, or covering a point)
 ##   {"t": 30, "type": "add_colony",      "colony": {colony...}}
 ##   {"t": 30, "type": "rain", "duration": 6, "area": {"center": [x, y], "radius": r} | {"rect": [x, y, w, h]},
 ##    "wash_half_life": 0.5}   (no area = whole world; half-life 0 = wiped at once)
@@ -34,6 +36,12 @@ static func apply(sim: Simulation, event: Dictionary) -> void:
 			add_obstacle(sim.world, event["obstacle"], World.Cell.FREE)
 		"add_colony":
 			add_colony(sim, event["colony"])
+		"add_scenery":
+			var list: Variant = event["scenery"]
+			for prop: Dictionary in (list if list is Array else [list]):
+				add_scenery(sim, prop)
+		"remove_scenery":
+			remove_scenery(sim, event)
 		"rain":
 			sim.start_rain(event.get("area", {}), float(event.get("duration", 5.0)), float(event.get("wash_half_life", 0.0)))
 		"drop_debris":
@@ -110,6 +118,24 @@ static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
 		for c in castes:
 			colony.nest.spawn_initial(sim, c)
 	return colony
+
+## Places a scenery prop on the surface. Scatter presets ({"scatter": ...})
+## are not supported yet and are skipped with a warning.
+static func add_scenery(sim: Simulation, prop: Dictionary) -> Prop:
+	if prop.has("scatter"):
+		push_warning("Scenery scatter presets are not supported yet; skipped")
+		return null
+	return sim.scenery.add(prop)
+
+## Removes the props named event["name"], or those covering event["at"].
+static func remove_scenery(sim: Simulation, event: Dictionary) -> void:
+	var found: Array[Prop] = []
+	if event.has("name"):
+		found = sim.scenery.named(str(event["name"]))
+	elif event.has("at"):
+		found = sim.scenery.props_at(vec2(event["at"]))
+	for p in found:
+		sim.scenery.remove(p)
 
 ## Stamps an obstacle shape into the world. kind_override (a World.Cell value)
 ## replaces the shape's own "kind", e.g. FREE to remove an obstacle.

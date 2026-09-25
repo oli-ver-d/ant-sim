@@ -1,5 +1,6 @@
 shader_type canvas_item;
-// Draws the obstacle grid smoothly. TEXTURE: R = wall, G = water (one texel
+// Draws the obstacle grid smoothly. TEXTURE: R = wall, G = water, B = cell
+// blocked by a scenery prop (drawn by SceneryRenderer, not here; one texel
 // per cell). The mask is sampled with a bicubic B-spline and nudged by a
 // little noise before thresholding, so outlines are rounded and slightly
 // irregular instead of following the 4 px cells. Walls are rough stone with a

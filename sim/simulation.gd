@@ -25,6 +25,8 @@ var rng := RandomNumberGenerator.new()
 ## Surface layer's obstacle grid and pheromones (layers[0]).
 var world: World
 var pheromones: PheromoneField
+## Surface scenery props (render-side; only blocking footprints reach `world`).
+var scenery: Scenery
 var layers: Array[SimLayer] = []
 var portals: Array[Portal] = []
 ## True once there is more than one layer (hot paths skip layer lookups otherwise).
@@ -145,6 +147,7 @@ func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> vo
 	layer_agents.append(0)
 	world = surface.world
 	pheromones = surface.pheromones
+	scenery = Scenery.new(world, registry, seed_value)
 
 	# Behaviour indices are assigned in sorted id order so they are stable.
 	var ids := registry.behaviours.keys()

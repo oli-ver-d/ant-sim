@@ -27,3 +27,7 @@ static func register(registry: Registry) -> void:
 	registry.register_item_type("waste", Item)
 	registry.register_item_type("spoil", Item)
 	registry.register_nest_type("basic_nest", BasicNest)
+	registry.register_scenery_type("rock", RockProp)
+	registry.register_scenery_type("log", LogProp)
+	registry.register_scenery_type("plant", PlantProp)
+	registry.register_scenery_type("grass", PlantProp)

@@ -1,0 +1,24 @@
+{
+	"name": "scenery_demo",
+	"description": "M15a check: one of each core scenery prop (rock, log, plant, grass) round a foraging colony, drawn as placeholders; blocking footprints steer the ants.",
+	"seed": 3,
+	"duration": 20,
+	"colonies": [
+		{"species": "leafcutter", "nest": [540, 1300], "population": {"minim": 30, "media": 130, "major": 10}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [540, 850], "radius": 26, "amount": 400}
+	],
+	"obstacles": [
+		{"shape": "circle", "center": [300, 1500], "radius": 40, "kind": "wall"}
+	],
+	"scenery": [
+		{"type": "rock", "center": [700, 1150], "radius": 50, "flat": 0.7},
+		{"type": "rock", "center": [760, 1230], "radius": 22},
+		{"type": "log", "points": [[300, 1000], [480, 1060], [560, 1020]], "width": 26},
+		{"type": "plant", "kind": "rosette", "center": [420, 1250], "radius": 60, "stem": 7},
+		{"type": "plant", "kind": "fern", "center": [640, 950], "radius": 80, "stem": 6, "blades": 11},
+		{"type": "grass", "center": [640, 1380], "radius": 40},
+		{"type": "grass", "center": [380, 800], "radius": 55}
+	]
+}

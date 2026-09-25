@@ -119,18 +119,7 @@ func set_cell(cx: int, cy: int, kind: int) -> void:
 
 ## Marks every cell whose centre is within `radius` of `center`.
 func fill_circle(center: Vector2, radius: float, kind: int) -> void:
-	var r2 := radius * radius
-	var x0 := int((center.x - radius) * _inv_cell)
-	var x1 := int((center.x + radius) * _inv_cell)
-	var y0 := int((center.y - radius) * _inv_cell)
-	var y1 := int((center.y + radius) * _inv_cell)
-	for cy in range(y0, y1 + 1):
-		for cx in range(x0, x1 + 1):
-			var c := Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size)
-			if c.distance_squared_to(center) <= r2:
-				set_cell(cx, cy, kind)
-	version += 1
-	edit_version += 1
+	_fill_cells(cells_in_circle(center, radius), kind)
 
 func fill_rect(rect: Rect2, kind: int) -> void:
 	for cy in range(int(rect.position.y * _inv_cell), int(ceil(rect.end.y * _inv_cell))):
@@ -141,29 +130,55 @@ func fill_rect(rect: Rect2, kind: int) -> void:
 
 ## Fills the cells of a closed polygon.
 func fill_polygon(points: PackedVector2Array, kind: int) -> void:
-	var bounds := Rect2(points[0], Vector2.ZERO)
-	for p in points:
-		bounds = bounds.expand(p)
-	for cy in range(int(bounds.position.y * _inv_cell), int(ceil(bounds.end.y * _inv_cell))):
-		for cx in range(int(bounds.position.x * _inv_cell), int(ceil(bounds.end.x * _inv_cell))):
-			if Geometry2D.is_point_in_polygon(Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size), points):
-				set_cell(cx, cy, kind)
-	version += 1
-	edit_version += 1
+	_fill_cells(cells_in_polygon(points), kind)
 
 ## Thick polyline (a wall drawn as connected segments with round joints).
 func draw_polyline(points: PackedVector2Array, thickness: float, kind: int) -> void:
+	_fill_cells(cells_in_polyline(points, thickness), kind)
+
+func _fill_cells(cells: PackedInt32Array, kind: int) -> void:
+	for c in cells:
+		obstacles[c] = kind
+	version += 1
+	edit_version += 1
+
+## Cells (inside the world) whose centres are within `radius` of `center`.
+func cells_in_circle(center: Vector2, radius: float) -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	var r2 := radius * radius
+	for cy in range(maxi(0, int((center.y - radius) * _inv_cell)), mini(height - 1, int((center.y + radius) * _inv_cell)) + 1):
+		for cx in range(maxi(0, int((center.x - radius) * _inv_cell)), mini(width - 1, int((center.x + radius) * _inv_cell)) + 1):
+			var c := Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size)
+			if c.distance_squared_to(center) <= r2:
+				out.append(cy * width + cx)
+	return out
+
+## Cells (inside the world) whose centres are inside a closed polygon.
+func cells_in_polygon(points: PackedVector2Array) -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	var bounds := Rect2(points[0], Vector2.ZERO)
+	for p in points:
+		bounds = bounds.expand(p)
+	for cy in range(maxi(0, int(bounds.position.y * _inv_cell)), mini(height, int(ceil(bounds.end.y * _inv_cell)))):
+		for cx in range(maxi(0, int(bounds.position.x * _inv_cell)), mini(width, int(ceil(bounds.end.x * _inv_cell)))):
+			if Geometry2D.is_point_in_polygon(Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size), points):
+				out.append(cy * width + cx)
+	return out
+
+## Cells (inside the world, each once) covered by a thick polyline: discs of
+## thickness / 2 stamped every half cell along it.
+func cells_in_polyline(points: PackedVector2Array, thickness: float) -> PackedInt32Array:
+	var seen: Dictionary[int, bool] = {}
 	var r := thickness * 0.5
 	for i in points.size() - 1:
 		var a := points[i]
 		var b := points[i + 1]
 		var steps := int(a.distance_to(b) / (cell_size * 0.5)) + 1
 		for s in steps + 1:
-			_stamp(a.lerp(b, float(s) / steps), r, kind)
+			_stamp(a.lerp(b, float(s) / steps), r, seen)
 	if points.size() == 1:
-		_stamp(points[0], r, kind)
-	version += 1
-	edit_version += 1
+		_stamp(points[0], r, seen)
+	return PackedInt32Array(seen.keys())
 
 ## Ground clutter (debris lying on the ground): number of clutter items
 ## covering each cell. Ants crossing cluttered cells are slowed.
@@ -270,15 +285,54 @@ func blocked_cells() -> PackedInt32Array:
 			out.append(i)
 	return out
 
-func _stamp(center: Vector2, radius: float, kind: int) -> void:
+func _stamp(center: Vector2, radius: float, into: Dictionary[int, bool]) -> void:
 	var r2 := radius * radius
 	var rc := int(ceil(radius * _inv_cell))
 	var cc := Vector2i(int(center.x * _inv_cell), int(center.y * _inv_cell))
-	for cy in range(cc.y - rc, cc.y + rc + 1):
-		for cx in range(cc.x - rc, cc.x + rc + 1):
+	for cy in range(maxi(0, cc.y - rc), mini(height, cc.y + rc + 1)):
+		for cx in range(maxi(0, cc.x - rc), mini(width, cc.x + rc + 1)):
 			var c := Vector2((cx + 0.5) * cell_size, (cy + 0.5) * cell_size)
 			if c.distance_squared_to(center) <= r2 + cell_size * cell_size * 0.25:
-				set_cell(cx, cy, kind)
+				into[cy * width + cx] = true
+
+# --- Scenery footprints ----------------------------------------------------------------
+
+## Render-only: how many scenery props (Scenery) cover each cell. Their cells
+## are WALL in `obstacles` like any wall, so the simulation (and the native
+## kernel) need nothing else; renderers use this to draw the prop's own look
+## there instead of stone. Not hashed. Empty until a blocking prop is placed.
+var prop_mask: PackedByteArray = []
+
+## Makes a prop's footprint blocking: every cell that is free (or already
+## under another prop) becomes WALL and is counted in prop_mask. Walls, water
+## and soil are left alone. Returns the cells claimed (for remove_prop_cells).
+func add_prop_cells(cells: PackedInt32Array) -> PackedInt32Array:
+	if prop_mask.is_empty():
+		prop_mask.resize(width * height)
+	var claimed: PackedInt32Array = []
+	for c in cells:
+		if obstacles[c] == Cell.FREE or prop_mask[c] > 0:
+			obstacles[c] = Cell.WALL
+			prop_mask[c] = mini(prop_mask[c] + 1, 255)
+			claimed.append(c)
+	version += 1
+	edit_version += 1
+	return claimed
+
+## Undoes add_prop_cells: cells no other prop covers become free again.
+func remove_prop_cells(cells: PackedInt32Array) -> void:
+	for c in cells:
+		if prop_mask[c] == 0:
+			continue
+		prop_mask[c] -= 1
+		if prop_mask[c] == 0 and obstacles[c] == Cell.WALL:
+			obstacles[c] = Cell.FREE
+	version += 1
+	edit_version += 1
+
+## True if cell i is blocked by a scenery prop (not a plain wall).
+func is_prop_cell(i: int) -> bool:
+	return not prop_mask.is_empty() and prop_mask[i] > 0
 
 ## Bridges: walkable strips laid over obstacles (e.g. a twig across water).
 ## [{"points": PackedVector2Array, "width": float}], for renderers.

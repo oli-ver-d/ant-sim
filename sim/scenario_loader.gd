@@ -7,6 +7,8 @@ extends RefCounted
 ##   "colonies":  [{"species": "...", "nest": [x, y], "nest_params": {}, "population": {"<caste>": n}}],
 ##   "food":      [{"type": "food_pile", "pos": [x, y], ...type params}],
 ##   "obstacles": [shape, ...]              (see ScenarioEvents for shapes)
+##   "scenery":   [{"type": "rock" | "log" | "plant" | "grass", ...}]   surface props
+##                (see Scenery and the PropType scripts in sim/scenery)
 ##   "debris":    [{"type": "twig" | "pebble", "pos": [x, y], ...}]  (see Debris)
 ##   "events":    [{"t": seconds, "type": ..., ...}]   (see ScenarioEvents)
 ##   "max_agents": {"surface": n, "nest": n}   agents per layer, beyond which
@@ -40,6 +42,8 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 	var sim := Simulation.new(config, registry, seed_value)
 	for ob: Dictionary in data.get("obstacles", []):
 		ScenarioEvents.add_obstacle(sim.world, ob)
+	for prop: Dictionary in data.get("scenery", []):
+		ScenarioEvents.add_scenery(sim, prop)
 	for food: Dictionary in data.get("food", []):
 		sim.add_food_source(food["type"], food)
 	for d: Dictionary in data.get("debris", []):

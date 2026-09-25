@@ -1,7 +1,8 @@
 class_name Registry
 extends RefCounted
 ## Maps string ids to the pluggable pieces of the simulation: behaviour states,
-## food source types, item types, nest types and species definitions.
+## food source types, item types, nest types, scenery types and species
+## definitions.
 ##
 ## The core registers its generic pieces; each species module registers its own
 ## through res://species/<module>/register.gd, which is discovered by scanning
@@ -21,6 +22,8 @@ var food_source_types: Dictionary[String, Script] = {}
 var item_types: Dictionary[String, Script] = {}
 ## NestType scripts, instantiated once per colony.
 var nest_types: Dictionary[String, Script] = {}
+## Scenery prop types (PropType scripts), instantiated once per Scenery.
+var scenery_types: Dictionary[String, Script] = {}
 ## Species definitions (SpeciesDef resources) by species id.
 var species: Dictionary[String, Resource] = {}
 ## Renderer scripts keyed by "<kind>:<type id>", e.g. "food:food_pile",
@@ -52,6 +55,9 @@ func register_item_type(id: String, script: Script) -> bool:
 
 func register_nest_type(id: String, script: Script) -> bool:
 	return _add(nest_types, "nest type", id, script)
+
+func register_scenery_type(id: String, script: Script) -> bool:
+	return _add(scenery_types, "scenery type", id, script)
 
 func register_species(id: String, def: Resource) -> bool:
 	return _add(species, "species", id, def)

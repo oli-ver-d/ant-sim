@@ -3,8 +3,9 @@ extends Node2D
 ## Builds and owns all renderers for one layer of a Simulation.
 ##
 ## The surface (layer 0), bottom to top: ground, wet ground (rain),
-## obstacles, bridges, nests, pheromone glow, food, ground items (debris),
-## ants, carried items, ants riding on carried items, falling rain, debug.
+## obstacles, scenery bases, bridges, nests, pheromone glow, food, ground
+## items (debris), ants, carried items, ants riding on carried items, scenery
+## canopy, falling rain, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
 ##
@@ -75,6 +76,11 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 		obstacles.bind(sim)
 		add_child(obstacles)
 
+		# Scenery on the ground (rock and log bodies, plant stems).
+		var scenery_base := SceneryRenderer.new()
+		scenery_base.bind(sim, SceneryRenderer.Pass.BASE)
+		add_child(scenery_base)
+
 		var bridges := BridgeRenderer.new()
 		bridges.bind(sim)
 		add_child(bridges)
@@ -125,6 +131,11 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	# Nest things carried over the ants (e.g. brood in a nurse's jaws).
 	_top_layer = Node2D.new()
 	add_child(_top_layer)
+	# Plant tops and grass blades hang over the ants.
+	if surface:
+		var canopy := SceneryRenderer.new()
+		canopy.bind(sim, SceneryRenderer.Pass.CANOPY)
+		add_child(canopy)
 	if rain_renderer != null:
 		add_child(rain_renderer)
 

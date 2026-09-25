@@ -1,9 +1,11 @@
 class_name ObstacleRenderer
 extends Sprite2D
 ## Draws the obstacle grid (walls, water) with obstacle.gdshader. The grid is
-## uploaded as a two-channel mask texture (R wall, G water), rebuilt when the
-## world's version changes. Cells under a bridge keep their water (or wall)
-## look; BridgeRenderer draws the bridge on top.
+## uploaded as a three-channel mask texture (R wall, G water, B scenery prop),
+## rebuilt when the world's version changes. Cells under a bridge keep their
+## water (or wall) look; BridgeRenderer draws the bridge on top. Cells blocked
+## by a scenery prop are not drawn as stone (R stays 0): SceneryRenderer draws
+## the prop there.
 
 var sim: Simulation
 ## Layer whose obstacles are drawn.
@@ -25,14 +27,21 @@ func _process(_delta: float) -> void:
 		return
 	_version = sim.layers[layer].world.version
 	var world := sim.layers[layer].world
+	texture = ImageTexture.create_from_image(Image.create_from_data(world.width, world.height, false, Image.FORMAT_RGB8, mask_bytes(world)))
+
+## The RGB8 mask for a world: R wall, G water, B scenery prop (one texel per cell).
+static func mask_bytes(world: World) -> PackedByteArray:
 	var bytes := PackedByteArray()
-	bytes.resize(world.obstacles.size() * 2)
+	bytes.resize(world.obstacles.size() * 3)
+	var props := not world.prop_mask.is_empty()
 	for i in world.obstacles.size():
 		var kind := world.obstacles[i]
 		if kind == World.Cell.FREE:
 			kind = world.bridged.get(i, kind)
-		if kind == World.Cell.WALL:
-			bytes[i * 2] = 255
+		if props and world.prop_mask[i] > 0:
+			bytes[i * 3 + 2] = 255
+		elif kind == World.Cell.WALL:
+			bytes[i * 3] = 255
 		elif kind == World.Cell.WATER:
-			bytes[i * 2 + 1] = 255
-	texture = ImageTexture.create_from_image(Image.create_from_data(world.width, world.height, false, Image.FORMAT_RG8, bytes))
+			bytes[i * 3 + 1] = 255
+	return bytes

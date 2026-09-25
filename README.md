@@ -85,7 +85,7 @@ sim/          core engine (no rendering, no species-specific code)
   sim_config.gd       global tunables (defaults; overrides in default_config.tres)
   species_def.gd, caste_def.gd, pheromone_channel_def.gd   species data Resources
   colony.gd           a SpeciesDef instance: nest, stats, namespaced channels, cached params
-  registry.gd         string id -> behaviours, food/item/nest types, species, renderers
+  registry.gd         string id -> behaviours, food/item/nest types, scenery types, species, renderers
   core_module.gd      registers the generic pieces below
   pheromone_field.gd  named channels, lazy evaporation, banded diffusion
   steering.gd         three-sensor model, obstacle avoidance, movement (and move_to for tunnels)
@@ -97,6 +97,8 @@ sim/          core engine (no rendering, no species-specific code)
   router.gd           A* routes for new tunnels through soil (SimLayer.route)
   traffic_map.gd      decaying per-cell count of the ants passing
   scenario_loader.gd  JSON scenario -> Simulation
+  scenery/            Scenery (surface props), Prop, PropType + core types: RockProp, LogProp,
+                      PlantProp (plant, grass); only blocking footprints reach the World
   behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
                       dig, carry_spoil, go_up; for nests with a queen: queen, nest_role, nurse,
                       tend_queen, carry_spent
@@ -316,12 +318,20 @@ JSON files in `scenarios/`. Simulation content:
 - `food`: type + type-specific params
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
   `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig
+- `scenery`: surface props: `{"type": "rock", "center": [x, y], "radius": 40, "flat": 0.8}`,
+  `{"type": "log", "points": [[x, y], ...], "width": 30}`, `{"type": "plant", "center": [x, y],
+  "radius": 60, "stem": 6}` (the stem blocks, the canopy hangs over the ants), `{"type": "grass",
+  ...}` (canopy only). Shapes come from each prop's own seeded RNG, never the simulation's, so
+  non-blocking scenery never changes a run; blocking footprints are walls to the ants (and
+  `World.prop_mask`, so they are drawn as the prop, not stone). Optional `"name"`. Placeholder
+  looks for now (M15a); see `docs/plan_M15.md`
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it
 - `max_agents`: `{"surface": n, "nest": n}` agents per layer, beyond which colonies grow as
   an abstract population (see "Layers, portals and digging")
 - `events`: timed (simulated seconds): `spawn_food`, `add_obstacle`, `remove_obstacle`,
-  `add_colony`, `rain` (`area` rect or circle, whole world if omitted; `wash_half_life` makes
+  `add_scenery`, `remove_scenery` (by `"name"` or `"at": [x, y]`), `add_colony`, `rain` (`area`
+  rect or circle, whole world if omitted; `wash_half_life` makes
   trails fade over a moment instead of vanishing), `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
   lands on the strongest spots of a trail, wherever it emerged); see `sim/scenario_events.gd`
 
