@@ -80,7 +80,7 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 		add_child(bridges)
 	else:
 		var soil := SoilRenderer.new()
-		soil.bind(sim.layers[layer].world, ground_seed)
+		soil.bind(sim.layers[layer].world, ground_seed, sim, sim.layers[layer])
 		add_child(soil)
 
 	# Nests sit on the ground, under the glow of the trails leading into them.

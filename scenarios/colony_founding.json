@@ -1,6 +1,6 @@
 {
 	"name": "colony_founding",
-	"description": "From a queen and a handful of minims sealed in a founding chamber to a sprawling nest of thousands: the first dig up to the surface, foraging, brood care, gardens filling chamber after chamber and a growing heap of dug soil. Split view, several hours in about 80 s.",
+	"description": "From a queen and a handful of minims sealed in a founding chamber to a sprawling nest of thousands: the ragged first dig up to the surface, foraging, brood care, galleries branching and gardens filling lobed chambers off them, busy tunnels widening into highways with two-way traffic, and a second and third entrance opening as the colony grows, each with its own heap of dug soil. Split view, about two hours in 80 s.",
 	"seed": 7,
 	"duration": 80,
 	"colonies": [
@@ -15,6 +15,7 @@
 				"chamber_capacity": 90,
 				"max_chambers": 30,
 				"max_population": 6000,
+				"entrances": {"at": [900, 2200], "spacing": 150},
 				"brood_rate": 0.003, "digest_rate": 0.03, "garden_reserve": 0,
 				"brood_reserve": 8,
 				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 40, "garden_life": 1500},
@@ -59,9 +60,10 @@
 		{"t": 0, "tpf": 0.5},
 		{"t": 7, "tpf": 0.5},
 		{"t": 12, "tpf": 4},
-		{"t": 20, "tpf": 30},
-		{"t": 30, "tpf": 70},
-		{"t": 66, "tpf": 80},
+		{"t": 20, "tpf": 28},
+		{"t": 30, "tpf": 52},
+		{"t": 38, "tpf": 78},
+		{"t": 66, "tpf": 86},
 		{"t": 71, "tpf": 3},
 		{"t": 80, "tpf": 2}
 	],
@@ -73,8 +75,8 @@
 			{"t": 60, "pos": [540, 1000], "zoom": 1.0}
 		],
 		"nest": [
-			{"t": 0, "pos": [690, 700], "zoom": 7.5},
-			{"t": 9, "pos": [690, 700], "zoom": 6.0},
+			{"t": 0, "pos": [705, 675], "zoom": 7.5},
+			{"t": 9, "pos": [705, 675], "zoom": 6.0},
 			{"t": 16, "pos": [700, 690], "zoom": 3.2},
 			{"t": 26, "fit": "excavation", "margin": 70, "max_zoom": 2.6}
 		]

@@ -6,7 +6,9 @@ extends Behaviour
 ## for `dig_time` seconds per bite. Each bite comes out as a spoil pellet to
 ## carry up (-> `on_spoil`); while the nest has no open entrance the soil is
 ## pressed into the walls instead and the ant keeps digging. With no job to
-## take, or after `give_up_after` seconds without a bite -> `on_idle`.
+## take, or after `give_up_after` seconds without a bite -> `on_idle` (and the
+## plan hears of it: a job everyone gives up on is abandoned, see
+## ExcavationPlan.report_stall).
 ##
 ## params: dig_time (s, 2.5), on_spoil ("carry_spoil"), on_idle ("linger"),
 ##         speed_factor (1.0), give_up_after (s, 90)
@@ -38,6 +40,8 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		sim.scratch_i[i] = job.id
 		sim.scratch_f0[i] = 0.0
 	if sim.timer[i] > float(p.get("give_up_after", 90.0)):
+		# No bite for a long while: tell the plan (a job nobody can dig is abandoned).
+		plan.report_stall(job)
 		return p.get("on_idle", "linger")
 
 	var move_speed := sim.speed[i] * float(p.get("speed_factor", 1.0))

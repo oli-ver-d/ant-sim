@@ -21,7 +21,8 @@ extends RefCounted
 ##
 ## params: check_every (s, 20), threshold (45), sustain (3), grow (1.35),
 ##         max_radius (14), section (world units, 50), bypass (1.8),
-##         max_bypasses (6), priority (plan priority of the widening jobs, -0.5),
+##         max_bypasses (6), priority (plan priority of the widening jobs: 35, after
+##         chambers, which the nest needs first),
 ##         half_life (s, the traffic map's, 60), lanes (SimLayer.lanes, 0.8)
 
 class Section:
@@ -50,7 +51,7 @@ var max_radius: float = 14.0
 var section_length: float = 50.0
 var bypass: float = 1.8
 var max_bypasses: int = 6
-var priority: float = -0.5
+var priority: float = 35.0
 ## Widenings and bypasses planned so far.
 var widened: int = 0
 var bypasses: int = 0

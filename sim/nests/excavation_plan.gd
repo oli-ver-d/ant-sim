@@ -5,9 +5,10 @@ extends RefCounted
 ## radius per point, an irregular blob of lobes, or any cell set), dug
 ## starting from `origin`, a point in space that is already open (the end of
 ## the tunnel it branches off, the rim of the chamber it leaves from). A job
-## is open once its origin cell is free, so a chamber waits for the tunnel
-## leading to it. Diggers take the open job with the lowest `priority` that
-## has room for them (max_diggers), walk to its origin (a nav field per job),
+## is open once a cell at its origin is free and reachable (is_open), so a
+## chamber waits for the tunnel leading to it. Diggers take the open job with
+## the lowest `priority` that has room for them (max_diggers), walk to its
+## origin (a nav field per job),
 ## then to its digging face (a small local field over the job's box, toward
 ## cells next to the job's remaining soil) and bite one of the job's soil
 ## cells beside them. Each cell has a rank (DigShape: progress along a path,
@@ -47,7 +48,8 @@ class Job:
 	var remaining: int = 0
 	var diggers: int = 0
 	var done: bool = false
-	## Nav field toward the origin (removed when done).
+	## Nav field toward the origin: made when the job is first taken (pick_job),
+	## removed when it is done.
 	var nav_field: int = -1
 	## Local field: distance (NavGrid units) to a cell where a digger can bite,
 	## over the cells of `box` (row-major), rebuilt when a dig lands in the box.
@@ -55,6 +57,10 @@ class Job:
 	var local: PackedInt32Array = []
 	var local_log: int = -1
 	var open_portal: Portal = null
+	## Give-ups in a row without progress (see report_stall), and whether it
+	## was abandoned.
+	var stalls: int = 0
+	var abandoned: bool = false
 	## Free-form tags for whoever planned it (e.g. "gallery", "widening").
 	var tags: Dictionary = {}
 
@@ -75,6 +81,10 @@ var rough_seed: int = 0
 ## cell is e times less likely to be bitten. 0 = always the best ranked.
 var ragged: float = 6.0
 var jobs: Array[Job] = []
+## A nav field toward a point known to be connected to the nest (NestType
+## sets it): a job opens only once its origin is reachable in it (-1: no check).
+var reach_field: int = -1
+const STALLS_TO_ABANDON := 4
 ## Soil cell -> id of the job it belongs to.
 var _cell_job: Dictionary[int, int] = {}
 ## Soil cell -> its rank in that job (see DigShape).
@@ -149,8 +159,6 @@ func add_shape_job(job_name: String, origin: Vector2, shape: DigShape, priority:
 	jobs.append(job)
 	if job.remaining == 0:
 		_finish(job)
-	else:
-		job.nav_field = nav.set_target_point(StringName("job:%d" % job.id), origin)
 	return job
 
 ## Every soil cell claimed by an unfinished job (cell -> job id), e.g. for
@@ -164,8 +172,51 @@ func open_portal_when_done(job: Job, portal: Portal) -> void:
 	if job.done:
 		portal.open = true
 
+## A job is open once a cell around its origin (the 3x3 block: a stone or the
+## job's own soil may sit right on the point) is open and reachable from the
+## nest (reach_field): a pocket freed by another job's rough edge may not
+## connect to the nest yet.
 func is_open(job: Job) -> bool:
-	return not job.done and world.obstacles[world.cell_at(job.origin)] == World.Cell.FREE
+	if job.done:
+		return false
+	for c in _origin_cells(job):
+		if world.obstacles[c] == World.Cell.FREE and (reach_field < 0 or nav.distance(reach_field, world.cell_center(c)) < INF):
+			return true
+	return false
+
+## The cells around a job's origin (its nav field's targets).
+func _origin_cells(job: Job) -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	var o := world.cell_at(job.origin)
+	if o < 0:
+		return out
+	var ox := o % world.width
+	@warning_ignore("integer_division")
+	var oy := o / world.width
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var x := ox + dx
+			var y := oy + dy
+			if x >= 0 and y >= 0 and x < world.width and y < world.height:
+				out.append(y * world.width + x)
+	return out
+
+## A digger gave up on `job` (it could not reach or bite its face). After
+## STALLS_TO_ABANDON give-ups in a row with no progress the job is abandoned:
+## its remaining cells stay soil (e.g. a cell only reachable through rock),
+## so they no longer hold up the digging that waits on it.
+func report_stall(job: Job) -> void:
+	if job.done:
+		return
+	job.stalls += 1
+	if job.stalls >= STALLS_TO_ABANDON:
+		for cell in job.cells:
+			if _cell_job.get(cell, -1) == job.id:
+				_cell_job.erase(cell)
+				_cell_rank.erase(cell)
+		job.remaining = 0
+		job.abandoned = true
+		_finish(job)
 
 ## Soil cells left in unfinished jobs.
 func remaining() -> int:
@@ -184,6 +235,10 @@ func pick_job() -> Job:
 			continue
 		if best == null or job.priority < best.priority:
 			best = job
+	# Its nav field toward the origin is made when it is first taken (planned
+	# jobs waiting for their way in cost nothing to keep up to date).
+	if best != null and best.nav_field < 0:
+		best.nav_field = nav.set_target(StringName("job:%d" % best.id), _origin_cells(best))
 	return best
 
 func job_by_id(id: int) -> Job:
@@ -195,23 +250,29 @@ func dig_cell(target: Job, cell: int, amount: float = -1.0) -> float:
 	if not world.is_soil(cell):
 		return 0.0
 	var take := _dig_one(target, cell, bite if amount < 0.0 else amount)
-	if amount < 0.0 and cells_per_bite > 1 and not target.done:
-		# More of the face beside it, nearest the bitten cell first.
-		var extra := 0
+	if amount < 0.0 and cells_per_bite > 1 and not target.done and not world.is_soil(cell):
+		# More of the face beside it, nearest the bitten cell first, each
+		# sharing an edge with a cell this bite opened (a cell touching open
+		# space only at a corner would open a pocket ants can't get into).
+		var opened: PackedInt32Array = [cell]
 		var cx := cell % world.width
 		@warning_ignore("integer_division")
 		var cy := cell / world.width
-		for k in 8:
-			if extra >= cells_per_bite - 1:
+		for k in (8 if cells_per_bite <= 9 else _BITE_DX.size()):
+			if opened.size() >= cells_per_bite:
 				break
-			var nx := cx + _DX[k]
-			var ny := cy + _DY[k]
+			var nx := cx + _BITE_DX[k]
+			var ny := cy + _BITE_DY[k]
 			if nx < 0 or ny < 0 or nx >= world.width or ny >= world.height:
 				continue
 			var n := ny * world.width + nx
-			if _cell_job.get(n, -1) == target.id and _free_beside(n):
-				take += _dig_one(target, n, bite)
-				extra += 1
+			if _cell_job.get(n, -1) != target.id:
+				continue
+			if not (opened.has(n - 1) or opened.has(n + 1) or opened.has(n - world.width) or opened.has(n + world.width)):
+				continue
+			take += _dig_one(target, n, bite)
+			if not world.is_soil(n):
+				opened.append(n)
 	return take
 
 func _dig_one(target: Job, cell: int, amount: float) -> float:
@@ -221,18 +282,12 @@ func _dig_one(target: Job, cell: int, amount: float) -> float:
 	if world.dig(cell, take + 1e-5):
 		if _cell_job.get(cell, -1) == target.id:
 			target.remaining -= 1
+			target.stalls = 0
 			if target.remaining <= 0:
 				_finish(target)
 		_cell_job.erase(cell)
 		_cell_rank.erase(cell)
 	return take
-
-## True if a free cell touches cell c (it is on the digging face).
-func _free_beside(c: int) -> bool:
-	for nb: int in [c - 1, c + 1, c - world.width, c + world.width]:
-		if nb >= 0 and nb < world.obstacles.size() and world.obstacles[nb] == World.Cell.FREE:
-			return true
-	return false
 
 ## Where a digger at `at` inside the job's box should step next toward the
 ## digging face: `at` itself if it can bite from here, or Vector2.INF if the
@@ -291,7 +346,7 @@ func bite_cell(target: Job, at: Vector2, rng: RandomNumberGenerator = null) -> i
 		if nx < 0 or ny < 0 or nx >= world.width or ny >= world.height:
 			continue
 		var n := ny * world.width + nx
-		if _cell_job.get(n, -1) != target.id:
+		if _cell_job.get(n, -1) != target.id or not _corner_open(cx, cy, k):
 			continue
 		var r: float = _cell_rank.get(n, 0.0)
 		found.append(n)
@@ -320,6 +375,10 @@ func is_job_cell(target: Job, cell: int) -> bool:
 
 const _DX: PackedInt32Array = [1, -1, 0, 0, 1, 1, -1, -1]
 const _DY: PackedInt32Array = [0, 0, 1, -1, 1, -1, 1, -1]
+## Cells a bite may take beside the bitten one: the 8 around it, then the
+## ring beyond (for small cells, see NestType: more cells per bite).
+const _BITE_DX: PackedInt32Array = [1, -1, 0, 0, 1, 1, -1, -1, 2, -2, 0, 0, 2, 2, -2, -2, 1, -1, 1, -1, 2, 2, -2, -2]
+const _BITE_DY: PackedInt32Array = [0, 0, 1, -1, 1, -1, 1, -1, 0, 0, 2, -2, 1, -1, 1, -1, 2, 2, -2, -2, 2, -2, 2, -2]
 
 func _free_local(target: Job, x: int, y: int) -> bool:
 	return world.obstacles[(y + target.box.position.y) * world.width + x + target.box.position.x] == World.Cell.FREE
@@ -355,7 +414,7 @@ func _refresh_local(target: Job) -> void:
 				var ny := y + target.box.position.y + _DY[k]
 				if nx < 0 or ny < 0 or nx >= world.width or ny >= world.height:
 					continue
-				if _cell_job.get(ny * world.width + nx, -1) == target.id:
+				if _cell_job.get(ny * world.width + nx, -1) == target.id and _corner_open(x + target.box.position.x, y + target.box.position.y, k):
 					d[y * w + x] = 0
 					queue.append(y * w + x)
 					break
@@ -384,7 +443,7 @@ func _finish(target: Job) -> void:
 	finished.append(target.id)
 	nav.remove_target(StringName("job:%d" % target.id))
 	target.nav_field = -1
-	if target.open_portal != null:
+	if target.open_portal != null and not target.abandoned:
 		target.open_portal.open = true
 
 ## Fingerprint for Simulation.state_hash().
@@ -395,3 +454,21 @@ func hash_into(ctx: HashingContext) -> void:
 		state.append(job.diggers)
 	if not state.is_empty():
 		ctx.update(state.to_byte_array())
+
+## True if neighbour k (of _DX/_DY) of cell (cx, cy) can be bitten from it:
+## any side neighbour; a corner one only if the cell between on either side
+## is open (never through two soil cells meeting at a corner, which would
+## leave an opening ants can't walk into).
+func _corner_open(cx: int, cy: int, k: int) -> bool:
+	if k < 4:
+		return true
+	return world.obstacles[cy * world.width + cx + _DX[k]] == World.Cell.FREE \
+			or world.obstacles[(cy + _DY[k]) * world.width + cx] == World.Cell.FREE
+
+## Drops a job that will not be needed (e.g. its way in was never dug): its
+## remaining cells stay soil and it counts as done (abandoned).
+func cancel(job: Job) -> void:
+	if job.done:
+		return
+	job.stalls = STALLS_TO_ABANDON - 1
+	report_stall(job)

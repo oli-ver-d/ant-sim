@@ -71,6 +71,10 @@ class Chamber:
 	## The gallery its capillary leaves from (-1: none), and how far along it.
 	var gallery: int = -1
 	var attach_s: float = 0.0
+	## Its digging was abandoned before it was mostly open: not a chamber.
+	var failed: bool = false
+	## Simulated time it was planned (set by the nest).
+	var planned_at: float = 0.0
 
 class Gallery:
 	var index: int
@@ -82,7 +86,14 @@ class Gallery:
 	## The gallery it branches off (-1: the royal chamber) and where along it.
 	var parent: int = -1
 	var attach_s: float = 0.0
+	## Its digging was abandoned before it was mostly open: not a chamber.
+	var failed: bool = false
+	## Simulated time it was planned (set by the nest).
+	var planned_at: float = 0.0
 	var job: int = -1
+	## Its job was cancelled before it was dug (its way in never opened): no
+	## more chambers or branches go on it.
+	var cancelled: bool = false
 	## Junction slots taken (slot * 2 + side).
 	var used: Dictionary[int, bool] = {}
 
@@ -336,10 +347,16 @@ func _inner(cell: int, k: int) -> bool:
 ## links after). With `carve` everything is dug out at once (a nest that
 ## starts established).
 func plan_chamber(plan: ExcavationPlan, priority: float, carve: bool = false) -> Chamber:
-	if galleries.is_empty() or _free_sites() < 3:
+	# A new gallery when junctions run short, but not while two are still
+	# being dug (the nest would sprawl faster than it can dig).
+	var digging := 0
+	for g in galleries:
+		if g.job >= 0 and not plan.job_by_id(g.job).done:
+			digging += 1
+	if galleries.is_empty() or (_free_sites() < 3 and digging < 2):
 		_plan_gallery(plan, priority - 0.6, carve)
 	var ch := _site(plan)
-	if ch == null:
+	if ch == null and digging < 2:
 		_plan_gallery(plan, priority - 0.6, carve)
 		ch = _site(plan)
 	if ch == null:
@@ -364,6 +381,8 @@ func _slots(g: Gallery) -> PackedFloat32Array:
 func _free_sites() -> int:
 	var n := 0
 	for g in galleries:
+		if g.cancelled:
+			continue
 		if g.level == Level.MAIN or g.level == Level.SECONDARY:
 			n += _slots(g).size() * 2 - g.used.size()
 		elif g.level == Level.STUB and not g.used.has(-1):
@@ -372,12 +391,14 @@ func _free_sites() -> int:
 
 ## A garden chamber at a free junction that fits, or null. Candidates are
 ## tried in a seeded order: stub ends first, then slots on the galleries
-## further out; ones that don't fit are marked used.
+## nearer the middle; ones that don't fit are marked used.
 func _site(plan: ExcavationPlan) -> Chamber:
 	var cands: Array[Vector4] = []  # (gallery, slot key, s, side), sorted by score in keys
 	var keys: PackedFloat32Array = []
 	var centre := royal().centre
 	for g in galleries:
+		if g.cancelled:
+			continue
 		if g.level == Level.STUB:
 			if not g.used.has(-1):
 				cands.append(Vector4(g.index, -1, g.length(), 0))
@@ -563,7 +584,8 @@ func _add_gallery(level: int, pts: PackedVector2Array, radii: PackedFloat32Array
 	if carve:
 		world.carve_path(pts, radii, rough, rough_seed)
 	else:
-		g.job = plan.add_path_job("gallery%d" % g.index, pts[0], pts, radii, priority, 6).id
+		# Galleries are long: room for more diggers than a capillary.
+		g.job = plan.add_path_job("gallery%d" % g.index, pts[0], pts, radii, priority, 6 if level >= Level.CAPILLARY else 10).id
 	return g
 
 ## Plans a gallery: a main one out of the royal chamber (up to max_mains,
@@ -643,6 +665,8 @@ func _pick_parent_gallery() -> Gallery:
 	var best: Gallery = null
 	var best_key := -INF
 	for g in galleries:
+		if g.cancelled:
+			continue
 		if g.level != Level.MAIN and g.level != Level.SECONDARY:
 			continue
 		# Spread the branching: galleries with fewer branches yet are likelier.
@@ -748,13 +772,25 @@ func route_tunnel(from: Vector2, to: Vector2, plan: ExcavationPlan) -> PackedVec
 		pts = PackedVector2Array([from, to])
 	return pts
 
-## Marks chambers whose digging is finished. Returns how many became dug.
+## Marks chambers whose digging is finished (or failed, see Chamber.failed).
+## Returns how many became dug.
 func update_dug(plan: ExcavationPlan) -> int:
 	var n := 0
 	for c in list:
-		if not c.dug and c.job >= 0 and plan.job_by_id(c.job).done:
-			c.dug = true
-			n += 1
+		if c.dug or c.failed or c.job < 0:
+			continue
+		var job := plan.job_by_id(c.job)
+		if not job.done:
+			continue
+		# Abandoned (its face couldn't be reached): a chamber if mostly open.
+		var open := 0
+		for cell in c.cells:
+			open += 1 if world.obstacles[cell] == World.Cell.FREE else 0
+		if job.abandoned and open * 2 < c.cells.size():
+			c.failed = true
+			continue
+		c.dug = true
+		n += 1
 	return n
 
 ## True if the tunnels and chambers form at least one loop (a cross-link
@@ -770,9 +806,10 @@ func has_loop() -> bool:
 func layout_rng() -> RandomNumberGenerator:
 	return _rng
 
-## The point on a gallery (or the royal chamber's centre) nearest `at`, for a
-## new tunnel to leave from.
-func nearest_tunnel_point(at: Vector2) -> Vector2:
+## The point on a gallery nearest `at` that is dug already (and, given the
+## plan, reachable from the nest; else the royal chamber's centre), for a new
+## tunnel to leave from.
+func nearest_tunnel_point(at: Vector2, plan: ExcavationPlan = null) -> Vector2:
 	var best := royal().centre
 	var best_d := at.distance_to(best)
 	for g in galleries:
@@ -781,7 +818,54 @@ func nearest_tunnel_point(at: Vector2) -> Vector2:
 		for k in g.points.size() - 1:
 			var q := Geometry2D.get_closest_point_to_segment(at, g.points[k], g.points[k + 1])
 			var d := q.distance_to(at)
-			if d < best_d:
+			if d < best_d and not world.is_blocked(q) and (plan == null or plan.reach_field < 0
+					or plan.nav.distance(plan.reach_field, q) < INF):
 				best_d = d
 				best = q
 	return best
+
+## Reconnects digging that can no longer open (its way in was a gallery that
+## was abandoned or never dug): galleries whose start can't open while the
+## one they branch off is finished are cancelled, and a chamber whose way in
+## can't open gets a new capillary from the nearest dug tunnel. Returns how
+## many chambers were reconnected.
+func rescue(plan: ExcavationPlan) -> int:
+	for g in galleries:
+		if g.cancelled or g.job < 0:
+			continue
+		var job := plan.job_by_id(g.job)
+		if job.done:
+			# Abandoned partway (see ExcavationPlan.report_stall): not a host.
+			g.cancelled = job.abandoned
+			continue
+		if plan.is_open(job):
+			continue
+		var parent_done := g.parent < 0 or galleries[g.parent].job < 0 or plan.job_by_id(galleries[g.parent].job).done
+		if parent_done:
+			plan.cancel(job)
+			g.cancelled = true
+	var n := 0
+	for c in list:
+		if c.dug or c.failed or c.job < 0:
+			continue
+		var chamber := plan.job_by_id(c.job)
+		if chamber.done or plan.is_open(chamber):
+			continue
+		var tunnel := plan.job_by_id(c.tunnel_job)
+		if tunnel != null and not tunnel.done and plan.is_open(tunnel):
+			continue
+		# Still waiting for its gallery to be dug that far?
+		if c.gallery >= 0 and not galleries[c.gallery].cancelled and galleries[c.gallery].job >= 0:
+			var host := plan.job_by_id(galleries[c.gallery].job)
+			if not host.done:
+				continue
+		if tunnel != null and not tunnel.done:
+			plan.cancel(tunnel)
+		var from := nearest_tunnel_point(c.door, plan)
+		var into := chamber.origin
+		var pts := route_tunnel(from, into, plan)
+		var w := tunnel_radius * CAPILLARY_WIDTH
+		c.tunnel_job = plan.add_path_job("tunnel%d_again" % c.index, from, pts, _taper(pts, w, w * 0.9), chamber.priority - 0.5, 6).id
+		c.tunnel = pts
+		n += 1
+	return n

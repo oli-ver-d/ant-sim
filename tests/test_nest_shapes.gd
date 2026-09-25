@@ -252,3 +252,43 @@ func test_chamber_lookup_matches_shape() -> void:
 	check_eq(layout.chamber_at(nest.queen_spot()), 0, "queen in the royal chamber")
 	check(layout.chamber_at(nest.pile_centre(LeafcutterBrood.Pile.LARVAE)) >= 0, "larvae in a chamber")
 	check(nest.garden.chamber_count[0] > 20, "a founding garden")
+
+## Digging never opens a pocket ants can't walk into (a cell open to the rest
+## only at a corner), and jobs nobody can finish are abandoned, not waited on.
+func test_digging_leaves_no_unreachable_pockets() -> void:
+	var sim := ScenarioLoader.load_simulation("res://tests/fixtures/scenarios/shapes_demo.json", _default_registry, _config)
+	for t in 150 * _config.tick_rate:
+		sim.step()
+	var nest := sim.colonies[0].nest
+	var nav := sim.layers[1].nav()
+	nav.update()
+	var w := sim.layers[1].world
+	var cut_off := 0
+	var free := 0
+	for c in w.obstacles.size():
+		if w.obstacles[c] == World.Cell.FREE:
+			free += 1
+			if nav.distance(nest.plan.reach_field, w.cell_center(c)) == INF:
+				cut_off += 1
+	check(free > 450, "dug a good deal (%d cells)" % free)
+	check_eq(cut_off, 0, "every open cell reachable from the nest")
+
+func test_stalled_jobs_are_abandoned() -> void:
+	var sim := _sim({"open": false, "carve": [{"center": [200, 240], "radius": 14}],
+			"plan": [{"name": "entrance", "origin": [200, 240], "from": [200, 226], "to": [200, 200], "radius": 7}]})
+	var plan := sim.colonies[0].nest.excavation_plan()
+	var job := plan.jobs[0]
+	for n in ExcavationPlan.STALLS_TO_ABANDON - 1:
+		plan.report_stall(job)
+	check(not job.done, "still waited on")
+	plan.dig_cell(job, job.cells[0], 0.01)
+	var before := job.stalls
+	for c in job.cells:
+		if plan.world.is_soil(c):
+			plan.dig_cell(job, c, 100.0)
+			break
+	check(job.stalls < before or job.done, "progress resets the count")
+	for n in ExcavationPlan.STALLS_TO_ABANDON:
+		plan.report_stall(job)
+	check(job.done and job.abandoned, "abandoned after repeated give-ups")
+	check(not sim.colonies[0].nest.has_entrance(), "an abandoned entrance job opens no portal")

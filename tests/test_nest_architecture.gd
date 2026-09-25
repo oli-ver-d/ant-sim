@@ -173,3 +173,27 @@ func test_colony_founding_grows() -> void:
 	check(colony.total_population() >= 3000, "grew to thousands (%d)" % colony.total_population())
 	check(nest.chambers_layout.dug_count() >= 20, "chambers dug (%d)" % nest.chambers_layout.dug_count())
 	check(nest.chambers_layout.has_loop(), "with loops")
+
+## A chamber whose way in hangs off a gallery that was abandoned gets a new
+## capillary from the nearest dug tunnel (FungusChambers.rescue).
+func test_orphaned_digging_is_reconnected() -> void:
+	var sim := _nest_sim(6)
+	var nest := sim.colonies[0].nest as FungusNest
+	var layout := nest.chambers_layout
+	var plan := nest.plan
+	var ch: FungusChambers.Chamber = null
+	for n in 12:
+		var c := layout.plan_chamber(plan, 50.0 + n)
+		if c != null and layout.galleries[c.gallery].job >= 0 and not plan.is_open(plan.job_by_id(c.tunnel_job)):
+			ch = c
+			break
+	check(ch != null, "a chamber waiting on a gallery still to dig")
+	if ch == null:
+		return
+	var host := layout.galleries[ch.gallery]
+	plan.cancel(plan.job_by_id(host.job))
+	check(layout.rescue(plan) >= 1, "reconnected")
+	var tunnel := plan.job_by_id(ch.tunnel_job)
+	check(tunnel.name.ends_with("_again"), "a new capillary (%s)" % tunnel.name)
+	check(plan.is_open(tunnel), "which can be dug now")
+	check(host.cancelled, "the abandoned gallery takes no more chambers")

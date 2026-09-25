@@ -115,13 +115,21 @@ var _entrance_planned: bool = false
 ## {"at": [900, 2200], "spacing": 150}), and how far apart entrances are.
 var entrance_steps: PackedInt32Array = []
 var entrance_spacing: float = 150.0
+var _entrance_retry_at: float = 0.0
 var _role_timer: float = 0.0
+var _plan_retry_at: float = 0.0
+var _rescue_timer: float = 60.0
 ## Cached places in chambers (see _spot).
 var _spots: Dictionary[Vector3, Vector2] = {}
 ## Default roughness of dug outlines (nest_params underground "overdig").
 const OVERDIG := 4.5
 ## Gardens grow this many cells (of the nest layer) in from a chamber's walls.
 const GARDEN_DEPTH := 2
+## Seconds after which a chamber whose way in hasn't opened stops holding up
+## new ones (see _plan_chambers).
+const STUCK_CHAMBER := 600.0
+## Seconds before trying again when no new chamber fits.
+const PLAN_RETRY := 30.0
 
 func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	var p := params
@@ -333,7 +341,12 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 			_plan_extra_entrances(sim)
 		if not _entrance_planned and workers >= open_entrance_at:
 			_plan_entrance()
-		_plan_chambers()
+		_plan_chambers(sim)
+		# Now and then, reconnect digging whose way in will never open.
+		_rescue_timer -= 1.0
+		if _rescue_timer <= 0.0:
+			_rescue_timer = 60.0
+			chambers_layout.rescue(plan)
 	if chambers_layout.update_dug(plan) > 0:
 		chambers = chambers_layout.dug_count()
 		for c in chambers_layout.list:
@@ -506,7 +519,9 @@ func _count_roles(sim: Simulation) -> void:
 			dig_slots += job.max_diggers
 	# Digging gets more hands the fuller the gardens are.
 	var dig_cap := maxi(2, int(workers * dig_fraction * clampf(garden_pressure(), 0.3, 1.7)))
-	role_need["dig"] = mini(mini(ceili(dig_work / 20.0), dig_cap), dig_slots) if dig_work > 0 else 0
+	# A digger per few cells of open work (galleries, capillaries and chambers
+	# open one after another, so there is seldom much open at once).
+	role_need["dig"] = mini(mini(ceili(dig_work / 6.0), dig_cap), dig_slots) if dig_work > 0 else 0
 	# Gardeners: to cut up leaf waiting by the gardens, weed, and tend.
 	role_need["garden"] = ceili(leaf_on_floor.size() * 1.5 + garden.total_spent() / (waste_load * 3.0)
 			+ garden.cells.size() / 2500.0) if workers >= 2 else 0
@@ -562,19 +577,29 @@ func _plan_entrance() -> void:
 ## Plans a new garden chamber when the gardens (with the pulp waiting on
 ## them) are nearly filling the ones
 ## dug (one at a time, up to max_chambers).
-func _plan_chambers() -> void:
+func _plan_chambers(sim: Simulation) -> void:
 	if not has_entrance() or chambers_layout.count() >= max_chambers:
 		return
 	# One chamber at a time, more at once (up to four) the more the gardens
 	# are overflowing.
+	# Chambers still being dug; one waiting a long time for its way in to open
+	# (e.g. its gallery was abandoned) doesn't hold up new ones.
 	var undug := 0
 	for c in chambers_layout.list:
-		if not c.dug:
+		if not c.dug and not c.failed and c.job >= 0 and (plan.is_open(plan.job_by_id(c.job)) or plan.is_open(plan.job_by_id(c.tunnel_job))
+				or sim.time() - c.planned_at < STUCK_CHAMBER):
 			undug += 1
 	var pressure := garden_pressure()
 	if pressure < 0.8 or undug >= clampi(int(pressure * 2.0), 1, 4):
 		return
-	chambers_layout.plan_chamber(plan, float(chambers_layout.count()))
+	if sim.time() < _plan_retry_at:
+		return
+	var ch := chambers_layout.plan_chamber(plan, float(chambers_layout.count()))
+	if ch == null:
+		# Nothing fits for now (planning is costly): try again in a while.
+		_plan_retry_at = sim.time() + PLAN_RETRY
+	if ch != null:
+		ch.planned_at = sim.time()
 
 ## Fungus the dug chambers hold: chamber_capacity per chamber of radius 50,
 ## scaled by area (the royal chamber holds less; the queen and brood live there).
@@ -937,7 +962,8 @@ func queen_heading() -> float:
 ## the shaft is dug (and the surface gets its own spoil heap and trail).
 func _plan_extra_entrances(sim: Simulation) -> void:
 	var done := extra_portals.size()
-	if done >= entrance_steps.size() or sim.colonies[colony_id].total_population() < entrance_steps[done]:
+	if done >= entrance_steps.size() or sim.colonies[colony_id].total_population() < entrance_steps[done] \
+			or sim.time() < _entrance_retry_at:
 		return
 	# Facing food: toward the richest source the colony can use, away from
 	# the directions entrances already face.
@@ -961,19 +987,21 @@ func _plan_extra_entrances(sim: Simulation) -> void:
 		best = Vector2.from_angle(rng.randf() * TAU)
 	var l := sim.layers[underground_layer]
 	var shaft_r := portal.radius
-	for attempt in 16:
-		var dir := best.rotated(rng.randf_range(-0.7, 0.7))
-		var surface := main + dir * rng.randf_range(entrance_spacing, entrance_spacing * 1.8)
+	for attempt in 32:
+		# Facing food first, then anywhere.
+		var spread := 0.7 if attempt < 12 else PI
+		var dir := best.rotated(rng.randf_range(-spread, spread))
+		var surface := main + dir * rng.randf_range(entrance_spacing, entrance_spacing * 2.2)
 		var ok := Rect2(Vector2.ZERO, Vector2(sim.world.size)).grow(-40.0).has_point(surface) and not sim.world.is_blocked(surface)
 		for e: Vector2 in [main] + Array(_all_entrances()):
 			ok = ok and surface.distance_to(e) >= entrance_spacing
 		ok = ok and surface.distance_to(spoil_position()) > 50.0 and surface.distance_to(dump_position()) > 50.0
 		var under := portal.pos_b + (surface - main)
 		ok = ok and Rect2(Vector2.ZERO, Vector2(l.world.size)).grow(-60.0).has_point(under)
-		ok = ok and chambers_layout._soil_around(under, shaft_r + 16.0, plan)
+		ok = ok and chambers_layout._soil_around(under, shaft_r + 8.0, plan)
 		if not ok:
 			continue
-		var from := chambers_layout.nearest_tunnel_point(under)
+		var from := chambers_layout.nearest_tunnel_point(under, plan)
 		if from == Vector2.INF:
 			return
 		var pts := chambers_layout.route_tunnel(from, under, plan)
@@ -992,8 +1020,8 @@ func _plan_extra_entrances(sim: Simulation) -> void:
 		var p := add_entrance(sim, surface, under, shaft_r)
 		plan.open_portal_when_done(job, p)
 		return
-	# Nowhere fits: skip this step.
-	entrance_steps.remove_at(done)
+	# Nowhere fits now: try again in a while (the nest keeps changing).
+	_entrance_retry_at = sim.time() + 120.0
 
 ## Surface ends of every extra entrance, open or not.
 func _all_entrances() -> PackedVector2Array:

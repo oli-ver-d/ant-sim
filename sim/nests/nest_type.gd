@@ -228,7 +228,10 @@ var highlight_ant: int = -1
 func setup_underground(sim: Simulation, params: Dictionary) -> void:
 	var size := Vector2i(ScenarioEvents.vec2(params.get("size", [1280, 1280])))
 	var l := sim.add_layer(StringName("nest%d" % colony_id), size, int(params.get("cell_size", 4)))
-	l.world.fill_soil(float(params.get("hardness", 1.0)))
+	# Work per cell and cells per bite scale with the cell area, so a nest digs
+	# the same volume whatever its cell size (4 is the reference).
+	var area := pow(l.world.cell_size / 4.0, 2.0)
+	l.world.fill_soil(float(params.get("hardness", 1.0)) * area)
 	underground_layer = l.index
 	var shaft := ScenarioEvents.vec2(params["shaft"]) if params.has("shaft") else Vector2(size) * 0.5
 	var shaft_r := float(params.get("shaft_radius", 10.0))
@@ -265,10 +268,19 @@ func setup_underground(sim: Simulation, params: Dictionary) -> void:
 	portal = sim.add_portal(0, entrance_position(), l.index, shaft, maxf(radius, shaft_r))
 	portal.open = open
 	plan = ExcavationPlan.new(l)
-	plan.bite = float(params.get("bite", plan.bite))
+	plan.bite = float(params.get("bite", plan.bite)) * area
+	plan.cells_per_bite = maxi(1, roundi(plan.cells_per_bite / area))
 	plan.overdig = float(params.get("overdig", plan.overdig))
 	plan.ragged = float(params.get("ragged", plan.ragged))
 	plan.rough_seed = sim.rng.seed * 13 + colony_id
+	# Jobs open once reachable from the nest's first open space (the first carved
+	# shape, else the shaft bottom).
+	var hub := shaft
+	var carves: Array = params.get("carve", [])
+	if not carves.is_empty():
+		var c0: Dictionary = carves[0]
+		hub = Vector2(c0["lobes"][0], c0["lobes"][1]) if c0.has("lobes") else ScenarioEvents.vec2(c0.get("from", c0.get("center", [shaft.x, shaft.y])))
+	plan.reach_field = l.nav().set_target_point(&"hub", hub)
 	for j: Dictionary in params.get("plan", []):
 		var job: ExcavationPlan.Job
 		var name := str(j.get("name", ""))
