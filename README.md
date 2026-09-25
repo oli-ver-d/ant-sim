@@ -317,7 +317,11 @@ JSON files in `scenarios/`. Simulation content:
   the species' own, e.g. `"granary_nest"`), optional `release_per_second`
   (ants emerge gradually instead of all at once), optional `nest_params`
   and per-colony tweaks: `params` (SimConfig keys and species tunables), `state_params`
-  (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`)
+  (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`).
+  `nest_params.entrance` sets how the entrances look (render only): `{"style": "crater",
+  "clear_radius": 90, "clears_plants": true}`; styles `hole` (basic nests), `crater`
+  (harvesters, who also clear plants and litter from a disc as wide as their `disc_radius`),
+  `mound` (leafcutters) and `turret`
 - `food`: type + type-specific params
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
   `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig;
@@ -746,7 +750,26 @@ All drawing lives in `render/` (plus each species' own renderers):
   rises while it rains). The blades' shadow is a second mesh drawn first, shifted away from
   the light by each point's height, so it darkens the ground and the ants under it. Canopy
   and shadow fade out round nest entrances, food and the ant the camera follows (a uniform
-  array of clear spots).
+  array of clear spots), and are gone inside the disc a harvester nest keeps cleared (as is the
+  ground cover), which widens as the colony grows (`NestType.cleared_radius`).
+- `entrance_renderer.gd` + `entrance.gdshader`: every surface entrance of every nest
+  (`NestType.entrance_sites()`: the main one, also while sealed, and each open extra one), one
+  quad each, from a height field: a noise-warped opening whose inner wall is lit on the side
+  away from the light and in deep shadow on the near side, the throat going to black, and per
+  style a packed lip with a ring of crumbs (`hole`), a funnel up to a ring of grit and pebbles
+  heavier on the spoil side (`crater`), a low cone of loose soil cut by erosion runnels
+  (`mound`) or a raised collar (`turret`), with a cast shadow marched toward the light. It
+  shades and tints whatever ground is drawn under it (the screen texture), so it sits on any
+  material. A sealed entrance is a soil plug. Openings widen with the ants through them
+  (`Portal.uses`, render only); extra ones start small. Species renderers keep only their
+  extras (the harvester's cleared disc and midden, the leafcutter's loose soil and dump).
+- `spoil_heap_renderer.gd`: each entrance's spoil heap is a fan on its outward side, wider
+  across than along and bent round the entrance, in subsoil colours tinted toward the ground
+  material under it; for crater and mound entrances some crumbs spill back to the rim.
+- `worn_ground_renderer.gd` + `worn_ground.gdshader`: the surface `TrafficMap` (turned on by
+  the view: not hashed, no random numbers) smoothed and multiplied over the ground, so busy
+  ground is packed darker: an apron round each entrance and faint paths along the busiest
+  routes. Ants going down a hole darken and shrink a little before they fade (`ant.gdshader`).
 - `bridge_renderer.gd`: bridges as big twigs (same generator as twig debris) with a shadow on
   the water.
 - `rain.gdshader` + `rain_renderer.gd`: per shower, wet darkened soil with splash rings under

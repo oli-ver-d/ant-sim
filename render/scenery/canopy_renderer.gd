@@ -71,7 +71,8 @@ func _process(delta: float) -> void:
 		mat.set_shader_parameter("wind", _wind)
 
 ## Places the canopy is kept thin over, as (x, y, radius, 0): the followed ant
-## first, then nest entrances, then food sources, at most MAX_SPOTS.
+## first, then nest entrances (and a nest's cleared disc, if it clears plants:
+## w = 1, canopy gone inside), then food sources, at most MAX_SPOTS.
 static func clear_spots(simulation: Simulation, follow_ant: int = -1) -> PackedVector4Array:
 	var out := PackedVector4Array()
 	if follow_ant >= 0 and follow_ant < simulation.alive.size() and simulation.alive[follow_ant] != 0 \
@@ -87,6 +88,11 @@ static func clear_spots(simulation: Simulation, follow_ant: int = -1) -> PackedV
 		for e in ents:
 			if out.size() < MAX_SPOTS:
 				out.append(Vector4(e.x, e.y, r, 0.0))
+		# A disc the colony keeps cleared of plants (w = 1), wider as it grows.
+		var disc := nest.cleared_radius(simulation) if nest.clears_plants else 0.0
+		if disc > 0.0 and out.size() < MAX_SPOTS:
+			var at := nest.entrance_position()
+			out.append(Vector4(at.x, at.y, disc, 1.0))
 	for src in simulation.food_sources:
 		if out.size() < MAX_SPOTS and not src.is_depleted():
 			out.append(Vector4(src.position.x, src.position.y, FOOD_CLEAR, 0.0))

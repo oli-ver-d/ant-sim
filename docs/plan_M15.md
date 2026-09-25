@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a, M15b, M15c, M15d done; next M15e.
+Status: M15a, M15b, M15c, M15d, M15e done; next M15f.
 
 ## Where things stand (before M15)
 
@@ -557,3 +557,59 @@ Changed from the plan / notes for the next phases:
 - For M15h (presets): kinds and sensible radii: grass 30-65, rosette 35-70, clover 35-50, fern
   60-100 (stem 6), seedling 10-18 (stem 2). Stems block, so dense scatter needs the
   connectivity check; `"stem": 0` gives canopy-only plants for existing scenarios (M15i).
+
+### M15e (done)
+
+Done:
+- Sim (render data only, nothing hashed, no RNG): `Portal.uses` (ants into it from either side,
+  counted in `Simulation.enter_portal`). `NestType`: `entrance_style` (`hole` / `crater` /
+  `mound` / `turret`), `clear_radius`, `clears_plants` from nest param `"entrance"`; nest types
+  set defaults before `super.setup()` (`FungusNest` mound; `SeedNest` / `GranaryNest` crater,
+  clears plants, `clear_radius` = `disc_radius` unless given). `ENTRANCE_REACH` (drawn reach per
+  style in opening radii), `USES_TO_WIDEN`, `EntranceSite` (position, radius, open, main, uses,
+  index = spoil heap; `reach(style)`), `entrance_sites()` (main first, also while sealed, then
+  open extras), `entrance_radius(uses, main)` (main 85% -> 120% of `radius`, extras 55% ->
+  100%), `cleared_radius(sim)` (the granary renderer's old growth rule, now shared).
+- New extra entrances (`ColonyNest`) are rejected where `World.prop_near(surface, radius *
+  reach)` (new helper; false with no props, so runs without scenery are unchanged).
+- `render/entrance_renderer.gd` (`EntranceRenderer`, one per colony, added by `WorldView` over
+  the nest's own renderer) + `render/entrance.gdshader`: a ColorRect quad per site; height
+  field per style, normal from central differences, cast shadow marched toward the light, depth
+  darkening to a black throat. Colour comes from the screen texture (whatever ground, worn
+  ground, disc is under it), only tinted (loose soil, grit) and shaded, so no halo on any
+  material. Sealed sites are drawn as a `hole`-style plug (`style_of`). Uniforms are re-set only
+  when a site moves, opens/closes, or its radius/wear changes a step.
+- Species renderers: `BasicNestRenderer` draws nothing now; `SeedNestRenderer` lost its crater;
+  `FungusNestRenderer` keeps its loose crumbs (mound body, extra-entrance crumbs) but no
+  craters; `GranaryNestRenderer` uses `cleared_radius`. (The granary had no entrance drawn at
+  all before.)
+- `SpoilHeapRenderer`: crumbs in a fan on the outward side (`crumb_position`, `HeapShape`:
+  0.7 x 1.3 heap radii, bent into a crescent), 22% spilled back toward the rim for crater and
+  mound styles, subsoil palette nearer the ground shader's, tinted by the ground material
+  (`ground_tint`).
+- `render/worn_ground_renderer.gd` + `worn_ground.gdshader`: turns on the surface
+  `TrafficMap` (`HALF_LIFE` 240 s unless highways turned it on first with theirs), uploads it
+  every 10 frames, 3x3 tent blur, `blend_mul` darkening (keeps the ground's hue). Drawn after
+  obstacles, before scenery bases.
+- Cleared discs: `CanopyRenderer.clear_spots` adds a `w = 1` spot per clearing nest (canopy
+  gone inside, `canopy.gdshader`); `GroundCoverRenderer.cleared_discs` / `clear_discs` fade
+  decals out of it (rebuilt when a disc grows by `DISC_STEP`).
+- `ant.gdshader`: ants in a portal fade shrink up to 30% and darken first, then fade
+  (visibility now `1 - smoothstep(0.35, 1, gone)`), their shadow fading with them.
+- Tests: `tests/test_entrances.gd` (8). Fixture `tests/fixtures/scenarios/entrances_demo.json`
+  (one colony per style, a digging nest with spoil, a sealed nest, a crater disc with plants).
+
+Changed from the plan / notes for the next phases:
+- Entrance size grows with `Portal.uses`, not with chambers; nests without portals (basic, seed
+  nests) keep a fixed opening (`uses` 0). The fungus mound body still grows with chambers in
+  `FungusNestRenderer` (its crumbs), the shader cone with uses.
+- Worn ground is multiplicative darkening only (no smoothing of the grain); it needs a while
+  of traffic to show (half-life 240 s). Tune `WEAR_TRAFFIC` (30) if paths look too faint/strong
+  in long runs.
+- The pheromone glow is drawn over entrances and can wash the hole out at close zoom on very
+  busy nests (as before, since the glow sits above nests). Stills: `--pheromones=0` to judge.
+- For M15f/M15h keep-clear: `nest.entrance_sites()` + `site.reach(nest.entrance_style)` give
+  each drawn entrance's circle; add `spoil_position_of(site.index)` with
+  `SpoilHeapRenderer._radius(spoil_count(index)) * 1.3` for its heap, and
+  `cleared_radius(sim)` for a clearing nest. Closed extra entrances aren't sites; use
+  `extra_portals` for planned ones.

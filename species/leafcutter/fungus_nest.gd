@@ -75,6 +75,8 @@ const GARDEN_DEPTH := 2
 
 func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	brood_food_type = "gongylidia"
+	# A low cone of loose soil round the hole.
+	entrance_style = "mound"
 	super.setup(sim, owner_colony, params)
 	fungus = params.get("initial_fungus", fungus)
 	digest_rate = params.get("digest_rate", digest_rate)

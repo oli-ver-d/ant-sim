@@ -1,7 +1,8 @@
 class_name SeedNestRenderer
 extends Node2D
 ## Draws a SeedNest: a pale cleared disc of sand around the entrance, and a
-## pile of seed husks (chaff) beside it that grows with seeds delivered.
+## pile of seed husks (chaff) beside it that grows with seeds delivered. The
+## crater itself is drawn by the core EntranceRenderer.
 
 const SAND := Color(0.46, 0.36, 0.24)
 const HUSK := Color(0.72, 0.6, 0.38)
@@ -39,6 +40,3 @@ func _draw() -> void:
 		draw_set_transform(p, rng.randf() * TAU, Vector2(1.7, 1.0))
 		draw_circle(Vector2.ZERO, rng.randf_range(1.0, 1.8), HUSK.darkened(rng.randf() * 0.3))
 	draw_set_transform(Vector2.ZERO)
-	# Entrance: a dark crater.
-	draw_circle(Vector2.ZERO, nest.radius * 1.6, SAND.darkened(0.25))
-	draw_circle(Vector2.ZERO, nest.radius, Color(0.05, 0.03, 0.02))

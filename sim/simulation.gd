@@ -244,6 +244,7 @@ func enter_portal(i: int, portal: Portal) -> bool:
 	dismount(i)
 	transit_portal[i] = portal.id
 	transit_until[i] = tick_count + maxi(1, roundi(portal.transit_time / dt))
+	portal.uses += 1
 	return true
 
 func in_transit(i: int) -> bool:

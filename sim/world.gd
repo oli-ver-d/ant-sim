@@ -357,6 +357,15 @@ func remove_prop_cells(cells: PackedInt32Array, free_cells: bool = true) -> void
 func is_prop_cell(i: int) -> bool:
 	return not prop_mask.is_empty() and prop_mask[i] > 0
 
+## True if any cell within `radius` of `center` is under a prop.
+func prop_near(center: Vector2, radius: float) -> bool:
+	if prop_mask.is_empty():
+		return false
+	for c in cells_in_circle(center, radius):
+		if prop_mask[c] > 0:
+			return true
+	return false
+
 ## Bridges: walkable strips laid over obstacles (e.g. a twig across water).
 ## [{"points": PackedVector2Array, "width": float}], for renderers.
 var bridges: Array[Dictionary] = []

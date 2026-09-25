@@ -23,6 +23,13 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	position = owner_colony.nest_position
 	radius = params.get("radius", radius)
 	sense_radius = params.get("sense_radius", sense_radius)
+	var ent: Dictionary = params.get("entrance", {})
+	entrance_style = str(ent.get("style", entrance_style))
+	if not ENTRANCE_REACH.has(entrance_style):
+		push_warning("Unknown entrance style \"%s\" (use %s)" % [entrance_style, ", ".join(ENTRANCE_REACH.keys())])
+		entrance_style = "hole"
+	clear_radius = float(ent.get("clear_radius", clear_radius))
+	clears_plants = bool(ent.get("clears_plants", clears_plants))
 	if params.has("underground"):
 		setup_underground(sim, params["underground"])
 
@@ -81,6 +88,80 @@ var extra_portals: Array[Portal] = []
 var _entrances: PackedVector2Array = []
 var _entrances_changes: int = -1
 var _entrances_count: int = -1
+
+# --- How the entrances look on the surface ---------------------------------------------
+# Render data (and room to keep clear of, for scenery and middens); none of
+# it is simulation state. Nest param "entrance": {"style", "clear_radius",
+# "clears_plants"}; nest types set their own defaults before setup().
+
+## "hole" (a plain hole with a worn rim), "crater" (a ring of excavated grit
+## round a funnel), "mound" (a low cone of loose soil, the hole on top) or
+## "turret" (a small raised collar).
+var entrance_style: String = "hole"
+## Radius of the disc the colony keeps clear round its entrance at full size
+## (0 = none), and whether plants and litter are cleared from it.
+var clear_radius: float = 0.0
+var clears_plants: bool = false
+
+## How far each style's drawing reaches from the middle, in opening radii.
+const ENTRANCE_REACH: Dictionary[String, float] = {"hole": 2.4, "crater": 3.6, "mound": 4.6, "turret": 2.4}
+## Uses (ants through, both ways) at which an opening is about 63% of the
+## way to its full size.
+const USES_TO_WIDEN := 3000.0
+
+## One opening on the surface (see entrance_sites()).
+class EntranceSite:
+	var position: Vector2
+	## Radius of the opening (see entrance_radius()).
+	var radius: float
+	## False for a sealed entrance (a founding nest not dug open yet).
+	var open: bool = true
+	var main: bool = true
+	## Ants through it so far (0 for a nest without portals).
+	var uses: int = 0
+	## Its spoil heap (spoil_position_of / spoil_count; 0 = the main one).
+	var index: int = 0
+
+	## How far its drawing reaches in `style` (for keep-clear rules).
+	func reach(style: String) -> float:
+		return radius * NestType.ENTRANCE_REACH.get(style, 2.4)
+
+## The entrances as drawn on the surface: the main one first (also while
+## sealed), then every open extra one.
+func entrance_sites() -> Array[EntranceSite]:
+	var out: Array[EntranceSite] = []
+	var main := EntranceSite.new()
+	main.position = entrance_position()
+	main.open = portal == null or portal.open
+	main.uses = portal.uses if portal != null else 0
+	main.radius = entrance_radius(main.uses, true)
+	out.append(main)
+	for k in extra_portals.size():
+		var p := extra_portals[k]
+		if not p.open:
+			continue
+		var s := EntranceSite.new()
+		s.position = p.pos_a
+		s.main = false
+		s.uses = p.uses
+		s.radius = entrance_radius(p.uses, false)
+		s.index = k + 1
+		out.append(s)
+	return out
+
+## Radius of an opening after `uses` ants: the main one opens at 85% of the
+## nest radius and widens to 120%; extra ones start at 55%, reach 100%.
+func entrance_radius(uses: int, main: bool) -> float:
+	var grown := 1.0 - exp(-uses / USES_TO_WIDEN)
+	return radius * (0.85 + 0.35 * grown if main else 0.55 + 0.45 * grown)
+
+## Radius of the cleared disc now: it widens as the colony grows (none while
+## the nest is sealed or doesn't clear one).
+func cleared_radius(sim: Simulation) -> float:
+	if clear_radius <= 0.0 or not has_entrance():
+		return 0.0
+	var size := sqrt(sim.colonies[colony_id].total_population())
+	return clear_radius * clampf(0.35 + size / 60.0, 0.35, 1.0)
 
 ## Takes ownership of a delivered item. The Simulation destroys the item afterwards.
 func receive_item(_sim: Simulation, _item: Item) -> void:

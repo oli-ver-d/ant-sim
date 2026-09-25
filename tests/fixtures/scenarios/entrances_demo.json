@@ -1,0 +1,52 @@
+{
+	"name": "entrances_demo",
+	"description": "M15e check: one nest per entrance style (hole, crater, mound, turret), each foraging so its ground wears; a digging nest with a mound and a fan of spoil, and a sealed founding nest. The crater nest clears plants from its disc.",
+	"seed": 6,
+	"duration": 30,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "sand", "shape": "circle", "center": [780, 620], "radius": 170, "soft": 50}
+		]
+	},
+	"colonies": [
+		{"species": "leafcutter", "nest": [300, 620], "nest_type": "basic_nest", "population": {"media": 60},
+			"nest_params": {"entrance": {"style": "hole"}}},
+		{"species": "leafcutter", "nest": [780, 620], "nest_type": "basic_nest", "population": {"media": 60},
+			"nest_params": {"entrance": {"style": "crater", "clear_radius": 90, "clears_plants": true}}},
+		{"species": "leafcutter", "nest": [300, 1250], "nest_type": "basic_nest", "population": {"media": 60},
+			"nest_params": {"entrance": {"style": "mound"}}},
+		{"species": "leafcutter", "nest": [780, 1250], "nest_type": "basic_nest", "population": {"media": 60},
+			"nest_params": {"entrance": {"style": "turret"}}},
+		{
+			"species": "leafcutter",
+			"nest": [540, 1650],
+			"population": {"minim": 60, "media": 30},
+			"params": {"hitchhiker_fraction": 0.0},
+			"state_params": {"assign_role": {"stayer": "dig"}, "dig": {"on_idle": "dig"}},
+			"nest_params": {
+				"underground": {
+					"size": [1000, 1000],
+					"carve": [{"center": [500, 500], "radius": 40}],
+					"plan": [
+						{"name": "t1", "origin": [540, 500], "from": [540, 500], "to": [760, 420], "radius": 7, "priority": 0, "diggers": 30},
+						{"name": "c1", "origin": [750, 425], "from": [780, 410], "radius": 40, "priority": 1, "diggers": 30}
+					]
+				}
+			}
+		},
+		{"species": "leafcutter", "nest": [540, 250], "population": {"queen": 1, "minim": 4},
+			"nest_params": {"underground": {"size": [600, 600], "open": false}}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [300, 400], "radius": 20, "amount": 400},
+		{"type": "food_pile", "pos": [780, 380], "radius": 20, "amount": 400},
+		{"type": "food_pile", "pos": [300, 1010], "radius": 20, "amount": 400},
+		{"type": "food_pile", "pos": [780, 1010], "radius": 20, "amount": 400}
+	],
+	"scenery": [
+		{"type": "grass", "center": [850, 660], "radius": 50},
+		{"type": "grass", "center": [930, 700], "radius": 45},
+		{"type": "plant", "kind": "clover", "center": [700, 700], "radius": 40, "stem": 0}
+	]
+}

@@ -4,6 +4,7 @@ extends MultiMeshInstance2D
 ## seed husks, twiglets, straws and crumbs. Scattered once from the ground's
 ## material map (GroundMap): thick on litter, sparse elsewhere. Render only:
 ## not items, no clutter, no effect on the ants, its own RNG (never sim.rng).
+## Decals fade out of the discs nests keep cleared (NestType.clears_plants).
 ##
 ## The sprites are baked procedurally into one atlas image and drawn with one
 ## MultiMesh (ground_cover.gdshader: tint and contact shadow).
@@ -40,8 +41,13 @@ const SIZES: Array[Vector2] = [
 ]
 const STRIDE := 16
 
+## Cleared discs change radius in steps of this (world units).
+const DISC_STEP := 4.0
+
 var sim: Simulation
 var _version: int = -1
+var _scattered: PackedFloat32Array = []
+var _discs: PackedVector3Array = []
 
 func bind(simulation: Simulation) -> void:
 	sim = simulation
@@ -59,14 +65,44 @@ func bind(simulation: Simulation) -> void:
 	material = mat
 
 func _process(_delta: float) -> void:
-	if sim == null or sim.ground == null or sim.ground.version == _version:
+	if sim == null or sim.ground == null:
 		return
-	_version = sim.ground.version
-	var buffer := scatter(sim.ground)
+	var discs := cleared_discs(sim)
+	if sim.ground.version == _version and discs == _discs:
+		return
+	if sim.ground.version != _version:
+		_version = sim.ground.version
+		_scattered = scatter(sim.ground)
+	_discs = discs
+	var buffer := clear_discs(_scattered, discs)
 	multimesh.instance_count = buffer.size() / STRIDE
 	if not buffer.is_empty():
 		multimesh.buffer = buffer
 	queue_redraw()
+
+## Discs nests keep cleared (NestType.clears_plants), as (x, y, radius), the
+## radius in steps of DISC_STEP so a growing disc updates now and then.
+static func cleared_discs(simulation: Simulation) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for colony in simulation.colonies:
+		var nest := colony.nest
+		var r := snappedf(nest.cleared_radius(simulation), DISC_STEP) if nest.clears_plants else 0.0
+		if r > 0.0:
+			out.append(Vector3(nest.entrance_position().x, nest.entrance_position().y, r))
+	return out
+
+## A copy of an instance buffer with the decals inside `discs` faded out (a
+## soft edge over the outer 20% of each disc).
+static func clear_discs(buffer: PackedFloat32Array, discs: PackedVector3Array) -> PackedFloat32Array:
+	if discs.is_empty():
+		return buffer
+	var out := buffer.duplicate()
+	for o in range(0, out.size(), STRIDE):
+		var at := Vector2(out[o + 3], out[o + 7])
+		for d in discs:
+			var f := smoothstep(d.z * 0.8, d.z, at.distance_to(Vector2(d.x, d.y)))
+			out[o + 11] *= f
+	return out
 
 ## Instance buffer (STRIDE floats each) for every decal on `ground`.
 static func scatter(ground: GroundMap) -> PackedFloat32Array:

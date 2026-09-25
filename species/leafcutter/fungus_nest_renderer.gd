@@ -75,24 +75,17 @@ func _draw_mound() -> void:
 		# Lit from the top-left like everything else: a shadow, then the crumb.
 		_mound.draw_circle(p + Vector2(0.4, 0.6), r, Color(0, 0, 0, 0.25))
 		_mound.draw_circle(p, r, SOIL.lightened(rng.randf() * 0.25))
-	# Entrance: a dark crater (none yet while a founding nest is sealed).
-	if not nest.has_entrance():
-		return
-	_mound.draw_circle(Vector2.ZERO, nest.radius * 1.5, SOIL.darkened(0.35))
-	_mound.draw_circle(Vector2.ZERO, nest.radius, Color(0.05, 0.03, 0.02))
-	# Entrances opened later (a nest that grows digs more): each a smaller
-	# rim of crumbs around its own crater.
+	# Entrances opened later (a nest that grows digs more): loose crumbs round
+	# each. The holes and their cones are drawn by the core EntranceRenderer.
 	for p in nest.extra_portals:
 		if not p.open:
 			continue
 		var at := p.pos_a - position
 		for n in 40:
-			var q := at + Vector2.from_angle(rng.randf() * TAU) * nest.radius * (1.0 + 0.9 * sqrt(rng.randf()))
+			var q := at + Vector2.from_angle(rng.randf() * TAU) * nest.radius * (1.4 + 1.6 * sqrt(rng.randf()))
 			var r := rng.randf_range(0.8, 1.8)
 			_mound.draw_circle(q + Vector2(0.4, 0.6), r, Color(0, 0, 0, 0.25))
 			_mound.draw_circle(q, r, SOIL.lightened(rng.randf() * 0.25))
-		_mound.draw_circle(at, nest.radius * 1.4, SOIL.darkened(0.35))
-		_mound.draw_circle(at, nest.radius * 0.95, Color(0.05, 0.03, 0.02))
 
 ## Clumps first .. first + count - 1 of the dump. Each clump's look comes from
 ## its own seed, and clump n lands within a radius that grows with n, so

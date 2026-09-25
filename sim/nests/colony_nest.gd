@@ -544,6 +544,8 @@ func _plan_extra_entrances(sim: Simulation) -> void:
 		var dir := best.rotated(rng.randf_range(-spread, spread))
 		var surface := main + dir * rng.randf_range(entrance_spacing, entrance_spacing * 2.2)
 		var ok := Rect2(Vector2.ZERO, Vector2(sim.world.size)).grow(-40.0).has_point(surface) and not sim.world.is_blocked(surface)
+		# Not up against a rock, log or plant stem: the whole drawn entrance fits.
+		ok = ok and not sim.world.prop_near(surface, radius * ENTRANCE_REACH.get(entrance_style, 2.4))
 		for e: Vector2 in [main] + Array(_all_entrances()):
 			ok = ok and surface.distance_to(e) >= entrance_spacing
 		ok = ok and surface.distance_to(spoil_position()) > 50.0 and surface.distance_to(dump_position()) > 50.0

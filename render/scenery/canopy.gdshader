@@ -55,7 +55,9 @@ float clear_fade() {
 	for (int i = 0; i < clear_count; i++) {
 		vec4 c = clear_spots[i];
 		float d = distance(world, c.xy);
-		f *= mix(clear_min, 1.0, smoothstep(c.z * 0.55, c.z, d));
+		// w = 1: a disc the colony keeps cleared, plants gone right inside.
+		bool cleared = c.w > 0.5;
+		f *= mix(cleared ? 0.0 : clear_min, 1.0, smoothstep(c.z * (cleared ? 0.8 : 0.55), c.z, d));
 	}
 	return f;
 }

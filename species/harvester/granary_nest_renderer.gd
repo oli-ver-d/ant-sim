@@ -42,7 +42,7 @@ func _draw() -> void:
 	if _drawn_open <= 0:
 		return
 	var main := nest.entrance_position()
-	var r := nest.disc_radius * clampf(0.35 + _drawn_size / 60.0, 0.35, 1.0)
+	var r := nest.cleared_radius(sim)
 	for e in nest.entrances():
 		var er := r if e == main else r * 0.55
 		# Cleared ground with a soft edge.

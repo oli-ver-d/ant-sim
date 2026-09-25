@@ -150,11 +150,15 @@ void fragment() {
 	float hw = floor(v_custom.w);
 	float fade_steps = floor(hw / 1024.0);
 	float heading = (hw - fade_steps * 1024.0) / 1023.0 * TAU_ - 3.14159265;
-	float visible = 1.0 - fade_steps / 15.0;
+	// Going down a hole (or coming up): the ant shrinks a little and darkens
+	// into the shadow of the funnel first, then fades.
+	float gone = fade_steps / 15.0;
+	float visible = 1.0 - smoothstep(0.35, 1.0, gone);
+	float dim = mix(1.0, 0.3, smoothstep(0.0, 0.6, gone));
 	b.phase = fract(v_custom.w) * TAU_;
 
 	// World-oriented quad coordinates (body lengths) -> body space (x forward).
-	vec2 q = (UV - 0.5) * QUAD;
+	vec2 q = (UV - 0.5) * QUAD * (1.0 + 0.3 * gone);
 	vec2 p = rot(q, -heading);
 
 	int which;
@@ -171,14 +175,14 @@ void fragment() {
 	float lambert = max(dot(n, L), 0.0);
 	float spec = pow(max(dot(n, normalize(L + vec3(0.0, 0.0, 1.0))), 0.0), 24.0);
 	vec3 base = v_color.rgb;
-	vec3 body_col = base * (0.5 + 0.65 * lambert) + vec3(spec * 0.55);
-	vec3 limb_col = base * 0.75;
+	vec3 body_col = (base * (0.5 + 0.65 * lambert) + vec3(spec * 0.55)) * dim;
+	vec3 limb_col = base * 0.75 * dim;
 
 	// Soft drop shadow: the same silhouette offset in world space, blurred.
 	vec2 ps = p - rot(shadow_offset, -heading);
 	int unused;
 	float sd = min(body_sdf(ps, b, unused), limbs_sdf(ps, b) + 0.006);
-	float shadow_a = (1.0 - smoothstep(-0.02, 0.07, sd)) * shadow_alpha;
+	float shadow_a = (1.0 - smoothstep(-0.02, 0.07, sd)) * shadow_alpha * (1.0 - gone);
 
 	float ant_a = body_a + limb_a;
 	vec3 ant_col = body_col * body_a + limb_col * limb_a;

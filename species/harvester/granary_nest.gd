@@ -75,6 +75,9 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	dump_offset = Vector2(90, 55)
 	# Most harvesters forage; a few keep the granaries when nothing is short.
 	inside_share = 0.15
+	# A crater of chaff and grit in a disc cleared of plants.
+	entrance_style = "crater"
+	clears_plants = true
 	super.setup(sim, owner_colony, params)
 	upkeep_per_ant = float(params.get("upkeep_per_ant", upkeep_per_ant))
 	granary_capacity = float(params.get("granary_capacity", granary_capacity))
@@ -82,6 +85,8 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	husk = float(params.get("husk", husk))
 	chaff_load = float(params.get("chaff_load", chaff_load))
 	disc_radius = float(params.get("disc_radius", disc_radius))
+	if clear_radius <= 0.0:
+		clear_radius = disc_radius
 	if chambers_layout == null:
 		push_error("GranaryNest needs nest_params \"underground\" (use seed_nest for a nest without one)")
 		return
