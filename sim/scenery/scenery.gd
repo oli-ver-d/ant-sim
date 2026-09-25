@@ -56,7 +56,8 @@ func remove(prop: Prop) -> void:
 		return
 	props.remove_at(i)
 	if not prop.cells.is_empty():
-		world.remove_prop_cells(prop.cells)
+		# A prop dressing a scenario wall leaves the wall there.
+		world.remove_prop_cells(prop.cells, not prop.params.has("wall"))
 		prop.cells = PackedInt32Array()
 	version += 1
 
@@ -86,9 +87,11 @@ func prop_type(type_id: String) -> PropType:
 
 static func _bounds_of(prop: Prop) -> Rect2:
 	var pts := prop.outline + prop.canopy
-	if pts.is_empty():
-		return Rect2(prop.position, Vector2.ZERO)
-	var r := Rect2(pts[0], Vector2.ZERO)
+	var r := Rect2(prop.position, Vector2.ZERO)
+	if not pts.is_empty():
+		r = Rect2(pts[0], Vector2.ZERO)
 	for p in pts:
 		r = r.expand(p)
+	if not prop.footprint.is_empty():
+		r = r.merge(PropType.footprint_bounds(prop.footprint))
 	return r

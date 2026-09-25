@@ -165,3 +165,126 @@ func test_unknown_type_is_skipped() -> void:
 	var sim := Simulation.new(_config, _registry, 1)
 	check(sim.scenery.add({"type": "no_such_prop", "center": [10, 10]}) == null, "unknown type -> null")
 	check_eq(sim.scenery.props.size(), 0, "nothing added")
+
+# --- M15c: rocks and logs --------------------------------------------------------------
+
+## Cells where the baked body is drawn (coverage >= 0.5 at the cell centre).
+func _drawn_cells(world: World, canvas: PropBaker.Canvas) -> Dictionary[int, bool]:
+	var out: Dictionary[int, bool] = {}
+	var cs := float(world.cell_size)
+	var r := canvas.rect
+	for cy in range(maxi(0, int(r.position.y / cs)), mini(world.height, int(ceil(r.end.y / cs)))):
+		for cx in range(maxi(0, int(r.position.x / cs)), mini(world.width, int(ceil(r.end.x / cs)))):
+			var px := (Vector2((cx + 0.5) * cs, (cy + 0.5) * cs) - r.position) * PropBaker.RES
+			var x := int(px.x)
+			var y := int(px.y)
+			if x >= 0 and y >= 0 and x < canvas.width and y < canvas.height and canvas.cover[y * canvas.width + x] >= 0.5:
+				out[cy * world.width + cx] = true
+	return out
+
+## Every drawn cell is within one cell of a blocked one and vice versa: ants
+## neither walk through drawn rock nor stop visibly short of it.
+func _check_drawn_matches_blocked(world: World, prop: Prop, painter: Object) -> void:
+	var canvas := PropBaker.rasterize(prop, float(world.cell_size))
+	painter.call("paint", canvas, prop, null)
+	var drawn := _drawn_cells(world, canvas)
+	var blocked: Dictionary[int, bool] = {}
+	for c in prop.cells:
+		blocked[c] = true
+	check(drawn.size() > 10 and blocked.size() > 10, "%s: drawn %d, blocked %d cells" % [prop.type_id, drawn.size(), blocked.size()])
+	var stray := 0
+	for c: int in drawn:
+		if not _near(c, blocked, world.width):
+			stray += 1
+	var bare := 0
+	for c: int in blocked:
+		if not _near(c, drawn, world.width):
+			bare += 1
+	check_eq(stray, 0, "%s: drawn cells more than a cell from a blocked one" % prop.type_id)
+	check_eq(bare, 0, "%s: blocked cells more than a cell from drawn ones" % prop.type_id)
+
+func _near(c: int, cells: Dictionary[int, bool], w: int) -> bool:
+	for dy: int in [-1, 0, 1]:
+		for dx: int in [-1, 0, 1]:
+			if cells.has(c + dy * w + dx):
+				return true
+	return false
+
+func test_rock_drawn_where_it_blocks() -> void:
+	var sim := Simulation.new(_config, _registry, 4)
+	var rock := sim.scenery.add({"type": "rock", "center": [300, 400], "radius": 45, "flat": 0.6, "lumpy": 0.4})
+	_check_drawn_matches_blocked(sim.world, rock, RockLook.new())
+	var small := sim.scenery.add({"type": "rock", "center": [600, 400], "radius": 12})
+	_check_drawn_matches_blocked(sim.world, small, RockLook.new())
+
+func test_log_drawn_where_it_blocks() -> void:
+	var sim := Simulation.new(_config, _registry, 4)
+	var log := sim.scenery.add({"type": "log", "points": [[200, 600], [420, 540], [560, 620]], "width": 30, "stubs": 2})
+	check_eq((log.detail["axes"] as Array).size(), 3, "trunk and two stubs")
+	_check_drawn_matches_blocked(sim.world, log, LogLook.new())
+	# The stubs block too: the tip of each is a wall.
+	for k: int in [1, 2]:
+		var pts: PackedVector2Array = log.detail["axes"][k]["points"]
+		var tip := pts[0].lerp(pts[1], 0.85)
+		check(sim.world.is_blocked(tip), "stub %d blocks near its tip %s" % [k, tip])
+
+func test_wall_look_drawn_where_it_blocks() -> void:
+	var sim := ScenarioLoader.build({"seed": 2, "obstacles": [
+		{"shape": "polyline", "points": [[100, 300], [300, 260], [380, 340]], "width": 22, "look": "rock"},
+		{"shape": "rect", "rect": [500, 300, 150, 40], "look": "rock"},
+		{"shape": "circle", "center": [800, 320], "radius": 40, "look": "rock"},
+		{"shape": "polygon", "points": [[200, 600], [320, 580], [360, 700], [220, 720]], "look": "rock"},
+	]}, _registry, _config)
+	check_eq(sim.scenery.props.size(), 4, "a rock prop per dressed wall")
+	for p in sim.scenery.props:
+		_check_drawn_matches_blocked(sim.world, p, RockLook.new())
+
+## A "look" only changes how walls are drawn: same cells, same run.
+func test_wall_look_keeps_cells_and_run() -> void:
+	var walls := [
+		{"shape": "polyline", "points": [[300, 1100], [700, 1100]], "width": 20},
+		{"shape": "circle", "center": [700, 1250], "radius": 40},
+	]
+	var dressed := walls.duplicate(true)
+	for w: Dictionary in dressed:
+		w["look"] = "rock"
+	var plain_data := _data([])
+	plain_data["obstacles"] = walls
+	var dressed_data := _data([])
+	dressed_data["obstacles"] = dressed
+	var plain := ScenarioLoader.build(plain_data, _registry, _config)
+	var looked := ScenarioLoader.build(dressed_data, _registry, _config)
+	check_eq(looked.world.obstacles, plain.world.obstacles, "same obstacle cells")
+	check_eq(looked.rng.state, plain.rng.state, "RNG untouched")
+	var marked := 0
+	for p in looked.scenery.props:
+		marked += p.cells.size()
+		for c in p.cells:
+			check(looked.world.is_prop_cell(c) and looked.world.obstacles[c] == World.Cell.WALL, "wall cell %d marked" % c)
+	check_eq(marked, plain.world.blocked_cells().size(), "every wall cell drawn as rock")
+	var bytes := ObstacleRenderer.mask_bytes(looked.world)
+	var c0 := looked.scenery.props[0].cells[0]
+	check_eq([bytes[c0 * 3], bytes[c0 * 3 + 2]], [0, 255], "no stone drawn under the look")
+	_run(plain, 200)
+	_run(looked, 200)
+	check_eq(looked.state_hash(), plain.state_hash(), "same run")
+	# Taking the look away leaves the wall.
+	var cells := looked.scenery.props[0].cells
+	looked.scenery.remove(looked.scenery.props[0])
+	for c in cells:
+		check_eq(looked.world.obstacles[c], World.Cell.WALL, "wall stays")
+		check(not looked.world.is_prop_cell(c), "no longer a prop cell")
+
+func test_bake_is_deterministic() -> void:
+	var a := Simulation.new(_config, _registry, 9)
+	var b := Simulation.new(_config, _registry, 9)
+	for sim: Simulation in [a, b]:
+		sim.scenery.add({"type": "rock", "center": [300, 400], "radius": 30})
+		sim.scenery.add({"type": "log", "points": [[200, 600], [380, 560]], "width": 20})
+	for i in 2:
+		var painter: Object = RockLook.new() if i == 0 else LogLook.new()
+		var ba := PropBaker.bake(a.scenery.props[i], painter, 4.0)
+		var bb := PropBaker.bake(b.scenery.props[i], painter, 4.0)
+		check_eq((ba["body"] as Image).get_data(), (bb["body"] as Image).get_data(), "%s body" % a.scenery.props[i].type_id)
+		check_eq((ba["shadow"] as Image).get_data(), (bb["shadow"] as Image).get_data(), "%s shadow" % a.scenery.props[i].type_id)
+		check(ba["shadow_rect"].encloses(ba["body_rect"]), "shadow covers the body's rect")

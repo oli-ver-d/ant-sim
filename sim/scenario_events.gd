@@ -24,6 +24,8 @@ extends RefCounted
 ##   {"shape": "polygon", "points": [[x, y], ...]}
 ##   {"shape": "rect", "rect": [x, y, w, h]}
 ##   {"shape": "circle", "center": [x, y], "radius": r}
+## A wall may add "look": "rock" (and rock look keys: "stone", "lichen",
+## "moss", "height") to be drawn as a rock prop instead of plain stone.
 
 static func apply(sim: Simulation, event: Dictionary) -> void:
 	match event.get("type", ""):
@@ -31,7 +33,7 @@ static func apply(sim: Simulation, event: Dictionary) -> void:
 			var food: Dictionary = event["food"]
 			sim.add_food_source(food["type"], food)
 		"add_obstacle":
-			add_obstacle(sim.world, event["obstacle"])
+			place_obstacle(sim, event["obstacle"])
 		"remove_obstacle":
 			add_obstacle(sim.world, event["obstacle"], World.Cell.FREE)
 		"add_colony":
@@ -157,6 +159,23 @@ static func add_obstacle(world: World, ob: Dictionary, kind_override: int = -1) 
 			world.fill_circle(vec2(ob["center"]), float(ob["radius"]), kind)
 		var other:
 			push_error("Unknown obstacle shape %s" % other)
+
+## add_obstacle, plus the obstacle's "look" if it has one: a wall with
+## "look": "rock" is drawn as a rock prop over exactly its cells (the cells and
+## the run are the same as without the look).
+static func place_obstacle(sim: Simulation, ob: Dictionary) -> void:
+	add_obstacle(sim.world, ob)
+	if not ob.has("look") or ob.get("kind", "wall") != "wall":
+		return
+	var look := str(ob["look"])
+	if look != "rock":
+		push_warning("Obstacle look '%s' is not supported (only \"rock\")" % look)
+		return
+	var prop := {"type": look, "wall": ob}
+	for key: String in ["name", "stone", "lichen", "moss", "height"]:
+		if ob.has(key):
+			prop[key] = ob[key]
+	sim.scenery.add(prop)
 
 static func points(arr: Array) -> PackedVector2Array:
 	var out: PackedVector2Array = []

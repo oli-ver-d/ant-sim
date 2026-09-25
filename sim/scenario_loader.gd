@@ -42,7 +42,7 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 	var seed_value: int = seed_override if seed_override >= 0 else int(data.get("seed", 1))
 	var sim := Simulation.new(config, registry, seed_value)
 	for ob: Dictionary in data.get("obstacles", []):
-		ScenarioEvents.add_obstacle(sim.world, ob)
+		ScenarioEvents.place_obstacle(sim, ob)
 	if data.has("ground"):
 		sim.ground = GroundMap.from_data(data["ground"], Vector2(config.world_size), seed_value)
 	for prop: Dictionary in data.get("scenery", []):

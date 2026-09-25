@@ -12,14 +12,19 @@ extends RefCounted
 func build(_prop: Prop, _rng: RandomNumberGenerator) -> void:
 	pass
 
-## Claims the prop's footprint in the world (if it blocks).
+## Claims the prop's footprint in the world (if it blocks). A prop that dresses
+## a scenario wall (params "wall") only marks the wall's cells as its own.
 func stamp(world: World, prop: Prop) -> void:
-	if prop.blocks:
+	if prop.params.has("wall"):
+		prop.cells = world.mark_prop_cells(footprint_cells(world, prop))
+	elif prop.blocks:
 		prop.cells = world.add_prop_cells(footprint_cells(world, prop))
 
 ## Cells under prop.footprint.
 func footprint_cells(world: World, prop: Prop) -> PackedInt32Array:
-	var fp := prop.footprint
+	return shape_cells(world, prop.footprint)
+
+static func shape_cells(world: World, fp: Dictionary) -> PackedInt32Array:
 	match fp.get("shape", ""):
 		"circle":
 			return world.cells_in_circle(fp["center"], float(fp["radius"]))
@@ -27,7 +32,82 @@ func footprint_cells(world: World, prop: Prop) -> PackedInt32Array:
 			return world.cells_in_polygon(fp["points"])
 		"polyline":
 			return world.cells_in_polyline(fp["points"], float(fp["width"]))
+		"rect":
+			return world.cells_in_rect(fp["rect"])
+		"multi":
+			var seen: Dictionary[int, bool] = {}
+			for part: Dictionary in fp["parts"]:
+				for c in shape_cells(world, part):
+					seen[c] = true
+			var out := PackedInt32Array(seen.keys())
+			out.sort()
+			return out
 	return PackedInt32Array()
+
+## True if `at` is inside a footprint shape, as its cells are chosen (a cell is
+## in when its centre is): renderers draw a prop's body over this, so what is
+## drawn and what blocks agree to within a cell. `cell` is the World's cell
+## size (polylines are stamped a little wider than their width).
+static func footprint_contains(fp: Dictionary, at: Vector2, cell: float) -> bool:
+	match fp.get("shape", ""):
+		"circle":
+			return at.distance_squared_to(fp["center"]) <= float(fp["radius"]) ** 2
+		"polygon":
+			return Geometry2D.is_point_in_polygon(at, fp["points"])
+		"polyline":
+			var pts: PackedVector2Array = fp["points"]
+			var r2 := (float(fp["width"]) * 0.5) ** 2 + cell * cell * 0.25
+			if pts.size() == 1:
+				return at.distance_squared_to(pts[0]) <= r2
+			for i in pts.size() - 1:
+				if at.distance_squared_to(Geometry2D.get_closest_point_to_segment(at, pts[i], pts[i + 1])) <= r2:
+					return true
+			return false
+		"rect":
+			var r: Rect2 = fp["rect"]
+			return at.x >= r.position.x and at.y >= r.position.y and at.x < r.end.x and at.y < r.end.y
+		"multi":
+			for part: Dictionary in fp["parts"]:
+				if footprint_contains(part, at, cell):
+					return true
+	return false
+
+## Bounding box of a footprint shape.
+static func footprint_bounds(fp: Dictionary) -> Rect2:
+	match fp.get("shape", ""):
+		"circle":
+			var r := float(fp["radius"])
+			return Rect2(fp["center"] - Vector2(r, r), Vector2(r, r) * 2.0)
+		"polygon", "polyline":
+			var pts: PackedVector2Array = fp["points"]
+			var b := Rect2(pts[0], Vector2.ZERO)
+			for p in pts:
+				b = b.expand(p)
+			return b.grow(float(fp.get("width", 0.0)) * 0.5 + 2.0)
+		"rect":
+			return fp["rect"]
+		"multi":
+			var b := Rect2()
+			var first := true
+			for part: Dictionary in fp["parts"]:
+				var pb := footprint_bounds(part)
+				b = pb if first else b.merge(pb)
+				first = false
+			return b
+	return Rect2()
+
+## Footprint of a scenario obstacle shape ({"shape": "polyline" | "polygon" |
+## "rect" | "circle", ...}; see ScenarioEvents.add_obstacle): the same cells.
+static func obstacle_footprint(ob: Dictionary) -> Dictionary:
+	match ob.get("shape", "polyline"):
+		"polygon":
+			return {"shape": "polygon", "points": params_points(ob["points"])}
+		"rect":
+			var a: Array = ob["rect"]
+			return {"shape": "rect", "rect": Rect2(a[0], a[1], a[2], a[3])}
+		"circle":
+			return {"shape": "circle", "center": params_vec2(ob["center"]), "radius": float(ob["radius"])}
+	return {"shape": "polyline", "points": params_points(ob["points"]), "width": float(ob.get("width", 16.0))}
 
 # --- Helpers for build() -----------------------------------------------------------------
 

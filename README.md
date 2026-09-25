@@ -319,7 +319,9 @@ JSON files in `scenarios/`. Simulation content:
   (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`)
 - `food`: type + type-specific params
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
-  `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig
+  `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig;
+  `"look": "rock"` on a wall draws it as a rock prop (optional `"stone"`, `"lichen"`, `"moss"`)
+  over exactly the same cells, so the run is unchanged
 - `ground`: what the surface is made of: `{"base": "soil", "regions": [{"material": "sand",
   "shape": "circle", "center": [x, y], "radius": 200, "soft": 60}, ...]}` (or just `"sand"`).
   Materials: `soil`, `sand`, `gravel`, `moss`, `litter`, `dry` (cracked clay). Regions paint in
@@ -328,13 +330,16 @@ JSON files in `scenarios/`. Simulation content:
   300, "cover": 0.3}` to paint only patches. Render only (own seeds, not hashed, no effect on
   movement); decals (fragments, bark, husks, twiglets, straws) are scattered by material, thick
   on litter. No `ground` = plain soil, as before (see `GroundMap`)
-- `scenery`: surface props: `{"type": "rock", "center": [x, y], "radius": 40, "flat": 0.8}`,
-  `{"type": "log", "points": [[x, y], ...], "width": 30}`, `{"type": "plant", "center": [x, y],
-  "radius": 60, "stem": 6}` (the stem blocks, the canopy hangs over the ants), `{"type": "grass",
-  ...}` (canopy only). Shapes come from each prop's own seeded RNG, never the simulation's, so
-  non-blocking scenery never changes a run; blocking footprints are walls to the ants (and
-  `World.prop_mask`, so they are drawn as the prop, not stone). Optional `"name"`. Placeholder
-  looks for now (M15a); see `docs/plan_M15.md`
+- `scenery`: surface props: `{"type": "rock", "center": [x, y], "radius": 40, "flat": 0.8}`
+  (also `"lumpy"`, `"height"`, `"stone"`: `granite` | `sandstone` | `basalt`, `"lichen"` 0-1,
+  `"moss"` 0-1, else from the ground map), `{"type": "log", "points": [[x, y], ...], "width":
+  30}` (also `"taper"`, `"stubs"` side branch stubs, `"peel"` 0-1; the first point is the sawn
+  end), `{"type": "plant", "center": [x, y], "radius": 60, "stem": 6}` (the stem blocks, the
+  canopy hangs over the ants), `{"type": "grass", ...}` (canopy only). Shapes come from each
+  prop's own seeded RNG, never the simulation's, so non-blocking scenery never changes a run;
+  blocking footprints are walls to the ants (and `World.prop_mask`, so they are drawn as the
+  prop, not stone). Optional `"name"`. Plants are placeholders until M15d; see
+  `docs/plan_M15.md`
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it
 - `max_agents`: `{"surface": n, "nest": n}` agents per layer, beyond which colonies grow as
@@ -719,6 +724,14 @@ All drawing lives in `render/` (plus each species' own renderers):
 - `obstacle.gdshader`: stone walls with rim light and shadow; water with drifting ripples and
   a damp bank. The 4 px obstacle grid is sampled bicubically with a little noise, so outlines
   are smooth and natural.
+- `scenery/prop_baker.gd`: rocks and logs are baked once into images when placed, by painters
+  registered as renderers `"prop:<type>"` (`rock_look.gd`: domed, faceted stone with grain,
+  hairline cracks, lichen and moss on the shaded side; `log_look.gd`: a lit cylinder with bark
+  ridges, knots, peeled patches, a sawn end with rings and a splintered broken end). The body
+  is drawn over exactly the prop's footprint (so it blocks where it is drawn), with a cast
+  shadow as long as the prop is tall and a contact shadow; `SceneryRenderer` draws all
+  shadows, then all bodies. Baking is GDScript (about 0.2 s for a 50-unit rock, 0.7 s for a
+  300-unit log).
 - `bridge_renderer.gd`: bridges as big twigs (same generator as twig debris) with a shadow on
   the water.
 - `rain.gdshader` + `rain_renderer.gd`: per shower, wet darkened soil with splash rings under

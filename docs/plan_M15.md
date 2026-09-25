@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a, M15b done; next M15c.
+Status: M15a, M15b, M15c done; next M15d.
 
 ## Where things stand (before M15)
 
@@ -467,3 +467,48 @@ Changed from the plan / notes for the next phases:
 - For M15c (rocks near moss): read `sim.ground.weight_at("moss", at)` when baking, or bind the
   same `material_a` texture (world UV = position / world_size) in a prop shader.
 - Existing scenarios have no `"ground"`, so they look as before (and hash as before).
+
+### M15c (done)
+
+Done:
+- `RockProp`: lumpy ellipse as before, plus a look `detail` (`half`, `height`, `stone` granite /
+  sandstone / basalt, `lichen`, optional `moss`). `LogProp`: `detail.axes` (trunk + 0-2 side
+  stubs, `"stubs"` param; each `{points, widths}`), `height`, `peel`, `tint`; footprint is now
+  `{"shape": "multi", "parts": [...]}`: a quad per segment (flat, tapered ends) and a disc at each
+  bend, for trunk and stubs, so it matches the drawn log (the old full-width polyline did not).
+- `PropType`: footprint shapes `rect` and `multi`; static `shape_cells`, `footprint_contains`
+  (same membership rule as the cells: cell centre inside; polylines use width/2 plus the
+  half-cell slack of `World._stamp`), `footprint_bounds`, `obstacle_footprint`. `Prop.detail`
+  (type-specific look geometry); `Prop.contains` also checks the footprint (log stubs);
+  `Scenery` bounds include the footprint.
+- Wall looks: `ScenarioEvents.place_obstacle(sim, ob)` (used by the loader and the
+  `add_obstacle` event) adds a rock prop `{"type": "rock", "wall": ob, ...}` for walls with
+  `"look": "rock"`; `PropType.stamp` then calls the new `World.mark_prop_cells` (counts WALL cells
+  in `prop_mask`, obstacles untouched, so hashes are unchanged); `Scenery.remove` of such a
+  prop keeps the wall (`remove_prop_cells(cells, false)`). `World.cells_in_rect` = fill_rect's cells.
+- `render/scenery/prop_baker.gd` (`PropBaker`): `bake(prop, painter, cell_size, ground)` ->
+  body image (RES 2 px/unit, mipmapped) + shadow image (1 px/unit) and their world rects.
+  `rasterize()` gives a `PropBaker.Canvas` (coverage with a 1-unit noise wobble and
+  supersampled edges, chamfer `depth` inside, `rgb`, optional per-pixel `heights`); the painter
+  fills it; the shadow is cast from the heights along `-LIGHT_DIR` (length 0.75 x height),
+  blurred, plus a contact ring. Painter helpers: `noise`, `cells` (Voronoi), `hash01`, `light3`.
+- Painters are registered as renderers `"prop:rock"` (`RockLook`) and `"prop:log"` (`LogLook`) in
+  `CoreRenderers`. `SceneryRenderer` bakes new props when `scenery.version` changes (cached by
+  prop id), draws all shadows then all bodies; props without a painter keep the placeholder.
+- Tests (`tests/test_scenery.gd`, +6): drawn body vs blocked cells agree within one cell for
+  rocks, logs with stubs and every wall-look shape; wall looks keep cells, RNG and state hash;
+  bakes are deterministic. Fixture `tests/fixtures/scenarios/rocks_logs_demo.json` for stills.
+
+Changed from the plan / notes for the next phases:
+- The obstacle shader still ignores B: baked shadows do the contact shadow/AO.
+- `"look"` supports `"rock"` only (a warning otherwise); a log look on polylines would need
+  capsule ends. `remove_obstacle` over a dressed wall frees the cells but leaves `prop_mask`
+  set (drawn as rock until the prop is removed) - same known edge as M15a.
+- Baking is GDScript per pixel: ~0.2 s for a 50-unit rock, ~0.7 s for a 300 x 30 diagonal log
+  (its whole bounding box is rasterized). Fine for tens of props; for M15h's scatter (hundreds)
+  either keep blocking props few/small, rasterize only near the footprint, or bake lazily over
+  frames. Plants (M15d) should bake smaller images.
+- For M15d: a plant painter is a `"prop:plant"` renderer with `paint(canvas, prop, ground)`; the
+  canvas covers only the footprint (stem), so the canopy needs its own images (add a second
+  bake entry point in `PropBaker`, e.g. `bake_image(size, fn)`, reusing `noise`/`light3`). The
+  base pass already draws shadows first; the canopy shadow can be drawn by the canopy node.

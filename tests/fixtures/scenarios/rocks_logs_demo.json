@@ -1,0 +1,37 @@
+{
+	"name": "rocks_logs_demo",
+	"description": "M15c check: rocks of each stone (one on moss), logs with stubs and a bend, and scenario walls dressed as rock (\"look\": \"rock\"), round a foraging colony.",
+	"seed": 7,
+	"duration": 20,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "moss", "shape": "circle", "center": [250, 700], "radius": 190, "soft": 60},
+			{"material": "sand", "shape": "circle", "center": [820, 420], "radius": 200, "soft": 60},
+			{"material": "litter", "shape": "rect", "rect": [0, 1500, 1080, 420], "soft": 100, "noise": {"scale": 160, "cover": 0.5}}
+		]
+	},
+	"colonies": [
+		{"species": "leafcutter", "nest": [540, 1300], "population": {"minim": 30, "media": 130, "major": 10}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [540, 560], "radius": 26, "amount": 400}
+	],
+	"obstacles": [
+		{"shape": "polyline", "points": [[120, 1000], [330, 960], [420, 1040]], "width": 22, "look": "rock"},
+		{"shape": "rect", "rect": [700, 1000, 200, 36], "look": "rock", "stone": "sandstone"},
+		{"shape": "circle", "center": [900, 1400], "radius": 50, "look": "rock", "stone": "basalt"},
+		{"shape": "circle", "center": [150, 1400], "radius": 30}
+	],
+	"scenery": [
+		{"type": "rock", "center": [250, 690], "radius": 70, "flat": 0.75, "stone": "granite"},
+		{"type": "rock", "center": [340, 790], "radius": 26, "stone": "granite"},
+		{"type": "rock", "center": [820, 420], "radius": 55, "flat": 0.6, "stone": "sandstone", "lichen": 0.1},
+		{"type": "rock", "center": [760, 760], "radius": 40, "stone": "basalt", "lichen": 0.8},
+		{"type": "rock", "center": [620, 1560], "radius": 18},
+		{"type": "rock", "center": [650, 1590], "radius": 11},
+		{"type": "log", "points": [[380, 1150], [560, 1110], [690, 1150]], "width": 30, "stubs": 2},
+		{"type": "log", "points": [[160, 300], [420, 250]], "width": 18, "taper": 0.5, "stubs": 1},
+		{"type": "log", "points": [[700, 1700], [980, 1790]], "width": 42, "taper": 0.8, "stubs": 0, "peel": 0.6}
+	]
+}

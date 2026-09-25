@@ -21,9 +21,14 @@ var prop_seed: int = 0
 ## True if its footprint blocks ants (stamped into the World as WALL).
 var blocks: bool = false
 ## Blocking footprint: {} (none), {"shape": "circle", "center": Vector2, "radius": r},
-## {"shape": "polygon", "points": PackedVector2Array} or
-## {"shape": "polyline", "points": PackedVector2Array, "width": w}.
+## {"shape": "polygon", "points": PackedVector2Array},
+## {"shape": "polyline", "points": PackedVector2Array, "width": w},
+## {"shape": "rect", "rect": Rect2} or {"shape": "multi", "parts": [footprints]}.
+## Renderers draw the prop's body over exactly this shape (PropType.footprint_contains).
 var footprint: Dictionary = {}
+## Type-specific geometry for the prop's look, e.g. a log's "axes"
+## ([{"points": PackedVector2Array, "widths": PackedFloat32Array}]) and "height".
+var detail: Dictionary = {}
 ## Outline of the part on the ground, drawn under the ants (base pass).
 var outline: PackedVector2Array = []
 ## Outline of the part over the ants (canopy pass); empty for none.
@@ -33,7 +38,8 @@ var bounds: Rect2 = Rect2()
 ## Cells claimed in World.prop_mask (see World.add_prop_cells).
 var cells: PackedInt32Array = []
 
-## True if `at` is inside the prop's base or canopy outline.
+## True if `at` is inside the prop's base or canopy outline, or its footprint.
 func contains(at: Vector2) -> bool:
 	return (outline.size() >= 3 and Geometry2D.is_point_in_polygon(at, outline)) \
-			or (canopy.size() >= 3 and Geometry2D.is_point_in_polygon(at, canopy))
+			or (canopy.size() >= 3 and Geometry2D.is_point_in_polygon(at, canopy)) \
+			or (not footprint.is_empty() and PropType.footprint_contains(footprint, at, 4.0))

@@ -165,6 +165,14 @@ func cells_in_polygon(points: PackedVector2Array) -> PackedInt32Array:
 				out.append(cy * width + cx)
 	return out
 
+## Cells fill_rect fills (those inside the world).
+func cells_in_rect(rect: Rect2) -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	for cy in range(maxi(0, int(rect.position.y * _inv_cell)), mini(height, int(ceil(rect.end.y * _inv_cell)))):
+		for cx in range(maxi(0, int(rect.position.x * _inv_cell)), mini(width, int(ceil(rect.end.x * _inv_cell)))):
+			out.append(cy * width + cx)
+	return out
+
 ## Cells (inside the world, each once) covered by a thick polyline: discs of
 ## thickness / 2 stamped every half cell along it.
 func cells_in_polyline(points: PackedVector2Array, thickness: float) -> PackedInt32Array:
@@ -319,13 +327,28 @@ func add_prop_cells(cells: PackedInt32Array) -> PackedInt32Array:
 	edit_version += 1
 	return claimed
 
-## Undoes add_prop_cells: cells no other prop covers become free again.
-func remove_prop_cells(cells: PackedInt32Array) -> void:
+## Gives existing walls a prop's look (a scenario obstacle with "look"): each
+## WALL cell is counted in prop_mask without changing `obstacles`, so the run
+## is exactly as without the look. Returns the cells marked.
+func mark_prop_cells(cells: PackedInt32Array) -> PackedInt32Array:
+	if prop_mask.is_empty():
+		prop_mask.resize(width * height)
+	var marked: PackedInt32Array = []
+	for c in cells:
+		if obstacles[c] == Cell.WALL:
+			prop_mask[c] = mini(prop_mask[c] + 1, 255)
+			marked.append(c)
+	version += 1
+	return marked
+
+## Undoes add_prop_cells: cells no other prop covers become free again (or
+## mark_prop_cells, with free_cells false: the walls stay).
+func remove_prop_cells(cells: PackedInt32Array, free_cells: bool = true) -> void:
 	for c in cells:
 		if prop_mask[c] == 0:
 			continue
 		prop_mask[c] -= 1
-		if prop_mask[c] == 0 and obstacles[c] == Cell.WALL:
+		if free_cells and prop_mask[c] == 0 and obstacles[c] == Cell.WALL:
 			obstacles[c] = Cell.FREE
 	version += 1
 	edit_version += 1
