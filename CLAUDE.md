@@ -20,9 +20,11 @@ when behaviour or tooling changes.
 ## Commands
 
 ```bash
-tools/test.sh                          # full headless suite (several minutes)
+tools/test.sh                          # full headless suite, in parallel (~2.5 min on 8 cores)
+tools/test.sh --quick                  # skip tests that took over 5 s last time (~25 s)
 tools/test.sh pheromones               # only tests whose "file::method" contains the filter
-tools/test.sh test_native.gd::         # one file
+tools/test.sh test_native::            # one file
+tools/test.sh -j 1                     # in one process (default: half the CPU count)
 tools/test.sh --no-native              # GDScript ants only
 tools/test.sh --long test_colony_founding_grows   # whole colony_founding run (~30 min)
 tools/build_native.sh                  # build the C++ ant kernel (MinGW GCC; `clean` removes it)
@@ -36,6 +38,15 @@ FORMAT=avi tools/record.sh <scenario> [seed] [seconds]   # fast draft; default P
 Tests: `tests/test_*.gd` extend `TestCase` and define `test_*` methods using `check()` /
 `check_eq()`. `ERROR:` lines in output are expected (some tests exercise error paths); only
 PASS/FAIL lines and the exit code matter. A script error inside a test counts as a failure.
+`tools/test.sh` spreads tests over processes by their last times (`.godot/test_times.txt`)
+and prints only PASS/FAIL lines; each process's full output is in `.godot/test_runs/`. A
+test that crashes its process is reported as a FAIL with no result.
+
+- Use `--quick` or a filter while iterating; always run the **full** suite before a commit.
+  `--quick` is not a gate: it skips the slow scenario, parity and determinism runs.
+- Keep tests independent (tests of one file may run in different processes, in any order).
+  Split a long test that loops over cases into one test per case so they run in parallel
+  (see `test_native_matches_gdscript_*`).
 
 ## Architecture
 
@@ -50,6 +61,9 @@ PASS/FAIL lines and the exit code matter. A script error inside a test counts as
   behaviours, food/item/nest types, renderers by string id like `"food:my_food"`).
 - `scenes/` — `main.tscn` (interactive, tuning panel) and `record.tscn` (Movie Maker capture);
   `scenario_player.gd` drives playback (camera keyframes, speed schedule, layouts).
+- Nests with a queen build on the core `ColonyNest` (queen, `Brood`/`BroodCare`, nest roles,
+  `NestChambers`, entrances); species nests (`FungusNest`, `GranaryNest`) add their food
+  store and roles. A scenario colony can pick another nest type with `"nest_type"`.
 - Layers: layer 0 is the surface; a nest may add an underground `SimLayer` linked by `Portal`s.
   Underground movement uses `NavGrid` distance fields, not pheromones. Digging is planned as
   jobs by `ExcavationPlan`/`DigShape`; `World.dig_log` lets caches update incrementally.

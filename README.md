@@ -55,7 +55,8 @@ ant of a colony, including its abstract population (see "Scale" below).
 
 ```bash
 tools/build_native.sh                           # build the native ant kernel (tools/build_native.sh clean removes it)
-tools/test.sh                                   # headless test suite (filter: tools/test.sh pheromones)
+tools/test.sh                                   # headless test suite in parallel (filter: tools/test.sh pheromones)
+tools/test.sh --quick                           # only tests that took 5 s or less last time (QUICK_MS=); -j N processes
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
 tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
 tools/screenshot.sh two_species 2400 out.png -1 --safe=1 --debug=1 --pheromones=0    # overlays

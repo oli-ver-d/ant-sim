@@ -2,9 +2,12 @@ extends SceneTree
 ## Headless test runner. Loads every res://tests/test_*.gd, runs its test_*
 ## methods and exits with code 1 if anything failed.
 ##
-##   godot --headless --path . -s res://tests/run_tests.gd -- [name_filter]
+##   godot --headless --path . -s res://tests/run_tests.gd -- [name_filter] [--list] [--tests-file=path]
 ##
-## Use tools/test.sh, which also refreshes the class cache first.
+## --list prints "TEST file::method" for every matching test instead of running
+## them; --tests-file runs only the tests named in the file (one full name per
+## line). tools/test.sh uses both to spread the suite over several processes,
+## and also refreshes the class cache first: use it rather than this directly.
 ##
 ## Tests run on the first frame (not in _initialize) so the scene tree is fully
 ## up: tests may add scenes to root and get _ready() as in the app.
@@ -42,10 +45,22 @@ func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	# Flags (e.g. --no-native, see NativeAnts) aren't filters.
 	var name_filter := ""
+	var list_only := false
+	var only := {}
 	for a in args:
-		if not a.begins_with("--"):
+		if a == "--list":
+			list_only = true
+		elif a.begins_with("--tests-file="):
+			var f := FileAccess.open(a.trim_prefix("--tests-file="), FileAccess.READ)
+			if f == null:
+				print("FAIL  can't read %s" % a)
+				quit(1)
+				return
+			for line in f.get_as_text().split("\n", false):
+				if line.strip_edges() != "":
+					only[line.strip_edges()] = true
+		elif not a.begins_with("--") and name_filter == "":
 			name_filter = a
-			break
 	var passed := 0
 	var failed := 0
 	var files := DirAccess.get_files_at(TEST_DIR)
@@ -60,11 +75,7 @@ func _run() -> void:
 			failed += 1
 			print("FAIL  %s (failed to load - parse error?)" % file)
 			continue
-		var tc := script.new() as TestCase
-		if tc == null:
-			failed += 1
-			print("FAIL  %s (does not extend TestCase)" % file)
-			continue
+		var selected: Array[String] = []
 		for method in script.get_script_method_list():
 			var method_name: String = method["name"]
 			if not method_name.begins_with("test_"):
@@ -72,6 +83,20 @@ func _run() -> void:
 			var full_name := "%s::%s" % [file.get_basename(), method_name]
 			if name_filter != "" and not full_name.contains(name_filter):
 				continue
+			if not only.is_empty() and not only.has(full_name):
+				continue
+			selected.append(method_name)
+			if list_only:
+				print("TEST %s" % full_name)
+		if list_only or selected.is_empty():
+			continue
+		var tc := script.new() as TestCase
+		if tc == null:
+			failed += 1
+			print("FAIL  %s (does not extend TestCase)" % file)
+			continue
+		for method_name in selected:
+			var full_name := "%s::%s" % [file.get_basename(), method_name]
 			tc.current_test = full_name
 			var failures_before := tc.failures.size()
 			var errors_before := _errors.script_errors
@@ -89,5 +114,6 @@ func _run() -> void:
 				for i in range(failures_before, tc.failures.size()):
 					print("      - " + tc.failures[i])
 
-	print("\n%d passed, %d failed in %.1f s" % [passed, failed, (Time.get_ticks_msec() - t_start) / 1000.0])
+	if not list_only:
+		print("\n%d passed, %d failed in %.1f s" % [passed, failed, (Time.get_ticks_msec() - t_start) / 1000.0])
 	quit(1 if failed > 0 else 0)

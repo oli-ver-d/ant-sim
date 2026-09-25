@@ -183,7 +183,9 @@ func test_extra_entrances_open_and_are_used() -> void:
 			for i in sim.high_water:
 				if sim.alive[i] != 0 and sim.transit_until[i] != 0:
 					used[sim.transit_portal[i]] = used.get(sim.transit_portal[i], 0) + 1
-		if opened_at > 0.0 and sim.time() > opened_at + 120.0:
+		# Ants start using it within a second or so of opening (the shaft
+		# takes ~460 s to dig): 30 s shows both entrances in use.
+		if opened_at > 0.0 and sim.time() > opened_at + 30.0:
 			break
 	check_eq(nest.extra_portals.size(), 1, "a second entrance planned at the population step")
 	check(opened_at > 0.0, "dug open (at %.0f s)" % opened_at)

@@ -44,16 +44,43 @@ func _run(scenario: String, ticks: int, native: bool) -> Dictionary:
 	NativeAnts.enabled = was
 	return {"hashes": hashes, "native": sim.native != null}
 
-func test_native_matches_gdscript() -> void:
+## Runs `scenario` (a RUNS key) with and without the kernel and compares.
+func _check_matches(scenario: String) -> void:
 	if not _native():
 		print("    (native kernel not built: skipped)")
 		return
+	var ticks: int = RUNS[scenario]
+	var fast := _run(scenario, ticks, true)
+	var slow := _run(scenario, ticks, false)
+	check(fast["native"], "%s: the kernel ran to the end" % scenario)
+	check_eq(fast["hashes"], slow["hashes"], "%s: native and GDScript state hashes" % scenario)
+
+## Its name for a test: the scenario name, or a fixture's file name.
+static func _matches_test(scenario: String) -> String:
+	return "test_native_matches_gdscript_" + scenario.get_file().get_basename()
+
+## One test per RUNS entry (so tools/test.sh can run them in parallel); every
+## entry must have one.
+func test_native_matches_gdscript_covers_every_run() -> void:
 	for scenario: String in RUNS:
-		var ticks: int = RUNS[scenario]
-		var fast := _run(scenario, ticks, true)
-		var slow := _run(scenario, ticks, false)
-		check(fast["native"], "%s: the kernel ran to the end" % scenario)
-		check_eq(fast["hashes"], slow["hashes"], "%s: native and GDScript state hashes" % scenario)
+		check(has_method(_matches_test(scenario)), "%s() for %s" % [_matches_test(scenario), scenario])
+
+func test_native_matches_gdscript_basic_forage() -> void: _check_matches("basic_forage")
+func test_native_matches_gdscript_chaos_to_highway() -> void: _check_matches("chaos_to_highway")
+func test_native_matches_gdscript_fungus_farm() -> void: _check_matches("fungus_farm")
+func test_native_matches_gdscript_leaf_strip() -> void: _check_matches("leaf_strip")
+func test_native_matches_gdscript_maze() -> void: _check_matches("maze")
+func test_native_matches_gdscript_rain_reset() -> void: _check_matches("rain_reset")
+func test_native_matches_gdscript_trunk_trail() -> void: _check_matches("trunk_trail")
+func test_native_matches_gdscript_twig_bridge() -> void: _check_matches("twig_bridge")
+func test_native_matches_gdscript_two_species() -> void: _check_matches("two_species")
+func test_native_matches_gdscript_colony_founding() -> void: _check_matches("colony_founding")
+func test_native_matches_gdscript_dig_demo() -> void: _check_matches("res://tests/fixtures/scenarios/dig_demo.json")
+func test_native_matches_gdscript_shapes_demo() -> void: _check_matches("res://tests/fixtures/scenarios/shapes_demo.json")
+func test_native_matches_gdscript_highway_demo() -> void: _check_matches("res://tests/fixtures/scenarios/highway_demo.json")
+func test_native_matches_gdscript_brood_demo() -> void: _check_matches("res://tests/fixtures/scenarios/brood_demo.json")
+func test_native_matches_gdscript_garden_demo() -> void: _check_matches("res://tests/fixtures/scenarios/garden_demo.json")
+func test_native_matches_gdscript_nest_bench() -> void: _check_matches("res://tests/fixtures/scenarios/nest_bench.json")
 
 ## Ticks spread across frames (as when rendering) give the same run.
 func test_native_split_ticks() -> void:
