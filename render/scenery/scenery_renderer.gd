@@ -8,6 +8,7 @@ extends Node2D
 ## e.g. RockLook) are baked once by PropBaker when they appear: the base pass
 ## draws every prop's shadow first, then the bodies, so a shadow never falls
 ## across a neighbouring rock. Others get placeholder outlines for now.
+## Plant blades (detail "blades") are drawn by CanopyRenderer, not the canopy pass.
 
 enum Pass { BASE, CANOPY }
 
@@ -80,7 +81,8 @@ func _draw() -> void:
 				draw_texture_rect(b["body"], b["body_rect"], false)
 			else:
 				_shape(prop.outline, Color(col, 0.85), col.darkened(0.45), 1.5)
-		else:
+		elif not prop.detail.has("blades"):
+			# Plant blades are drawn by CanopyRenderer.
 			_shape(prop.canopy, Color(col, 0.18), Color(col.lightened(0.2), 0.7), 1.0)
 
 func _shape(outline: PackedVector2Array, fill: Color, line: Color, line_width: float) -> void:

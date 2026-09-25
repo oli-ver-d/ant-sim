@@ -9,3 +9,5 @@ static func register(registry: Registry) -> void:
 	# Scenery prop looks, baked by PropBaker.
 	registry.register_renderer("prop:rock", RockLook)
 	registry.register_renderer("prop:log", LogLook)
+	registry.register_renderer("prop:plant", PlantLook)
+	registry.register_renderer("prop:grass", PlantLook)

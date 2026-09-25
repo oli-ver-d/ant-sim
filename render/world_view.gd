@@ -6,7 +6,7 @@ extends Node2D
 ## ground cover decals, wet ground (rain),
 ## obstacles, scenery bases, bridges, nests, pheromone glow, food, ground
 ## items (debris), ants, carried items, ants riding on carried items, scenery
-## canopy, falling rain, debug.
+## canopy (plant blades and their shadow: CanopyRenderer), falling rain, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
 ##
@@ -145,6 +145,9 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 		var canopy := SceneryRenderer.new()
 		canopy.bind(sim, SceneryRenderer.Pass.CANOPY)
 		add_child(canopy)
+		var plants := CanopyRenderer.new()
+		plants.bind(sim)
+		add_child(plants)
 	if rain_renderer != null:
 		add_child(rain_renderer)
 

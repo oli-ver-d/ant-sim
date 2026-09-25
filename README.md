@@ -99,7 +99,8 @@ sim/          core engine (no rendering, no species-specific code)
   traffic_map.gd      decaying per-cell count of the ants passing
   scenario_loader.gd  JSON scenario -> Simulation
   scenery/            Scenery (surface props), Prop, PropType + core types: RockProp, LogProp,
-                      PlantProp (plant, grass); only blocking footprints reach the World
+                      PlantProp (plant kinds, grass: blades in detail); only blocking
+                      footprints reach the World
                       GroundMap: surface ground materials (render-only weights grid)
   behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
                       dig, carry_spoil, go_up; for nests with a queen: queen, nest_role, nurse,
@@ -334,12 +335,15 @@ JSON files in `scenarios/`. Simulation content:
   (also `"lumpy"`, `"height"`, `"stone"`: `granite` | `sandstone` | `basalt`, `"lichen"` 0-1,
   `"moss"` 0-1, else from the ground map), `{"type": "log", "points": [[x, y], ...], "width":
   30}` (also `"taper"`, `"stubs"` side branch stubs, `"peel"` 0-1; the first point is the sawn
-  end), `{"type": "plant", "center": [x, y], "radius": 60, "stem": 6}` (the stem blocks, the
-  canopy hangs over the ants), `{"type": "grass", ...}` (canopy only). Shapes come from each
+  end), `{"type": "plant", "kind": "rosette", "center": [x, y], "radius": 60, "stem": 6}` (the
+  stem blocks, the blades hang over the ants; kinds `rosette` (flat blades, lobed or broad),
+  `clover` (stalks with three heart-shaped lobes), `fern` (arching fronds of pinnae),
+  `seedling` (two to four small blades); `"blades"` sets the count, `"stem": 0` makes it
+  canopy only), `{"type": "grass", "center": [x, y], "radius": 40}` (a clump of thin blades,
+  some bent over; canopy only unless `"stem"` is set). Shapes come from each
   prop's own seeded RNG, never the simulation's, so non-blocking scenery never changes a run;
   blocking footprints are walls to the ants (and `World.prop_mask`, so they are drawn as the
-  prop, not stone). Optional `"name"`. Plants are placeholders until M15d; see
-  `docs/plan_M15.md`
+  prop, not stone). Optional `"name"`. See `docs/plan_M15.md`
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it
 - `max_agents`: `{"surface": n, "nest": n}` agents per layer, beyond which colonies grow as
@@ -421,6 +425,8 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
 | `bench.gd basic_forage 300 15000` | 12.8 ms per tick (GDScript: 135) |
 | nest that digs, ~1,500 ants (`nest_bench.json 900`) | 9.1 ms per tick: surface 2.2 ms (2.5 µs per ant), underground 3.7 ms (6.2 µs per ant) (GDScript: 20.9) |
 | `colony_founding` headless, whole run (216,000 ticks) | 30 min; 13–15 ms per tick at the 1,600 agent cap (GDScript: 22–26), ends at the same 3,529 ants |
+| **Plants** (M15d, native kernel) | |
+| 3,000 ants and 202 plants (`plants_bench.json --probe=1 --ants=3000`) | 60 fps; GPU 10.6 ms per frame, render CPU 0.5 ms (the same scene without plants: 6.8–10.3, 0.3); the canopy is 2 draw calls, each baked stem crown 2 more (+~250) |
 
 | **Organic nests** (M13, same machine; both runs side by side so they share the load) | |
 | `colony_founding` headless, whole run (`nest_probe.gd`) | 13.66 ms per tick (M12: 13.42, +2%); ends at 3,857 ants (M12: 3,529); 76 MB (M12: 70) |
@@ -731,7 +737,16 @@ All drawing lives in `render/` (plus each species' own renderers):
   is drawn over exactly the prop's footprint (so it blocks where it is drawn), with a cast
   shadow as long as the prop is tall and a contact shadow; `SceneryRenderer` draws all
   shadows, then all bodies. Baking is GDScript (about 0.2 s for a 50-unit rock, 0.7 s for a
-  300-unit log).
+  300-unit log). A plant's stem crown is baked the same way (`plant_look.gd`).
+- `scenery/canopy_renderer.gd` + `canopy.gdshader`: every plant blade (`PlantProp`'s
+  `detail.blades`: spine, widths, heights) in one static mesh drawn over the ants, shaded in
+  the shader (midrib and side veins, dandelion lobes, heart-shaped lobes with a pale chevron,
+  grass streaks, the fold facing the light, light through thin edges and tips, alpha thinning
+  toward the tips) and swaying slowly per blade in the vertex shader (a `wind` uniform that
+  rises while it rains). The blades' shadow is a second mesh drawn first, shifted away from
+  the light by each point's height, so it darkens the ground and the ants under it. Canopy
+  and shadow fade out round nest entrances, food and the ant the camera follows (a uniform
+  array of clear spots).
 - `bridge_renderer.gd`: bridges as big twigs (same generator as twig debris) with a shadow on
   the water.
 - `rain.gdshader` + `rain_renderer.gd`: per shower, wet darkened soil with splash rings under

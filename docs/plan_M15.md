@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a, M15b, M15c done; next M15d.
+Status: M15a, M15b, M15c, M15d done; next M15e.
 
 ## Where things stand (before M15)
 
@@ -512,3 +512,48 @@ Changed from the plan / notes for the next phases:
   canvas covers only the footprint (stem), so the canopy needs its own images (add a second
   bake entry point in `PropBaker`, e.g. `bake_image(size, fn)`, reusing `noise`/`light3`). The
   base pass already draws shadows first; the canopy shadow can be drawn by the canopy node.
+
+### M15d (done)
+
+Done:
+- `PlantProp` builds blade geometry per kind into `prop.detail`: `kind`, `reach`, `height` (stem
+  crown) and `blades`, a list of `{style, points (SEGMENTS + 1 = 9 spine points, base to tip),
+  widths, heights (above ground), tint, phase, teeth}` drawn in order (lowest first). Styles
+  (`PlantProp.Style`): GRASS, BROAD, LOBE, PINNA, STALK. Kinds: `rosette` (two whorls; lobed
+  dandelion-like or broad plantain-like, round-tipped), `clover` (stalks + three heart lobes,
+  lobes share their stalk's sway phase), `fern` (rachis + pinna pairs, shared phase),
+  `seedling`, `grass` (tight tuft, 16-28 blades, ~30% bent at a kink and falling, some straw).
+  Per-kind defaults in `PlantProp.DEFAULTS` (radius, stem, blade count range). `prop.canopy` is
+  the convex hull of every blade. Footprint unchanged: one stem circle.
+- `render/scenery/canopy_renderer.gd` (`CanopyRenderer`, added by `WorldView` after the canopy
+  placeholder pass): `build_mesh(props, shadow)` makes one ArrayMesh of all blades (UV across /
+  along, COLOR tint, CUSTOM0 = plant centre, phase, sway per distance^2; CUSTOM1 = style, teeth,
+  length, light side). The shadow mesh is the same blades widened and shifted by
+  `-LIGHT_DIR * 0.75 * height`, drawn first. Rebuilt when `scenery.version` changes.
+  `canopy.gdshader`: shading and sway as planned; `wind` uniform eased up by up to +1.6 while
+  it rains. `clear_spots(sim, follow_ant)`: followed ant (from the Camera2D's `follow_ant`),
+  entrances (nest radius + 22), food (45), max 16; canopy and shadow alpha drop to 0.18 inside.
+- `render/scenery/plant_look.gd` (`PlantLook`, `"prop:plant"` / `"prop:grass"`): the stem crown
+  baked by `PropBaker` like rocks (ridged blade bases, pale sheaths, dark soil line).
+  `SceneryRenderer`'s canopy pass skips props with `detail.blades`.
+- Tests: `tests/test_plants.gd` (7: kinds, counts, determinism, only the stem blocks, mesh and
+  shadow geometry, clear spots, canopy-only plants keep the run's hash) and
+  `test_scenery::test_plant_stem_drawn_where_it_blocks`. Fixtures
+  `tests/fixtures/scenarios/plants_demo.json` (every kind, stills) and `plants_bench.json`
+  (202 plants, frame probe).
+- Frame probe (3,000 ants, native): with plants GPU 10.6 ms, render CPU 0.5 ms, ~800 draw calls;
+  without 6.8-10.3 ms, 0.3 ms, ~520. 60 fps both. In the README.
+
+Changed from the plan / notes for the next phases:
+- No baked canopy images or atlases: the canopy is a vector mesh with procedural shading, so
+  it is crisp at any zoom, costs no bake time, and sways per blade in the vertex shader (the
+  plan's "per-blade vertex offset"). The "canopy shadow image" is a second mesh.
+- Draw calls: each baked prop (rock, log, stem crown) is 2 draw calls (own textures). Fine at
+  ~200 props; for M15h's scatter consider packing baked bodies/shadows into an atlas.
+- Sway uses shader `TIME` (video time under Movie Maker, so deterministic in recordings, and
+  independent of the sim speed schedule).
+- Clear spots use the nest's current `entrances()`; M15e's entrance renderer may want the same
+  list (and `clears_plants` could scale canopy alpha by distance the same way).
+- For M15h (presets): kinds and sensible radii: grass 30-65, rosette 35-70, clover 35-50, fern
+  60-100 (stem 6), seedling 10-18 (stem 2). Stems block, so dense scatter needs the
+  connectivity check; `"stem": 0` gives canopy-only plants for existing scenarios (M15i).

@@ -239,6 +239,13 @@ func test_wall_look_drawn_where_it_blocks() -> void:
 	for p in sim.scenery.props:
 		_check_drawn_matches_blocked(sim.world, p, RockLook.new())
 
+func test_plant_stem_drawn_where_it_blocks() -> void:
+	var sim := Simulation.new(_config, _registry, 4)
+	var plant := sim.scenery.add({"type": "plant", "kind": "rosette", "center": [300, 400], "radius": 70, "stem": 12})
+	_check_drawn_matches_blocked(sim.world, plant, PlantLook.new())
+	var grass := sim.scenery.add({"type": "grass", "center": [600, 400], "radius": 60, "stem": 11})
+	_check_drawn_matches_blocked(sim.world, grass, PlantLook.new())
+
 ## A "look" only changes how walls are drawn: same cells, same run.
 func test_wall_look_keeps_cells_and_run() -> void:
 	var walls := [

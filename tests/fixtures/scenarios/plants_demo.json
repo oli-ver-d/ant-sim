@@ -1,0 +1,34 @@
+{
+	"name": "plants_demo",
+	"description": "M15d check: every plant kind and grass round a foraging colony on mixed ground; stems block, blades hang over the ants and thin out round the nest and food.",
+	"seed": 5,
+	"duration": 30,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "moss", "shape": "circle", "center": [300, 700], "radius": 200, "soft": 50},
+			{"material": "litter", "shape": "circle", "center": [820, 1500], "radius": 200, "soft": 60}
+		]
+	},
+	"colonies": [
+		{"species": "leafcutter", "nest": [540, 1300], "population": {"minim": 30, "media": 130, "major": 10}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [540, 800], "radius": 26, "amount": 400}
+	],
+	"scenery": [
+		{"type": "plant", "kind": "rosette", "center": [420, 1100], "radius": 70, "stem": 7},
+		{"type": "plant", "kind": "rosette", "center": [700, 1150], "radius": 50, "stem": 5},
+		{"type": "plant", "kind": "clover", "center": [620, 980], "radius": 45},
+		{"type": "plant", "kind": "clover", "center": [470, 930], "radius": 38},
+		{"type": "plant", "kind": "fern", "center": [300, 720], "radius": 95},
+		{"type": "plant", "kind": "seedling", "center": [560, 1050], "radius": 14},
+		{"type": "plant", "kind": "seedling", "center": [520, 1000], "radius": 11},
+		{"type": "plant", "kind": "seedling", "center": [600, 1080], "radius": 16},
+		{"type": "grass", "center": [760, 850], "radius": 55},
+		{"type": "grass", "center": [380, 1300], "radius": 45},
+		{"type": "grass", "center": [540, 1300], "radius": 50},
+		{"type": "grass", "center": [820, 1450], "radius": 60, "stem": 3},
+		{"type": "rock", "center": [760, 1000], "radius": 30}
+	]
+}
