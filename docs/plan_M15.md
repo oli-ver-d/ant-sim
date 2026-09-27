@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a-M15j done; next M15k (founding frame budget, final videos).
+Status: M15a-M15k done (M15k: AVI drafts of every scenario); next M15l (founding frame budget, PNG finals).
 
 ## Where things stand (before M15)
 
@@ -862,3 +862,20 @@ Not done / for the next phase (M15k: founding frame budget and final videos):
   to run while another's `override.cfg` exists.
 - The fungus_farm GPU spikes (to 27 ms) weren't separated from CPU load; an A/B with the
   midden renderer hidden would tell whether full middens cost GPU time.
+
+### M15k (done)
+
+Done (at the user's request, AVI/MJPEG drafts instead of PNG finals for now):
+- `FORMAT=avi tools/record.sh` for all 12 scenarios with their own seeds, one at a time
+  (1080x1920, 60 fps, all checked with ffprobe). Wall time per video:
+  basic_forage 60 s video / 5.6 min, maze 2.6, twig_bridge 2.4, two_species 3.2,
+  leaf_strip 3.1, trunk_trail 2.5, rain_reset 2.7, chaos_to_highway 2.5, fungus_farm 3.3,
+  meadow_forage 7.1, harvester_founding (80 s) 39 min, colony_founding (80 s) 52 min.
+  Output: `renders/<scenario>_seed<N>_20260927_*.mp4` (11-155 MB).
+
+Changed from the plan / notes for M15l:
+- The founding frame budget (colony_founding late: ~14,000 draw calls, ~40 ms of renderer
+  `_process`; `frame_probe.gd` summing SubViewport render times) was not started; it moves
+  to M15l with the M15j notes above.
+- PNG finals still to record once the drafts are approved (founding runs ~1-1.5 h each in
+  PNG against ~40-50 min in AVI).
