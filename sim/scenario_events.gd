@@ -121,11 +121,11 @@ static func add_colony(sim: Simulation, col: Dictionary) -> Colony:
 			colony.nest.spawn_initial(sim, c)
 	return colony
 
-## Places a scenery prop on the surface. Scatter presets ({"scatter": ...})
-## are not supported yet and are skipped with a warning.
-static func add_scenery(sim: Simulation, prop: Dictionary) -> Prop:
+## Places a scenery prop on the surface, or scatters a preset
+## ({"scatter": {...}}, see Scatter; `index` seeds it).
+static func add_scenery(sim: Simulation, prop: Dictionary, index: int = -1) -> Prop:
 	if prop.has("scatter"):
-		push_warning("Scenery scatter presets are not supported yet; skipped")
+		Scatter.apply(sim, prop["scatter"], index if index >= 0 else 1000 + sim.scenery.props.size())
 		return null
 	return sim.scenery.add(prop)
 

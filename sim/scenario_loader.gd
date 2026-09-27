@@ -9,7 +9,8 @@ extends RefCounted
 ##   "obstacles": [shape, ...]              (see ScenarioEvents for shapes)
 ##   "ground":    {"base": "soil", "regions": [...]}   surface materials (see GroundMap)
 ##   "scenery":   [{"type": "rock" | "log" | "plant" | "grass", ...}]   surface props
-##                (see Scenery and the PropType scripts in sim/scenery)
+##                (see Scenery and the PropType scripts in sim/scenery), or
+##                {"scatter": {"preset": "meadow", ...}} (see Scatter; placed after the colonies)
 ##   "debris":    [{"type": "twig" | "pebble", "pos": [x, y], ...}]  (see Debris)
 ##   "events":    [{"t": seconds, "type": ..., ...}]   (see ScenarioEvents)
 ##   "max_agents": {"surface": n, "nest": n}   agents per layer, beyond which
@@ -45,14 +46,20 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 		ScenarioEvents.place_obstacle(sim, ob)
 	if data.has("ground"):
 		sim.ground = GroundMap.from_data(data["ground"], Vector2(config.world_size), seed_value)
-	for prop: Dictionary in data.get("scenery", []):
-		ScenarioEvents.add_scenery(sim, prop)
+	var scenery: Array = data.get("scenery", [])
+	for prop: Dictionary in scenery:
+		if not prop.has("scatter"):
+			ScenarioEvents.add_scenery(sim, prop)
 	for food: Dictionary in data.get("food", []):
 		sim.add_food_source(food["type"], food)
 	for d: Dictionary in data.get("debris", []):
 		Debris.create(sim, d)
 	for col: Dictionary in data.get("colonies", []):
 		ScenarioEvents.add_colony(sim, col)
+	# Scatters keep clear of the nests and food, so they come last.
+	for k in scenery.size():
+		if scenery[k].has("scatter"):
+			ScenarioEvents.add_scenery(sim, scenery[k], k)
 	# Agent caps per layer: "surface", or "nest" for every nest's underground.
 	var caps: Dictionary = data.get("max_agents", {})
 	for l in sim.layers:

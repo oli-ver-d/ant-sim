@@ -1,0 +1,33 @@
+{
+	"name": "scatter_demo",
+	"description": "M15h check: the four scatter presets in bands (meadow, forest floor, rocky, sandy) over matching ground, round a basic nest in the meadow and a harvester crater in the sand, food in each band and a path kept clear between them.",
+	"seed": 8,
+	"duration": 30,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "moss", "shape": "rect", "rect": [0, 0, 1080, 480], "noise": {"scale": 220, "cover": 0.45}},
+			{"material": "litter", "shape": "rect", "rect": [0, 480, 1080, 480], "soft": 60, "ragged": 40},
+			{"material": "moss", "shape": "rect", "rect": [0, 480, 1080, 480], "noise": {"scale": 180, "cover": 0.3}},
+			{"material": "gravel", "shape": "rect", "rect": [0, 960, 1080, 480], "soft": 60, "ragged": 40},
+			{"material": "sand", "shape": "rect", "rect": [0, 1440, 1080, 480], "soft": 60, "ragged": 40}
+		]
+	},
+	"colonies": [
+		{"species": "leafcutter", "nest": [540, 300], "nest_type": "basic_nest", "population": {"media": 80}},
+		{"species": "harvester", "nest": [540, 1650], "population": {"minor": 60}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [200, 140], "radius": 24, "amount": 400},
+		{"type": "food_pile", "pos": [860, 700], "radius": 24, "amount": 400},
+		{"type": "food_pile", "pos": [220, 1200], "radius": 24, "amount": 400},
+		{"type": "seed_pile", "pos": [880, 1500], "radius": 30, "count": 150, "seed": 4}
+	],
+	"scenery": [
+		{"scatter": {"preset": "meadow", "rect": [0, 0, 1080, 480]}},
+		{"scatter": {"preset": "forest_floor", "rect": [0, 480, 1080, 480]}},
+		{"scatter": {"preset": "rocky", "rect": [0, 960, 1080, 480]}},
+		{"scatter": {"preset": "sandy", "rect": [0, 1440, 1080, 480],
+			"clear": [{"shape": "polyline", "points": [[540, 1650], [880, 1500]], "width": 50}]}}
+	]
+}

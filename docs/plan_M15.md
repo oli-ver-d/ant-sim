@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a-M15g done; next M15h.
+Status: M15a-M15h done; next M15i.
 
 ## Where things stand (before M15)
 
@@ -725,3 +725,56 @@ Changed from the plan / notes for the next phases:
 - For M15h keep-clear: a midden's drawn extent is its stain grid (256 units square round
   `Midden.position`), but the visible pile is `centre()` + `radius()`; ring middens spread
   along the band (`drop_point`).
+
+### M15h (done)
+
+Done:
+- `sim/scenery/scatter.gd` (`Scatter.apply(sim, s, index)`): presets `meadow`, `forest_floor`,
+  `rocky`, `sandy` (`PRESETS`: `per_mu` darts per million square units, entries with type/kind,
+  weight `w`, `size` range, `spacing`, per-material `prefer`, `params` with `[a, b]` ranges).
+  Each dart picks an entry by weight x ground liking (`GroundMap.weights_at`) and is kept with
+  probability liking / base weight. Candidates are then placed biggest first (`extent()`),
+  each measured from its core (a point, or a log's end-to-end segment): must fit (zones, world
+  edge, blocking footprints 12 units off walls/water/other props) and be spaced (reach x
+  spacing per pair, blocking reaches + 12). Own RNG: `Scenery.prop_seed_for(seed, 1000000 +
+  entry index)` or `"seed"`.
+  Scenario keys: `preset`, `density`, `rect`, `keep_clear` (30), `avoid`
+  (nests/food/portals), `clear` (obstacle shapes; `"reserve": true` on one makes it
+  blocking-only), `reserve` (scale of the nest ring, 0 = none), `entries` / `per_mu` (custom).
+- Keep-clear (`keep_clear_zones`): hard zones (no prop): main entrance at full size
+  (1.2 x radius x style reach) + margin, every entrance site and extra portal, cleared disc,
+  spoil heaps (55), fixed dump; food body + margin; surface portals. Reserve zone (no blocking
+  prop; plants there are cut to stem 0): `midden_distance.y + 40` (ring middens: disc + 46),
+  or `entrance_spacing x 2.2 + reach` for nests with `entrance_steps`, scaled by `reserve`.
+- Connectivity (`_keep_connected`): baseline flood fill before placing; afterwards, per colony,
+  a 4-connected flood from the main entrance with scattered prop footprints dilated one cell;
+  targets = usable food sources' access points + the world edge (for every colony, not only
+  digging ones). While a target reachable before isn't, the newest blocking scattered prop
+  bordering (2 cells) the reachable area is removed (plants re-added with stem 0).
+- `ScenarioLoader`: explicit props still before food/colonies; scatter entries after the
+  colonies. `add_scenery` event with `"scatter"` scatters at run time.
+- `tests/test_scatter.gd` (11); fixture `tests/fixtures/scenarios/scatter_demo.json` (four
+  bands, one per preset, a basic nest and a harvester crater, a cleared path);
+  `tests/scatter_probe.gd` (counts and load time).
+- scatter_demo: ~135 props (~80 blocking, 3 logs); scatters take 0.3-0.4 s each headless;
+  a windowed still takes ~4 s longer than a scenario without scatter (rock bakes). Stills
+  checked: whole fixture, the meadow nest close up (keep-clear round the hole, canopy thinned),
+  the sand band (crater disc and path clear), a rock close up.
+
+Changed from the plan / notes for the next phase:
+- Density is darts, not a target count: a target count made saturated areas (spacing) push
+  the remainder onto disliked ground, so materials barely steered the mix.
+- The reserve ring is large (240 units for default middens): around a nest the scatter is
+  canopy-only for a while. Use `"reserve": 0.6` or so for a denser look if nest_probe shows
+  middens/entrances still fit; midden siting only needs a few free candidate points.
+- Logs were first spaced as a circle round their middle (radius half their length plus
+  stubs), which left almost no room for them; the core segment and biggest-first order fixed
+  that (~10 logs at forest_floor density 4, was ~0-1).
+- Connectivity dropped nothing in the fixture or in dense probes (forest_floor + rocky at
+  density 4 across a wall with one 120-unit gap, seeds 1-3): the spacing rule leaves gaps.
+  It is exercised by the plugged-gap tests; it matters when scatters meet scenario walls.
+- Food spawned later by events isn't kept clear (unknown at load). For colony_founding /
+  harvester_founding (M15i) add `"clear"` circles at the later food sites, or use `"avoid"`
+  with explicit clear shapes.
+- Bake cost: rocks are the slow part (~0.1-0.2 s each). A whole-world `rocky` scatter at
+  density 1 is ~100 rocks: expect several seconds before the first frame; fine for recording.

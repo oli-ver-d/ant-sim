@@ -101,7 +101,7 @@ sim/          core engine (no rendering, no species-specific code)
   scenario_loader.gd  JSON scenario -> Simulation
   scenery/            Scenery (surface props), Prop, PropType + core types: RockProp, LogProp,
                       PlantProp (plant kinds, grass: blades in detail); only blocking
-                      footprints reach the World
+                      footprints reach the World; Scatter (presets, keep-clear, connectivity)
                       GroundMap: surface ground materials (render-only weights grid)
   behaviours/         explore, follow_trail, go_to_food, carry_home, deliver, linger, carry_waste,
                       dig, carry_spoil, go_up; for nests with a queen: queen, nest_role, nurse,
@@ -367,7 +367,19 @@ JSON files in `scenarios/`. Simulation content:
   some bent over; canopy only unless `"stem"` is set). Shapes come from each
   prop's own seeded RNG, never the simulation's, so non-blocking scenery never changes a run;
   blocking footprints are walls to the ants (and `World.prop_mask`, so they are drawn as the
-  prop, not stone). Optional `"name"`. See `docs/plan_M15.md`
+  prop, not stone). Optional `"name"`. See `docs/plan_M15.md`.
+  `{"scatter": {"preset": "meadow", "density": 1, "rect": [x, y, w, h]}}` scatters a preset
+  instead (`meadow`, `forest_floor`, `rocky`, `sandy`; see `sim/scenery/scatter.gd`): darts
+  thinned by the ground materials each prop likes (ferns on moss, few plants on sand) and a
+  minimum spacing, from the scenario seed (not the run's RNG). Scatters are placed after the
+  colonies and food and keep clear of nests (entrances at full size, cleared discs, spoil
+  heaps; `"keep_clear"` margin, default 30), food, surface portals and `"clear"` shapes
+  (obstacle shapes, a polyline is a path). Round each nest they keep a ring free of blocking
+  props (plants there keep only their canopy) for the middens and extra entrances it will add
+  later (`"reserve"` scales it, 0 = none). Afterwards a scattered blocking prop that cuts a
+  colony off from a food source or the world edge is dropped. `"avoid"` (default
+  `["nests", "food", "portals"]`), `"entries"` / `"per_mu"` for a custom mix, `"seed"`.
+  `tests/scatter_probe.gd` prints what a scenario's scatters place and the load time
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it
 - `max_agents`: `{"surface": n, "nest": n}` agents per layer, beyond which colonies grow as
