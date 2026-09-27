@@ -346,7 +346,12 @@ JSON files in `scenarios/`. Simulation content:
   `nest_params.entrance` sets how the entrances look (render only): `{"style": "crater",
   "clear_radius": 90, "clears_plants": true}`; styles `hole` (basic nests), `crater`
   (harvesters, who also clear plants and litter from a disc as wide as their `disc_radius`),
-  `mound` (leafcutters) and `turret`
+  `mound` (leafcutters) and `turret`. `nest_params.midden` sets where refuse goes:
+  `{"style": "pile", "distance": [100, 200], "sites": 2, "capacity": 30, "avoid_trails":
+  true}` (the defaults; styles `pile`, `ring` (an arc at the edge of a cleared disc),
+  `scatter`); `"dump": [dx, dy]` (an offset from the nest) fixes one site instead. `params.worker_lifespan` (simulated seconds, 0 = never) makes
+  workers die of age and be carried to the midden, `params.brood_corpses` leaves starved
+  larvae (see Refuse and Corpses above)
 - `food`: type + type-specific params
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
   `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig;
@@ -471,6 +476,12 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
 | `colony_founding` headless, whole run (216,000 ticks) | 30 min; 13–15 ms per tick at the 1,600 agent cap (GDScript: 22–26), ends at the same 3,529 ants |
 | **Plants** (M15d, native kernel) | |
 | 3,000 ants and 202 plants (`plants_bench.json --probe=1 --ants=3000`) | 60 fps; GPU 10.6 ms per frame, render CPU 0.5 ms (the same scene without plants: 6.8–10.3, 0.3); the canopy is 2 draw calls, each baked stem crown 2 more (+~250) |
+| **Scenery, entrances, middens** (M15, native kernel) | |
+| `meadow_forage` interactive at the end (`--at=34 --probe=1`, ~385 ants, ~260 scattered props of which ~130 block, two middens with corpses) | 60 fps; GPU 10–13 ms per frame, render CPU 0.5–0.7 ms, 600–900 draw calls |
+| `meadow_forage` headless (`bench.gd meadow_forage 3600`) | 4.0 ms per tick, 3.2 of it the 4 pheromone channels on a large world (ants 0.6) |
+| `fungus_farm` after ~1,500 s (`--at=20 --probe=1`, ~1,060 ants, three full middens, ~2,700 deposits) | GPU 11–27 ms per frame (jumpy, with the CPU busy on the 30-ticks-per-frame timelapse), render CPU 0.4 ms, ~440 draw calls; the app runs at 8 fps because of the simulation, recordings are unaffected |
+| `colony_founding` late, split layout (`--at=62 --probe=1`, ~1,400 agents) | 11–14 fps: the simulation ~50 ms per frame (78 ticks per frame), renderers ~40 ms, ~14,000 draw calls (GPU time of the split views not measured: the probe reads the root viewport only) |
+| Loading scenery | a scatter takes 0.3–0.4 s headless; rocks and logs bake at 0.1–0.7 s each, so a scenario with a big `rocky` scatter takes several seconds before the first frame (`meadow_forage`: scatters 1.1 s) |
 
 | **Organic nests** (M13, same machine; both runs side by side so they share the load) | |
 | `colony_founding` headless, whole run (`nest_probe.gd`) | 13.66 ms per tick (M12: 13.42, +2%); ends at 3,857 ants (M12: 3,529); 76 MB (M12: 70) |

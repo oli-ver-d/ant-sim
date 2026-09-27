@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a-M15i done; next M15j.
+Status: M15a-M15j done; next M15k (founding frame budget, final videos).
 
 ## Where things stand (before M15)
 
@@ -829,3 +829,36 @@ Changed from the plan / notes for M15j:
 - Screenshots of meadow_forage at 18000 ticks take ~2 min windowed; scatter load is ~1.1 s.
 - Sand-region edges over soil read as a jagged dark rim at zoom 1 (ground cover decals at the
   boundary); worth a look if it shows in videos.
+
+### M15j (done)
+
+Done:
+- README: `nest_params.midden` (style, distance, sites, capacity, avoid_trails; defaults) and
+  `"dump"` (an offset), `params.worker_lifespan` / `brood_corpses` under Scenarios; M15 rows in
+  Performance (meadow_forage frame probe and bench, fungus_farm with full middens, scenery
+  load times). Visual style, refuse, corpses, scatter, `"look": "rock"`, `"blocking": false`
+  and `meadow_forage` were already documented in M15g-M15i.
+- Frame checks (native kernel, windowed, `--probe=1`):
+  - `meadow_forage --at=34` (~385 ants, 228 + 32 scattered props, 133 blocking, two middens
+    with corpses): 60 fps, GPU 10-13 ms, render CPU 0.5-0.7 ms, 600-900 draw calls. Headless
+    bench: 4.0 ms/tick, 3.2 of it pheromones (4 channels, large world).
+  - `fungus_farm --at=20` then ~4 min on (~1,060 ants, full middens): sim-bound at 8 fps
+    (30 ticks/frame), GPU 11-27 ms (jumpy), render CPU 0.4 ms, ~440 draw calls.
+  - `colony_founding --at=62` (split layout, ~1,400 agents): 11-14 fps; sim ~50 ms per frame
+    (78 ticks/frame), `process` 80-130 ms, so the renderers' `_process` take ~35-50 ms;
+    ~14,000 draw calls. The probe's render cpu/gpu (0.0/0.2 ms) are the root viewport only:
+    the split layout draws in SubViewports, which `frame_probe.gd` doesn't measure.
+- Recorded `renders/meadow_forage_seed*_*.mp4` (PNG).
+
+Not done / for the next phase (M15k: founding frame budget and final videos):
+- colony_founding late: find what makes ~14,000 draw calls and ~40 ms of renderer
+  `_process` (candidates: spoil heap crumbs, midden chunks, scenery props, stem crowns,
+  soil/garden views). Make `frame_probe.gd` sum render time over SubViewports
+  (`viewport_get_measured_render_time_*` per SubViewport RID). Offline recording is not
+  blocked by it (~3 min over an 80 s video against ~55 min of PNG writing).
+- Final PNG videos not yet recorded: colony_founding, harvester_founding (~1-1.5 h each),
+  and the short restyled ones (maze, twig_bridge, two_species, fungus_farm, basic_forage,
+  chaos_to_highway, rain_reset, trunk_trail, leaf_strip). One at a time: `record.sh` refuses
+  to run while another's `override.cfg` exists.
+- The fungus_farm GPU spikes (to 27 ms) weren't separated from CPU load; an A/B with the
+  midden renderer hidden would tell whether full middens cost GPU time.
