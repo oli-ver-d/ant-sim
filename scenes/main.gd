@@ -13,6 +13,7 @@ extends Node2D
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   manual camera (overrides the scenario's)
 ##   --safe=1 --debug=1 --pheromones=0 --tuning=1   initial overlay state
+##   --captions=0           hide the scenario's captions (render.captions)
 ##   --layout=split|normal|nest  split surface/underground view, the surface full
 ##                          screen, or the nest's underground full screen
 ##                          (overrides the scenario's render.layout)
@@ -55,6 +56,8 @@ func _ready() -> void:
 	var args := _parse_args()
 
 	var layer := CanvasLayer.new()
+	# Above the scenario's presentation (captions, fades, grade).
+	layer.layer = 10
 	add_child(layer)
 	debug_readout = RichTextLabel.new()
 	debug_readout.bbcode_enabled = true
@@ -81,6 +84,8 @@ func _ready() -> void:
 			debug_readout, str(args.get("layout", "")))
 	sim = player.sim
 	player.view.debug_view.mouse_world = _mouse_world
+	if player.presentation != null and args.get("captions", "1") == "0":
+		player.presentation.captions_visible = false
 
 	tuning = TuningPanel.new()
 	tuning.setup(sim, player.registry)

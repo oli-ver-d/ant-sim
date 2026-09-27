@@ -32,6 +32,8 @@ var _mode: String = "surface"
 ## Timed layout changes ("render.layout.modes": [{"t": video s, "mode": ...}]).
 var _mode_schedule: Array[Dictionary] = []
 var _layout_layer: CanvasLayer
+## Captions, fades and colour grade (render.captions/fades/grade), or null.
+var presentation: Presentation
 ## Video seconds played so far.
 var video_time: float = 0.0
 ## Video length from the scenario ("duration"), in seconds.
@@ -90,6 +92,10 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 		set_mode(mode)
 
 	_parse_tpf(data.get("ticks_per_frame", config.ticks_per_frame))
+	if Presentation.wanted(render):
+		presentation = Presentation.new()
+		presentation.setup(render)
+		add_child(presentation)
 
 ## Advances video time by `delta` seconds; `speed` multiplies the scenario's
 ## own ticks-per-frame (interactive speed keys).
@@ -104,6 +110,8 @@ func advance(delta: float, speed: float = 1.0) -> void:
 		nest_view.alpha = runner.alpha()
 		nest_camera.alpha = runner.alpha()
 		nest_camera.update_camera(video_time, delta)
+	if presentation != null:
+		presentation.update(video_time)
 
 func ticks_per_frame_at(t: float) -> float:
 	if _tpf_points.size() == 1 or t <= _tpf_points[0].x:

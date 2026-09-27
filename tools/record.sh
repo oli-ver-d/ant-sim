@@ -3,6 +3,7 @@
 #
 #   tools/record.sh <scenario> [seed] [duration_seconds]
 #   FORMAT=avi tools/record.sh <scenario> ...      # fast MJPEG capture for drafts
+#   CAPTIONS=0 tools/record.sh <scenario> ...      # without the scenario's captions
 #
 # Runs res://scenes/record.tscn under Godot's Movie Maker at a fixed 60 fps
 # (so the video is perfectly smooth however slow the simulation is), then
@@ -36,7 +37,7 @@ seed_label="$seed"
 if [ "$seed" -lt 0 ]; then
 	seed_label="$(sed -n 's/.*"seed": *\([0-9]*\).*/\1/p' "$scenario_file" | head -1)"
 fi
-name="${scenario}_seed${seed_label}_$(date +%Y%m%d_%H%M%S)"
+name="${scenario}_seed${seed_label}$([ "${CAPTIONS:-1}" = "0" ] && echo _nocaptions)_$(date +%Y%m%d_%H%M%S)"
 capture_dir="renders/capture_${name}"
 mkdir -p "$capture_dir"
 
@@ -58,6 +59,7 @@ if command -v cygpath >/dev/null; then capture_native="$(cygpath -w "$capture")"
 
 args=(--scenario="$scenario" --seed="$seed")
 [ -n "$duration" ] && args+=(--duration="$duration")
+[ "${CAPTIONS:-1}" = "0" ] && args+=(--captions=0)
 
 echo "Recording $scenario ($FORMAT) -> $capture_dir"
 "$GODOT" --path . --write-movie "$capture_native" --fixed-fps 60 res://scenes/record.tscn -- "${args[@]}"

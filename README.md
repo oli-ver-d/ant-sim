@@ -422,12 +422,23 @@ Playback (video) settings:
   times. Nests without an underground layer play full screen. See `render/split_layout.gd`
 - `render.pheromones` (default true) and `render.pheromone_opacity` (e.g. 0.55): the pheromone
   overlay
+- Cinematic presentation over the whole frame (render only, see `render/presentation.gd`):
+  `render.captions`: `[{"t": 2, "until": 8, "text": "A queen lands", "style": "title",
+  "pos": "middle", "fade": 0.8}]` (styles `title`, `chapter`, `caption`; `pos` `top`,
+  `middle`, `bottom`, all inside the safe area; `\n` breaks lines); `render.fades`:
+  `[{"t": 58, "to": 0}, {"t": 60, "to": 1, "color": [0, 0, 0]}, {"t": 61, "to": 0}]` (a
+  full-frame colour whose opacity ramps between points); `render.grade`: `[{"t": 0, "tint":
+  [1.08, 0.82, 0.62], "brightness": 0.92, "contrast": 1.08, "saturation": 0.85, "vignette":
+  0.5}]` (a colour grade, e.g. dawn to dusk). Points ramp with the later point's `"ease"`
+  (default `in_out`); a key a point leaves out keeps its earlier value. `--captions=0` (or
+  `CAPTIONS=0 tools/record.sh ...`) plays or records without the captions
 
 ## Recording
 
 ```bash
 tools/record.sh chaos_to_highway            # scenario seed and duration
 tools/record.sh chaos_to_highway 7 15       # seed 7, 15 seconds
+CAPTIONS=0 tools/record.sh <scenario>       # without the scenario's captions
 FORMAT=avi tools/record.sh chaos_to_highway # fast draft (MJPEG capture)
 ```
 

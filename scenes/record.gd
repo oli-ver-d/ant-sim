@@ -3,6 +3,7 @@ extends Node
 ##
 ##   godot --path . --write-movie out/frame.png --fixed-fps 60 res://scenes/record.tscn \
 ##         -- --scenario=<name> [--seed=<n>] [--duration=<s>] [--layout=split|normal|nest] [--at=<s>]
+##         [--captions=0]
 ##
 ## --at fast-forwards to that video time before the first frame (for drafts
 ## and stills of a later moment).
@@ -41,6 +42,8 @@ func _ready() -> void:
 	add_child(player)
 	_layout_arg = str(args.get("layout", ""))
 	player.setup(scenario, int(args.get("seed", -1)), 0, null, _layout_arg)
+	if player.presentation != null and args.get("captions", "1") == "0":
+		player.presentation.captions_visible = false
 	if args.has("stills"):
 		for s: String in str(args["stills"]).split(","):
 			_stills.append(float(s))
