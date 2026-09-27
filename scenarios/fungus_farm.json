@@ -3,6 +3,14 @@
 	"description": "A young leafcutter colony farms fungus: leaf goes in, the garden grows chamber by chamber, the colony grows, and waste piles up outside.",
 	"seed": 4,
 	"duration": 20,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "litter", "noise": {"scale": 260, "cover": 0.5}},
+			{"material": "moss", "shape": "rect", "rect": [0, 0, 1080, 520], "soft": 180, "noise": {"scale": 170, "cover": 0.45}},
+			{"material": "moss", "shape": "rect", "rect": [0, 1700, 1080, 220], "soft": 120, "noise": {"scale": 140, "cover": 0.4}}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -14,6 +22,17 @@
 	"food": [
 		{"type": "leaf", "pos": [330, 820], "rotation": -30, "length": 300, "width": 140, "shape": "elliptic", "teeth": 26, "seed": 3},
 		{"type": "leaf", "pos": [800, 900], "rotation": 40, "length": 280, "width": 120, "shape": "lanceolate", "teeth": 22, "seed": 8}
+	],
+	"scenery": [
+		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.5,
+			"clear": [
+				{"shape": "circle", "center": [600, 720], "radius": 200},
+				{"shape": "circle", "center": [260, 1560], "radius": 190},
+				{"shape": "circle", "center": [840, 1500], "radius": 190},
+				{"shape": "polyline", "points": [[330, 820], [540, 1250], [800, 900]], "width": 220},
+				{"shape": "polyline", "points": [[600, 720], [540, 1250]], "width": 220},
+				{"shape": "polyline", "points": [[260, 1560], [540, 1250], [840, 1500]], "width": 220}
+			]}}
 	],
 	"events": [
 		{"t": 300, "type": "spawn_food", "food": {"type": "leaf", "pos": [600, 720], "rotation": 10, "length": 360, "width": 170, "shape": "elliptic", "teeth": 30, "seed": 12}},

@@ -3,6 +3,14 @@
 	"description": "A leaf across a stream; a single fallen twig is the only way over.",
 	"seed": 3,
 	"duration": 20,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "litter", "noise": {"scale": 230, "cover": 0.35}},
+			{"material": "moss", "shape": "rect", "rect": [0, 660, 1080, 600], "soft": 160, "ragged": 130, "noise": {"scale": 170, "cover": 0.6, "soft": 0.5}},
+			{"material": "sand", "shape": "rect", "rect": [0, 820, 1080, 270], "soft": 50, "ragged": 40, "strength": 0.85}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -22,6 +30,13 @@
 			[450, 1052], [360, 1062], [270, 1048], [180, 1030], [90, 1036], [-20, 1050]
 		]},
 		{"shape": "polyline", "kind": "bridge", "points": [[468, 1086], [430, 824]], "width": 14}
+	],
+	"scenery": [
+		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.1,
+			"clear": [
+				{"shape": "polyline", "points": [[620, 1440], [468, 1086], [430, 824], [600, 520]], "width": 280},
+				{"shape": "rect", "rect": [0, 860, 1080, 190]}
+			]}}
 	],
 	"warmup": 15,
 	"ticks_per_frame": [

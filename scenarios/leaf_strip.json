@@ -3,6 +3,13 @@
 	"description": "One giant leaf stripped completely by a large colony (meant for timelapse).",
 	"seed": 2,
 	"duration": 30,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "litter", "noise": {"scale": 220, "cover": 0.45}},
+			{"material": "moss", "noise": {"scale": 160, "cover": 0.18}, "strength": 0.8}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -13,5 +20,9 @@
 	"food": [
 		{"type": "leaf", "pos": [540, 700], "rotation": -75, "length": 760, "width": 330, "shape": "lanceolate", "teeth": 40, "seed": 5}
 	],
-	"obstacles": []
+	"obstacles": [],
+	"scenery": [
+		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.2,
+			"clear": [{"shape": "polyline", "points": [[540, 1700], [540, 700]], "width": 320}]}}
+	]
 }

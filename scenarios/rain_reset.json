@@ -4,6 +4,13 @@
 	"seed": 3,
 	"duration": 20,
 	"warmup": 140,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "moss", "noise": {"scale": 200, "cover": 0.4}},
+			{"material": "litter", "noise": {"scale": 130, "cover": 0.2}, "strength": 0.8}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -14,6 +21,10 @@
 	],
 	"food": [
 		{"type": "leaf", "pos": [600, 560], "rotation": 18, "length": 360, "width": 160, "shape": "elliptic", "teeth": 30, "seed": 7}
+	],
+	"scenery": [
+		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.9,
+			"clear": [{"shape": "polyline", "points": [[540, 1420], [600, 560]], "width": 340}]}}
 	],
 	"events": [
 		{"t": 143, "type": "rain", "duration": 6, "wash_half_life": 0.6}

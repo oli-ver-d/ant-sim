@@ -13,7 +13,9 @@ extends RefCounted
 ## Placement is dart throwing with a minimum spacing per pair (Poisson-disc
 ## like), from its own RandomNumberGenerator (never the Simulation's), so the
 ## same scenario seed always gives the same scatter and runs without scatter
-## are untouched. Loaded after the colonies and food, since it keeps clear of:
+## are untouched. "blocking": false keeps only the plant and grass entries,
+## cut to their canopy (stem 0), so nothing reaches the simulation and a
+## scenario keeps its state hashes. Loaded after the colonies and food, since it keeps clear of:
 ##   - hard zones (no prop at all): each nest's drawn entrances (+ keep_clear),
 ##     its cleared disc, spoil heaps, planned entrances, a fixed dump, food,
 ##     surface portals, "clear" shapes (polylines = paths) and the world edge;
@@ -190,6 +192,10 @@ static func apply(sim: Simulation, s: Dictionary, index: int = 0) -> Result:
 	for key: String in ["entries", "per_mu"]:
 		if s.has(key):
 			preset[key] = s[key]
+	if not bool(s.get("blocking", true)):
+		preset["entries"] = canopy_only(preset["entries"])
+		if preset["entries"].is_empty():
+			return result
 	var world := sim.world
 	var world_rect := Rect2(Vector2.ZERO, Vector2(world.size))
 	var area := world_rect
@@ -262,6 +268,19 @@ static func apply(sim: Simulation, s: Dictionary, index: int = 0) -> Result:
 		buckets[b].append(p)
 	result.dropped = _keep_connected(sim, placed, baseline, result)
 	return result
+
+## The plant and grass entries of `entries`, with their stems cut to 0.
+static func canopy_only(entries: Array) -> Array:
+	var out: Array = []
+	for e: Dictionary in entries:
+		if str(e["type"]) != "plant" and str(e["type"]) != "grass":
+			continue
+		var c := e.duplicate()
+		var params: Dictionary = c.get("params", {}).duplicate()
+		params["stem"] = 0.0
+		c["params"] = params
+		out.append(c)
+	return out
 
 ## Builds a candidate's prop data at `at`.
 static func _candidate(e: Dictionary, at: Vector2, size_u: float, spin: float, rng: RandomNumberGenerator) -> Placed:

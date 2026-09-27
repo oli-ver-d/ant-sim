@@ -3,6 +3,14 @@
 	"description": "Leafcutters pour out of the nest at random; a clean trail self-organises to a single leaf.",
 	"seed": 1,
 	"duration": 20,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "litter", "noise": {"scale": 240, "cover": 0.35}},
+			{"material": "moss", "shape": "rect", "rect": [0, 0, 1080, 380], "soft": 160, "noise": {"scale": 150, "cover": 0.5}},
+			{"material": "gravel", "noise": {"scale": 90, "cover": 0.06}, "strength": 0.6}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -15,6 +23,10 @@
 		{"type": "leaf", "pos": [600, 560], "rotation": 18, "length": 340, "width": 150, "shape": "elliptic", "teeth": 30, "seed": 11}
 	],
 	"obstacles": [],
+	"scenery": [
+		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.7,
+			"clear": [{"shape": "polyline", "points": [[540, 1420], [600, 560]], "width": 360}]}}
+	],
 	"ticks_per_frame": [
 		{"t": 0, "tpf": 0.5},
 		{"t": 2.5, "tpf": 0.5},

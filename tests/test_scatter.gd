@@ -41,6 +41,21 @@ func test_scatter_leaves_the_run_rng_alone() -> void:
 	check(scattered.scenery.props.size() > 20, "props placed")
 	check_eq(scattered.rng.state, plain.rng.state, "Simulation.rng untouched by the scatter")
 
+## "blocking": false places only canopy, so the run is the same as without it.
+func test_canopy_only_scatter_keeps_the_run() -> void:
+	var plain := _build([])
+	var sim := _build([{"scatter": {"preset": "forest_floor", "blocking": false, "density": 2.0}}])
+	check(sim.scenery.props.size() > 20, "props placed (%d)" % sim.scenery.props.size())
+	for p in sim.scenery.props:
+		check(p.type_id == "plant" or p.type_id == "grass", "only plants and grass (%s)" % p.type_id)
+		check(not p.blocks, "nothing blocks")
+	check_eq(sim.world.obstacles, plain.world.obstacles, "no footprints")
+	check(not sim.world.prop_near(Vector2(540, 960), 2000.0), "no prop cells")
+	for t in 150:
+		plain.step()
+		sim.step()
+	check_eq(sim.state_hash(), plain.state_hash(), "same state hash")
+
 func test_every_preset_places_its_types() -> void:
 	for preset: String in Scatter.PRESETS:
 		var sim := _build([{"scatter": {"preset": preset, "density": 2.0}}])

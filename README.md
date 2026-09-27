@@ -329,7 +329,12 @@ traffic, and a second and third entrance open, each with its own heap of dug soi
 `harvester_founding` (the same story for harvester ants, about 80 s over ~110 simulated
 minutes: a queen, four minors and her cache of seeds sealed in dig up to the surface; foragers
 carry seeds down into granaries that fill heap by heap, husks of eaten seeds go out to a
-midden, and the nest grows chamber by chamber with more entrances).
+midden, and the nest grows chamber by chamber with more entrances), `meadow_forage` (scenery
+showcase: a leafcutter mound in a mossy meadow and a harvester crater on a sandy rise, trails
+bending round a fallen branch, boulders and plant stems under the canopy; workers live 400 s,
+so the dead go out to a heap of spent garden and a ring of chaff). Every scenario has ground
+materials and scenery; only `meadow_forage` and the two founding runs have blocking props
+(scattered clear of the later food sites).
 
 JSON files in `scenarios/`. Simulation content:
 - `seed`
@@ -379,6 +384,9 @@ JSON files in `scenarios/`. Simulation content:
   later (`"reserve"` scales it, 0 = none). Afterwards a scattered blocking prop that cuts a
   colony off from a food source or the world edge is dropped. `"avoid"` (default
   `["nests", "food", "portals"]`), `"entries"` / `"per_mu"` for a custom mix, `"seed"`.
+  `"blocking": false` keeps only the preset's plants and grass, cut to their canopy: nothing
+  reaches the simulation, so a scenario keeps its state hashes (the included scenarios are
+  dressed this way; walls there use `"look": "rock"`, which keeps their cells).
   `tests/scatter_probe.gd` prints what a scenario's scatters place and the load time
 - `debris`: twigs and pebbles on the ground (`{"type": "twig", "pos": [x, y]}`); ants crossing
   debris are slowed (`clutter_slowdown`) until something moves it

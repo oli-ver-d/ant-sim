@@ -4,6 +4,13 @@
 	"seed": 3,
 	"duration": 20,
 	"warmup": 100,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "litter", "noise": {"scale": 240, "cover": 0.55}},
+			{"material": "moss", "noise": {"scale": 150, "cover": 0.15}, "strength": 0.8}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -19,6 +26,10 @@
 		{"type": "pebble", "pos": [300, 1100]},
 		{"type": "twig", "pos": [820, 900]},
 		{"type": "pebble", "pos": [760, 1250]}
+	],
+	"scenery": [
+		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.2,
+			"clear": [{"shape": "polyline", "points": [[540, 1420], [575, 1030], [600, 560]], "width": 300}]}}
 	],
 	"events": [
 		{"t": 104, "type": "drop_debris", "scatter": {"count": 9, "near": [575, 1030], "radius": 200, "on_channel": "c0.food", "min_spacing": 40}}

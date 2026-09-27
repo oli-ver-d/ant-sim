@@ -3,6 +3,15 @@
 	"description": "Core-engine test: one colony, two food piles, one wall in between.",
 	"seed": 1,
 	"duration": 60,
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "moss", "shape": "circle", "center": [220, 1250], "radius": 170, "soft": 60, "ragged": 70},
+			{"material": "litter", "shape": "rect", "rect": [0, 0, 1080, 420], "soft": 140, "noise": {"scale": 200, "cover": 0.55}},
+			{"material": "dry", "shape": "circle", "center": [860, 1380], "radius": 180, "soft": 90, "ragged": 80, "strength": 0.75},
+			{"material": "moss", "noise": {"scale": 110, "cover": 0.1}, "strength": 0.7}
+		]
+	},
 	"colonies": [
 		{
 			"species": "leafcutter",
@@ -15,7 +24,14 @@
 		{"type": "food_pile", "pos": [820, 800], "radius": 22, "amount": 250}
 	],
 	"obstacles": [
-		{"shape": "polyline", "points": [[360, 1050], [720, 1050]], "width": 16, "kind": "wall"},
+		{"shape": "polyline", "points": [[360, 1050], [720, 1050]], "width": 16, "kind": "wall", "look": "rock"},
 		{"shape": "circle", "center": [220, 1250], "radius": 60, "kind": "water"}
+	],
+	"scenery": [
+		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.8,
+			"clear": [
+				{"shape": "polyline", "points": [[540, 1500], [330, 1050], [300, 520]], "width": 260},
+				{"shape": "polyline", "points": [[540, 1500], [760, 1050], [820, 800]], "width": 260}
+			]}}
 	]
 }

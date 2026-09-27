@@ -18,6 +18,7 @@ const RUNS := {
 	"twig_bridge": 600,
 	"two_species": 600,
 	"colony_founding": 1500,
+	"meadow_forage": 600,
 	"res://tests/fixtures/scenarios/dig_demo.json": 900,
 	"res://tests/fixtures/scenarios/shapes_demo.json": 900,
 	"res://tests/fixtures/scenarios/highway_demo.json": 900,
@@ -75,6 +76,7 @@ func test_native_matches_gdscript_trunk_trail() -> void: _check_matches("trunk_t
 func test_native_matches_gdscript_twig_bridge() -> void: _check_matches("twig_bridge")
 func test_native_matches_gdscript_two_species() -> void: _check_matches("two_species")
 func test_native_matches_gdscript_colony_founding() -> void: _check_matches("colony_founding")
+func test_native_matches_gdscript_meadow_forage() -> void: _check_matches("meadow_forage")
 func test_native_matches_gdscript_dig_demo() -> void: _check_matches("res://tests/fixtures/scenarios/dig_demo.json")
 func test_native_matches_gdscript_shapes_demo() -> void: _check_matches("res://tests/fixtures/scenarios/shapes_demo.json")
 func test_native_matches_gdscript_highway_demo() -> void: _check_matches("res://tests/fixtures/scenarios/highway_demo.json")

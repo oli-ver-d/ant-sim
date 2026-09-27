@@ -8,7 +8,7 @@ refuse becomes a proper system: middens that are placed sensibly, hold what was
 actually thrown out, age and decay. Scenarios describe scenery as data, or scatter it
 from a preset, and none of it breaks determinism, the native kernel or the video budget.
 
-Status: M15a-M15h done; next M15i.
+Status: M15a-M15i done; next M15j.
 
 ## Where things stand (before M15)
 
@@ -359,11 +359,21 @@ Goal: use it everywhere it helps, and document it.
   growth is not blocked by props (A/B against M14 numbers).
 - Entrance and midden styles set in `leafcutter.tres` / `harvester.tres`; a corpse
   demo (short `worker_lifespan`) in the showcase scenario only.
+- (Moved to M15j: README, performance numbers, recordings.)
+
+### M15j: docs, frame budget and final videos
+
+Split off M15i (M15i took the whole session with the scenarios and the A/B nest probes).
+
 - README: "Visual style" (ground materials, props, canopy, entrances, middens),
-  "Scenarios" (`ground`, `scenery`, scatter presets, `entrance` / `midden` nest params,
-  `worker_lifespan`), the refuse system under "How the simulation works", performance
-  numbers from M15d/g.
-- Record final PNG videos for the restyled scenarios (background, separate session if long).
+  "Scenarios" (`ground`, `scenery`, scatter presets incl. `"blocking": false`, `"look":
+  "rock"` walls, `entrance` / `midden` nest params, `worker_lifespan`), the refuse system
+  under "How the simulation works", performance numbers from M15d/g/h; add `meadow_forage`
+  to the scenario list.
+- Frame check with scenery and full middens: `bench` / a windowed frame-time probe on
+  `meadow_forage`, `fungus_farm` at 1500 s and `colony_founding` late (M15g note).
+- Record final PNG videos for the restyled scenarios (background; the founding runs are long,
+  maybe a session of their own).
 
 ## Open questions (decide before the phase that needs them)
 
@@ -778,3 +788,44 @@ Changed from the plan / notes for the next phase:
   with explicit clear shapes.
 - Bake cost: rocks are the slow part (~0.1-0.2 s each). A whole-world `rocky` scatter at
   density 1 is ~100 rocks: expect several seconds before the first frame; fine for recording.
+
+### M15i (done)
+
+Done:
+- `Scatter`: `"blocking": false` keeps only a preset's plant/grass entries with `stem` 0
+  (`Scatter.canopy_only`), so nothing reaches the sim. Test
+  `test_scatter::test_canopy_only_scatter_keeps_the_run`.
+- Existing scenarios dressed without changing hashes (`test_layers` single-layer hashes and
+  `test_native` pass unchanged): ground materials everywhere; canopy-only scatters with
+  `"clear"` corridors along the trails (and clear circles at fungus_farm's later leaf sites);
+  `maze` walls and `basic_forage`'s wall use `"look": "rock"` (maze: gravel/sand band between
+  the walls, litter and moss above); `twig_bridge` sandy shores and a moss bank; `two_species`
+  litter/moss for the leafcutters, sand with dry patches for the harvesters.
+- `colony_founding`: rocky (2.5), forest_floor (1.4), meadow (2.2) blocking scatters; every
+  later leaf site kept clear by a polyline along the leaf's axis (hard: 0.8 length x 0.7
+  width; `"reserve": true`: full length + stem, width + 40). Circles over-covered the world
+  (24 sites) and left no room for rocks. ~260 props, ~55 blocking, 7 rocks.
+  `harvester_founding`: sand ground, rocky (1.2) + sandy (2.0) blocking scatters, seed sites
+  kept clear by circles (r + 35 hard, r + 80 reserve). ~170 props, ~65 blocking.
+- nest_probe A/B over 7200 s (HEAD scenarios vs dressed, run side by side), at 7200 s:
+  colony_founding 3584 -> 3550 ants, chambers 24/26 -> 24/27, entrances 3/3 both;
+  harvester_founding 4554 -> 4569 ants, chambers 29/30 -> 26/29, entrances 4/4 both.
+  Within run-to-run noise; props don't hold growth back.
+- New `scenarios/meadow_forage.json` (40 s): leafcutter mound in moss, harvester seed nest on
+  a sandy rise (`"midden": {"style": "ring"}`), two logs, boulders, meadow + sandy blocking
+  scatters with clear zones at the event food sites, `worker_lifespan` 400 for both colonies
+  (corpse demo), food events at 300-420 s. In `test_native` RUNS (600 ticks).
+- `SeedNestRenderer`: its render-only husk pile (seed nests have no refuse system) is now an
+  arc along the cleared disc's edge centred on the colony's real midden, instead of a round
+  heap that read as a seed pile.
+- README: `"blocking": false` note, `meadow_forage` in the scenario list.
+
+Changed from the plan / notes for M15j:
+- Entrance/midden styles were not put in `leafcutter.tres` / `harvester.tres`: nest types
+  already set them (fungus mound, seed/granary crater, granary ring), and species params
+  would override `basic_nest` colonies of the species (tests expect a basic nest to be a hole)
+  and turn seed_nest middens into rings in hashed `two_species`. Set per colony instead.
+- README, frame check and videos moved to M15j.
+- Screenshots of meadow_forage at 18000 ticks take ~2 min windowed; scatter load is ~1.1 s.
+- Sand-region edges over soil read as a jagged dark rim at zoom 1 (ground cover decals at the
+  boundary); worth a look if it shows in videos.
