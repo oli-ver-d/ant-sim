@@ -301,20 +301,34 @@ func _track_brood(k: int) -> void:
 ## Where keyframe k's target is now, or null if it isn't on this layer.
 func _tracked_pos(k: int) -> Variant:
 	if _kf_brood.has(k):
-		var b := _kf_brood[k]
-		var brood := _brood_of(b.y)
-		var rec := brood.index_of(b.x) if brood != null else -1
-		if rec < 0 or sim.colonies[b.y].nest.underground_layer != layer:
-			return null
-		var c := brood.carrier[rec]
-		if c >= 0 and sim.alive[c] != 0:
-			var h := lerp_angle(sim.prev_heading[c], sim.shown_heading[c], alpha)
-			return _ant_pos(c) + Vector2.from_angle(h) * sim.caste_of(c).size * 0.55
-		return brood.pos[rec]
+		return _brood_pos(_kf_brood[k].x, _kf_brood[k].y)
 	var ant: int = _kf_ant.get(k, -1)
 	if ant >= 0 and _on_my_layer(ant):
 		return _ant_pos(ant)
 	return null
+
+## Where the story's ant or brood item is now, or null if it isn't on this
+## camera's layer (or there is none). Read by StoryMarker.
+func story_pos() -> Variant:
+	if story.has("brood"):
+		return _brood_pos(int(story["brood"]), int(story.get("colony", 0)))
+	var ant := int(story.get("ant", -1))
+	if ant >= 0 and ant < sim.high_water and _on_my_layer(ant):
+		return _ant_pos(ant)
+	return null
+
+## Where brood record `id` of `colony` is drawn now (on its carrier if
+## carried), or null if it's gone or not on this camera's layer.
+func _brood_pos(id: int, colony: int) -> Variant:
+	var brood := _brood_of(colony)
+	var rec := brood.index_of(id) if brood != null else -1
+	if rec < 0 or sim.colonies[colony].nest.underground_layer != layer:
+		return null
+	var c := brood.carrier[rec]
+	if c >= 0 and sim.alive[c] != 0:
+		var h := lerp_angle(sim.prev_heading[c], sim.shown_heading[c], alpha)
+		return _ant_pos(c) + Vector2.from_angle(h) * sim.caste_of(c).size * 0.55
+	return brood.pos[rec]
 
 ## Record index in `brood` for a follow's "brood" choice, or -1.
 func _pick_brood(brood: Brood, f: Dictionary, near: Vector2) -> int:

@@ -8,7 +8,8 @@ extends Control
 ##                                 "surface": "top", "ratio": 0.5}}
 ## ratio is the surface's share of the frame height; "surface": "bottom" puts
 ## it below. "mode": "nest" shows only the nest, full screen. "stats": false
-## hides the nest's readout (e.g. for a captioned, cinematic scenario).
+## hides the nest's readout (e.g. for a captioned, cinematic scenario), and
+## "highlight": false the ring on new workers (below).
 ##
 ## The nest part is the nest's underground layer (NestType.underground_layer)
 ## in a second SubViewport (nest_viewport), where ScenarioPlayer puts a
@@ -40,6 +41,8 @@ var nest: NestType
 var sim: Simulation
 ## "split" or "nest" (the nest full screen); see set_mode().
 var mode: String = "split"
+## Ring NestType.highlight_ant on the surface ("highlight": false turns it off).
+var highlight := true
 
 var _container: SubViewportContainer
 var _seam: Control
@@ -84,6 +87,7 @@ static func create(simulation: Simulation, spec: Dictionary) -> SplitLayout:
 	layout.underground = view
 	layout._build(on_top)
 	layout._stats.visible = bool(spec.get("stats", true))
+	layout.highlight = bool(spec.get("highlight", true))
 	return layout
 
 func _build(surface_on_top: bool) -> void:
@@ -145,7 +149,7 @@ func _process(delta: float) -> void:
 
 ## A soft ring around the highlighted ant, fading out.
 func _draw_ring() -> void:
-	if _ring_ant < 0 or _ring_age > HIGHLIGHT_TIME or sim.alive[_ring_ant] == 0 or sim.layer[_ring_ant] != 0:
+	if not highlight or _ring_ant < 0 or _ring_age > HIGHLIGHT_TIME or sim.alive[_ring_ant] == 0 or sim.layer[_ring_ant] != 0:
 		return
 	var at := surface_viewport.canvas_transform * sim.shown_pos[_ring_ant]
 	var zoom := surface_viewport.canvas_transform.get_scale().x

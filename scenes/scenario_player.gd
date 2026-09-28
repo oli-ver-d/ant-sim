@@ -45,6 +45,9 @@ var _mode_schedule: Array[Dictionary] = []
 var _layout_layer: CanvasLayer
 ## Captions, fades and colour grade (render.captions/fades/grade), or null.
 var presentation: Presentation
+## Rings on the story target (render.story_marker), one per camera.
+var markers: Array[StoryMarker] = []
+var _marker_windows: Array[Vector3] = []
 ## Video seconds played so far.
 var video_time: float = 0.0
 ## Video length from the scenario ("duration"), in seconds.
@@ -97,6 +100,8 @@ func setup_data(scenario: Dictionary, seed_value: int = -1, extra_ticks: int = 0
 		cams = cams.get("surface", [])
 	camera.setup(sim, cams)
 	camera.make_current()
+	_marker_windows = StoryMarker.parse(render.get("story_marker", []))
+	_add_marker(view, camera)
 	if render.has("layout"):
 		_layout_spec.merge(render["layout"], true)
 	var mode := str(_layout_spec.get("mode", "split")) if render.has("layout") else "normal"
@@ -143,8 +148,22 @@ func advance(delta: float, speed: float = 1.0) -> void:
 			nest_camera.snap()
 			nest_camera.update_camera(video_time, 0.0)
 		camera.update_camera(video_time, 0.0)
+	for m in markers:
+		m.video_time = video_time
 	if presentation != null:
 		presentation.update(video_time)
+
+## A StoryMarker for `cam`, drawn on top of `world_view` (if the scenario
+## has story_marker windows).
+func _add_marker(world_view: WorldView, cam: CameraDirector) -> void:
+	if _marker_windows.is_empty():
+		return
+	var m := StoryMarker.new()
+	m.camera = cam
+	m.windows = _marker_windows
+	m.video_time = video_time
+	world_view.add_child(m)
+	markers.append(m)
 
 func ticks_per_frame_at(t: float) -> float:
 	if _tpf_points.size() == 1 or t <= _tpf_points[0].x:
@@ -215,6 +234,7 @@ func _build_nest_view() -> void:
 	nest_camera.story = camera.story
 	nest_camera.alpha = runner.alpha() if runner != null else 1.0
 	nest_camera.make_current()
+	_add_marker(nest_view, nest_camera)
 
 ## Current layout mode: "surface", "split" or "nest".
 func mode() -> String:

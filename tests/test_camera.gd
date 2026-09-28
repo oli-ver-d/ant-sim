@@ -223,6 +223,80 @@ func test_story_camera_keeps_hashes() -> void:
 	check_eq(player.sim.state_hash(), plain.state_hash(), "same hash as a plain run")
 	player.queue_free()
 
+func test_story_marker_alpha() -> void:
+	var w := StoryMarker.parse([{"t": 10, "until": 20, "fade": 2.0}])
+	check_eq(StoryMarker.alpha_at(w, 9.0), 0.0, "0 before t")
+	check_eq(StoryMarker.alpha_at(w, 21.0), 0.0, "0 after until")
+	check_eq(StoryMarker.alpha_at(w, 15.0), 1.0, "1 in the middle")
+	check(absf(StoryMarker.alpha_at(w, 11.0) - 0.5) < 0.001, "0.5 halfway up the fade in")
+	check(absf(StoryMarker.alpha_at(w, 19.0) - 0.5) < 0.001, "0.5 halfway down the fade out")
+	var two := StoryMarker.parse([{"t": 10, "until": 20, "fade": 2.0}, {"t": 12, "until": 30, "fade": 2.0}])
+	check_eq(StoryMarker.alpha_at(two, 19.0), 1.0, "overlapping windows take the max")
+	var open := StoryMarker.parse([{"t": 5, "fade": 1.0}])
+	check_eq(StoryMarker.alpha_at(open, 1000.0), 1.0, "no until is open-ended")
+	check_eq(StoryMarker.alpha_at(open, 4.0), 0.0, "but not before t")
+	check_eq(StoryMarker.parse(null).size(), 0, "no spec, no windows")
+
+func test_story_pos_follows_story() -> void:
+	var player := _player(_nest_data([
+		{"t": 0, "follow": {"near": [640, 640]}, "zoom": 3, "smoothing": 0},
+	]))
+	_frames(player, 30)
+	var cam := player.nest_camera
+	var ant := cam.followed_ant(0)
+	check(ant >= 0, "followed an ant")
+	var p: Variant = cam.story_pos()
+	check(p != null, "story_pos on the nest camera")
+	if p != null and ant >= 0:
+		var sim := player.sim
+		var expect: Vector2 = sim.prev_pos[ant].lerp(sim.shown_pos[ant], cam.alpha)
+		check((p as Vector2).distance_to(expect) < 1.0, "close to the ant (%.2f away)" % (p as Vector2).distance_to(expect))
+	check(player.camera.story_pos() == null, "null on the surface camera (other layer)")
+	player.queue_free()
+
+func test_story_pos_follows_brood() -> void:
+	var data := ScenarioLoader.load_data("colony_founding")
+	var brood_params: Dictionary = data["colonies"][0]["nest_params"]["brood"]
+	brood_params.merge({"egg": 3, "larva": 5, "pupa": 4, "callow": 1, "initial": {"egg": 2}}, true)
+	var sim := ScenarioLoader.build(data, _registry, _config)
+	var nest := sim.colonies[0].nest as ColonyNest
+	var brood := nest.brood
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1080, 1920)
+	_root().add_child(vp)
+	var cam := CameraDirector.new()
+	vp.add_child(cam)
+	cam.setup(sim, [{"t": 0, "follow": {"brood": "first", "stage": "egg"}, "zoom": 4, "smoothing": 0}], nest.underground_layer)
+	cam.update_camera(0.0, 1.0 / ScenarioPlayer.VIDEO_FPS)
+	var id := cam.followed_brood(0)
+	check(id >= 0, "chose a brood record")
+	var rec := brood.index_of(id)
+	var p: Variant = cam.story_pos()
+	check(p != null, "story_pos for brood")
+	if p != null and rec >= 0 and brood.carrier[rec] < 0:
+		check_eq(p as Vector2, brood.pos[rec], "the tracked brood position")
+	vp.queue_free()
+
+func test_story_marker_created() -> void:
+	var data := _nest_data([{"t": 0, "pos": [640, 640], "zoom": 3}], "surface")
+	data["render"]["story_marker"] = [{"t": 1, "until": 5}]
+	var player := _player(data)
+	check_eq(player.markers.size(), 1, "one marker after setup")
+	player.set_mode("nest")
+	check_eq(player.markers.size(), 2, "two once the nest layout is on")
+	check_eq(player.layout.highlight, true, "highlight defaults on")
+	player.queue_free()
+
+	var plain := _player(_nest_data([{"t": 0, "pos": [640, 640], "zoom": 3}]))
+	check_eq(plain.markers.size(), 0, "no key, no markers")
+	plain.queue_free()
+
+	var d2 := _nest_data([{"t": 0, "pos": [640, 640], "zoom": 3}])
+	d2["render"]["layout"]["highlight"] = false
+	var off := _player(d2)
+	check(off.layout != null and off.layout.highlight == false, "layout.highlight false")
+	off.queue_free()
+
 ## The layout schedule still switches modes at its points.
 func test_mode_schedule_applies_at_points() -> void:
 	var data := _dig_data([{"t": 0, "pos": [540, 1100], "zoom": 2}])

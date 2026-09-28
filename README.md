@@ -68,7 +68,7 @@ godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000 -1 --
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300    # a nest's growth: chambers, highways, entrances, ms/tick
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300 2  # the same with 2-unit underground cells
 godot --headless --path . -s res://tests/midden_probe.gd -- fungus_farm 1800 300     # middens: sites, deposits, mass on them / stain / rotted
-godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life 3 2350 150  # story beats (first egg ... debris cleared, corpses) with times and places
+godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life 3 2350 150 [track_after]  # story beats (first egg ... debris cleared, corpses, nurseries and one egg through them) with times and places
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
 tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
@@ -334,11 +334,14 @@ midden, and the nest grows chamber by chamber with more entrances), `meadow_fora
 showcase: a leafcutter mound in a mossy meadow and a harvester crater on a sandy rise, trails
 bending round a fallen branch, boulders and plant stems under the canopy; workers live 400 s,
 so the dead go out to a heap of spent garden and a ring of chaff), `leafcutter_life`
-(cinematic and captioned, ~150 s, M17 draft: a queen sealed in with her fungus garden, her
-first egg followed through larva, pupa and callow to a worker, breaking ground, a leaf
-fragment cut, carried down and planted, majors clearing debris off the trunk trail months
-later, waste and the dead carried out, a pull-back at dusk; real-time close-ups with time
-skips under fades; `tests/story_probe.gd` prints when and where its story beats happen).
+(cinematic and captioned, ~163 s, M17 draft: a queen sealed in with her fungus garden lays
+her first eggs, her first workers dig up and open the nest, a leaf fragment is cut, carried
+down and planted and fungus grows over it, months later one egg is followed through the egg,
+larva and pupa nurseries to a worker, majors clear debris off the trunk trail, waste and the
+dead are carried out, a pull-back at dusk; real-time close-ups, cued time-lapses and time
+skips under fades, a story marker ring on whatever the camera follows;
+`tests/story_probe.gd` prints when and where its story beats happen, including the
+nurseries and one egg laid after them).
 Every scenario has ground
 materials and scenery; only `meadow_forage` and the two founding runs have blocking props
 (scattered clear of the later food sites).
@@ -439,7 +442,12 @@ Playback (video) settings:
   fully simulated, with its own camera, for a nest that digs (the nest's size and brood are
   shown top left; `"stats": false` hides that readout). `"mode": "nest"` shows the underground full screen, and
   `"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]` switches mode at video
-  times. Nests without an underground layer play full screen. See `render/split_layout.gd`
+  times. Nests without an underground layer play full screen. `"highlight": false` turns off
+  the ring on each new worker. See `render/split_layout.gd`
+- `render.story_marker`: `[{"t": 16, "until": 57, "fade": 0.5}]` draws a soft ring on whatever
+  the camera story follows (the followed ant or brood item, per camera) between `t` and
+  `until` (default open-ended), faded over `fade` seconds. Render only, see
+  `render/story_marker.gd`
 - `render.pheromones` (default true) and `render.pheromone_opacity` (e.g. 0.55): the pheromone
   overlay
 - Cinematic presentation over the whole frame (render only, see `render/presentation.gd`):

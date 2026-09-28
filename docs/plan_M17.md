@@ -23,7 +23,8 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 150–180 s of video (so a PNG final render takes ~2 h; draft with AVI).
 
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
-scenario, story probe), M17c2 done (brood nurseries). Next: M17c3 (polish).
+scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish). Next: M17d
+(the queen's landing).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -351,6 +352,65 @@ README, tests for any new render keys.
 Verify: story probe (seed 3, and a re-pick of the seed if the nurseries moved the beats
 badly), stills of every beat, a `FORMAT=avi` draft checked for resolution, fps and
 duration, and the full suite.
+
+**Done.** Render side:
+- `render.story_marker: [{"t", "until", "fade"}]` (`render/story_marker.gd`, `StoryMarker`):
+  a soft pulsing ring on the camera story's target, drawn in world space on top of each
+  WorldView (one per camera, created by `ScenarioPlayer`). `CameraDirector.story_pos()`
+  gives the story ant's or brood item's position on that camera's layer (null elsewhere).
+- `render.layout.highlight: false` turns off the split layout's new-worker ring.
+- Tests in `tests/test_camera.gd` (marker alpha, `story_pos` for ants and brood, markers
+  created, highlight option); README (render keys, scenario description, probe args).
+- `tests/story_probe.gd`: prints when the nurseries come into use and where, then follows
+  the first egg laid after that (and after an optional 5th arg, `track_after` sim s)
+  through its stages, carries and feeds to the ant it becomes.
+
+Seed 3 kept: the nurseries didn't move the early beats (first egg 13.3, open 158, first cut
+231, fragment underground 239 are as in M17c); debris pickup 2150.0, first 5 cleared by
+2153.9 (faster than M17c). Nurseries in use at 1770 s: eggs (815, 688), larvae (669, 902),
+pupae (587, 850). Egg id 247: laid 1772.6 at the queen, carried 1776.9–1782.5 to the egg
+nursery, larva 1802.7, carried 1808.9–1821.9, fed 1837.9, pupa 1869.9, carried
+1873.5–1877.6, callow 1909.9, ecloses 1918.3 as ant 224 (a media).
+
+Scenario, restructured (163 s; the video order is now founding → breaking ground → leaf to
+fungus → lifecycle → trunk trail → waste → close):
+| video s | sim s | layout | content |
+|---|---|---|---|
+| 0–25.5 | 0–25.5 | nest | title, queen and pellet garden, first egg (id 9, marked) |
+| 25.5 | +124 jump | | dip; "Breaking ground" |
+| 26–35 | 150–159 | nest | a marked digger at the shaft face; the entrance opens at V34 |
+| 35–53 | 159–231 | split | nest opens; time-lapse V41–47 (tpf 6) captioned "Days pass..." |
+| 53–62 | 231–240 | split | "Leaf to fungus": marked cutter followed (across) to the nest |
+| 61.5–83 | 240–336 | nest | garden close-up (zoom 10), pulp; growth time-lapse V72–78 (tpf 8) |
+| 83.5 | +1437.5 jump | | dip; "Egg, larva, pupa, worker" |
+| 84–124 | 1774–1925 | nest | egg 247 followed and marked through the three nurseries; real time on carries and the feed, ramps up to tpf 4–8 between |
+| 124.5 | +218 jump | | dip; daylight grade |
+| 125–146 | 2143–2164 | surface | trunk trail (zoom 2.7–2.9), marked major with a twig, marked hitchhiker |
+| 146–156.5 | 2164–2175 | split | waste: marked corpse carrier (surface), `carry_spent` (nest) |
+| 156.5–163 | 2175–2181 | split | pull-back, dusk, fade out |
+Only four full dips now (was eight); the old lifecycle dips are time-lapses. Grades
+brightened: sealed nest 0.92 → 1.02 (vignette 0.45 → 0.36), leaf close-up 0.96 → 1.08.
+Timing was placed from the probe with a throwaway script integrating the tpf schedule
+(sim time at a video time); `record.gd --stills` confirms it (e.g. V106.3 = sim 1838).
+
+Stills of every beat were checked (`renders/stills_c3a`): marker on the egg, digger,
+cutter, brood 247 in each nursery (floors read clearly), new worker, major, hitchhiker and
+corpse carrier. Fixed after them: dig shot zoom 5 → 6.5 with a marked digger, garden zoom
+8–9.5 → 10–10.5, trunk-trail establishing zoom 2 → 2.7.
+
+Draft video (M17c3): `renders/leafcutter_life_seed3_20260928_231702.mp4` (AVI capture,
+1080x1920, 60 fps, 163.0 s, 9780 frames; ~27 min to record and encode). Frames at V29,
+V68 and V127 spot-checked after the framing fixes.
+
+Still reading badly / left for later phases:
+- Length 163 s (was 150); with the prologue and finale ~200 s. Trim in M17g (lifecycle
+  holds, trunk trail, waste).
+- Trunk trail still ~300 ants; a denser trail needs more sim time (recording time) or
+  faster growth. Traffic is split with the (800, 1300) leaf's trail.
+- The pupa nursery's pale sand floor looks blocky (square cells) at zoom 7–9: a soil
+  shader detail to smooth (render only).
+- The fungus growing over the pulp is subtle in the small founding garden.
+- The waste chapter's nest half follows `carry_spent` but it isn't marked (one story).
 
 ### M17d: the queen's landing (prologue)
 

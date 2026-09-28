@@ -6,9 +6,11 @@ extends SceneTree
 ## fragment underground and planted, the first gongylidia fed to a larva, the
 ## first major and patrol, debris picked up and cleared off the trail, the first
 ## worker death and corpse on a midden, population steps, and a summary every
-## `every` seconds (where leaf is being cut, middens).
+## `every` seconds (where leaf is being cut, middens). Once the nurseries are
+## in use: where they are, and the first egg laid after them (and after
+## `track_after` sim seconds) through its stages, carries and feeds.
 ##
-##   godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life [seed] [sim_seconds] [every]
+##   godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life [seed] [sim_seconds] [every] [track_after]
 ##
 ## Positions are sim coordinates: "surface" ones are the camera's world
 ## coordinates, "nest" ones the underground layer's (the nest camera's).
@@ -24,6 +26,15 @@ var _first_laid: int = -1
 var _first_laid_stage: int = -1
 var _debris_carried: Dictionary = {}  # item id -> where it was picked up
 var _pop_step: int = 0
+## The nursery brood item (_check_nursery_brood): tracked from the first egg
+## laid after the nurseries are in use and after _track_after sim seconds.
+var _track_after: float = 0.0
+var _nb_id: int = -1
+var _nb_laid_before: int = -1
+var _nb_stage: int = 0
+var _nb_carried := false
+var _nb_hunger: float = INF
+var _nb_done := false
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -31,6 +42,7 @@ func _initialize() -> void:
 	var seed_value := int(args[1]) if args.size() > 1 else -1
 	var seconds := float(args[2]) if args.size() > 2 else 3000.0
 	var every := float(args[3]) if args.size() > 3 else 300.0
+	_track_after = float(args[4]) if args.size() > 4 else 0.0
 	var config := load("res://sim/default_config.tres") as SimConfig
 	var registry := Registry.create_default()
 	sim = ScenarioLoader.load_simulation(scenario, registry, config, seed_value)
@@ -108,6 +120,7 @@ func _check_brood(brood: Brood) -> void:
 			var ant := brood.emerged_as(_first_laid)
 			_beat("laid_worker", "first laid egg ecloses as ant %d%s" % [ant,
 					(" (%s) at nest %s" % [sim.caste_of(ant).id, _v(sim.pos[ant])]) if ant >= 0 else " (gone: died or abstract)"])
+	_check_nursery_brood(brood)
 	if brood.emerged > 0:
 		var a := brood.emerge_ants[0]
 		_beat("emerged", "first worker ecloses: ant %d%s" % [a, (" at nest %s" % _v(sim.pos[a])) if a >= 0 else ""])
@@ -137,6 +150,51 @@ func _check_brood(brood: Brood) -> void:
 				print("t=%7.1f  larva %d fed (feed #%d) at nest %s by %s" % [sim.time(), id, _seen["feeds"], _v(brood.pos[k]),
 						("ant %d (%s)" % [feeder, sim.caste_of(feeder).id]) if feeder >= 0 else "?"])
 		_hunger = now
+
+## Once the nurseries are in use (and after `_track_after`): where they are,
+## then the first egg laid from then on through its stages, carries and feeds
+## to the ant it becomes (for a lifecycle chapter across the nurseries).
+func _check_nursery_brood(brood: Brood) -> void:
+	var cn := nest as ColonyNest
+	if cn == null or not brood.care or cn.nursery[Brood.Stage.EGG] < 0:
+		return
+	if not _seen.has("nurseries"):
+		var at: Array[String] = []
+		for s in 3:
+			at.append("%s %s" % [Brood.STAGE_KEYS[s], _v(cn.chambers_layout.list[cn.nursery[s]].centre)])
+		_beat("nurseries", "nurseries in use: " + ", ".join(at))
+	if sim.time() < _track_after:
+		return
+	if _nb_id < 0:
+		if brood.eggs_laid > _nb_laid_before and _nb_laid_before >= 0:
+			_nb_id = brood.lay_ids[(brood.eggs_laid - 1) % Brood.EVENT_LOG]
+			var k0 := brood.index_of(_nb_id)
+			if k0 >= 0:
+				print("t=%7.1f  nursery brood: egg id %d laid at nest %s" % [sim.time(), _nb_id, _v(brood.pos[k0])])
+			else:
+				_nb_id = -1
+		_nb_laid_before = brood.eggs_laid
+		return
+	if _nb_done:
+		return
+	var k := brood.index_of(_nb_id)
+	if k < 0:
+		_nb_done = true
+		var ant := brood.emerged_as(_nb_id)
+		print("t=%7.1f  nursery brood %d ecloses as ant %d%s" % [sim.time(), _nb_id, ant,
+				(" (%s) at nest %s" % [sim.caste_of(ant).id, _v(sim.pos[ant])]) if ant >= 0 else " (gone)"])
+		return
+	if brood.stage[k] != _nb_stage:
+		_nb_stage = brood.stage[k]
+		print("t=%7.1f  nursery brood %d is now a %s at nest %s" % [sim.time(), _nb_id, Brood.STAGE_KEYS[_nb_stage], _v(brood.pos[k])])
+	var carried := brood.carrier[k] >= 0
+	if carried != _nb_carried:
+		_nb_carried = carried
+		print("t=%7.1f  nursery brood %d %s at nest %s" % [sim.time(), _nb_id, "picked up" if carried else "put down", _v(brood.pos[k])])
+	if brood.stage[k] == Brood.Stage.LARVA:
+		if brood.hunger[k] < _nb_hunger - 0.05:
+			print("t=%7.1f  nursery brood %d fed at nest %s" % [sim.time(), _nb_id, _v(brood.pos[k])])
+		_nb_hunger = brood.hunger[k]
 
 func _nearest_ant(at: Vector2, l: int, state_id: String) -> int:
 	var best := -1
