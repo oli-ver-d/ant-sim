@@ -23,7 +23,7 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 150–180 s of video (so a PNG final render takes ~2 h; draft with AVI).
 
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
-scenario, story probe). Next: user reviews the M17c draft, then M17d.
+scenario, story probe), M17c2 done (brood nurseries). Next: M17c3 (polish).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -261,6 +261,96 @@ What reads badly (for review and M17d–g):
 Frames spot-checked from the MP4 (26 times): framing, captions and safe zones are right;
 the fragment carrier is in shot from the leaf to the garden; debris and trail read at zoom
 3.2–3.8.
+
+### M17c2: brood nurseries — DONE
+
+Goal (user request): a clear visual distinction of where eggs, larvae and pupae lie, with a
+different floor colour beneath each, in distinct chambers once the nest is big enough; in
+every nest with a queen and an underground (core, always on; state hashes of nests with an
+underground change, accepted).
+Files: `sim/nests/colony_nest.gd` (nurseries), `sim/nests/brood_care.gd` (carry priority),
+`sim/nests/nest_chambers.gd` (`plan_chamber(..., near)`), `species/leafcutter/fungus_nest.gd`
+and `species/harvester/granary_nest.gd` (no store in nurseries, `holds_food`),
+`render/soil_renderer.gd` + `render/soil.gdshader` (floor tones), `tests/test_nurseries.gd`,
+README (leafcutter nest section, harvester section).
+Verify: new tests; full suite; `nest_probe` over 7200 s for `colony_founding` and
+`harvester_founding` and `story_probe` for `leafcutter_life` seed 3 against HEAD (run side
+by side from a worktree of HEAD); stills of the nest.
+
+**Done.** As planned, plus changes to nurse work that the nurseries needed. Nurseries lie
+~100 units apart (queen → eggs → larvae → pupae in `colony_founding`), and nurses walking
+between them first cost `colony_founding` 21% of its ants by 7200 s. The fixes are in
+`sim/nests/brood_care.gd`, `sim/behaviours/nurse.gd` and `sim/nests/brood.gd`, and they
+apply only while nurseries are in use:
+- **Batched feeding:** a nurse fetches food for up to 4 larvae (`FEED_LOAD`) and feeds hungry
+  larvae within 24 units (`FEED_REACH`); what's left goes back to the store.
+- **Local work first:** a task's rank drops by 1 per 40 units away (`LOCAL_REACH`), and idle
+  nurses wait spread over the three nurseries.
+- **Starving larvae first:** a larva at hunger 1 gets rank 5.5.
+
+A further fix also applies without nurseries: brood put down outside a chamber goes straight
+to its pile. This was the late slump in `colony_founding`. When a nurse carrying brood died
+of old age or was sent to carry a corpse, the brood dropped in a gallery. Nurses navigate by
+chamber and portal nav fields, never reached it, and each one that claimed it was stuck for
+good. By ~6000 s, 60+ nurses were walking to 68 callows lying in galleries.
+
+Tried and dropped:
+- `FEED_LOAD` 8 / `FEED_REACH` 40 (no better).
+- A fungus garden in the larvae's nursery (no better; walking, not food, was the limit).
+- 25% more nurses (no better while nurses were stuck).
+
+Probes after the fixes, 7200 s:
+
+| Run | M17c | M17c2 |
+|---|---|---|
+| `colony_founding` | 3550 ants | 3632 ants |
+| `harvester_founding` | 4569 ants | 4618 ants |
+
+`colony_founding` loses 425 larvae to starvation by 7200 s. At 5000 s it has lost 170,
+against 71 at M17c.
+
+`leafcutter_life` seed 3 story probe:
+
+| Beat | M17c | M17c2 |
+|---|---|---|
+| 200 ants | 1708 s | 1801 s |
+| 300 ants | 2095 s | 2187 s |
+| First debris cleared | 2153 s | 2153 s |
+| First corpse on a midden | 1120 s | 1120 s |
+
+Stills (nest layout): `colony_founding` at 3000 s and `harvester_founding` at 2000 s show the
+three floors clearly. The harvester's three nurseries lie spread over the nest rather than
+together (the site nearest the queen was taken). Growth is unaffected, so this is left as is.
+
+Hashes: every underground nest's hash changes (nurseries, and brood put down in galleries);
+single-layer hashes and native parity are unchanged.
+
+For M17c3: the lifecycle chapter can follow brood from the egg nursery on through the larvae
+and pupae nurseries (M17b's `"follow": {"brood": ...}`), and the three floor tones make the
+stages readable. Re-run the story probe first, since the beat times moved.
+
+### M17c3: polish the draft
+
+Goal: fix what reads badly in the M17c draft (list under M17c) that doesn't belong to
+another phase, and use the nurseries in the lifecycle chapter. Queen-only founding stays
+with M17d, and the length trim with M17g.
+- **Story marker:** a soft ring on the followed brood item or ant (render only, like the split
+  layout's highlight ring).
+- **Nest ring:** the new-worker ring off for this scenario (a render option).
+- **Lifecycle:** fewer dips. Follow brood egg nursery → larvae nursery → pupae nursery, so
+  the floor tones carry the stages, and keep the larva's feed out from under captions.
+- **Breaking ground:** show part of the dig, and cue the time-lapse (caption or grade).
+- **Leaf to fungus:** closer framing on chewing, planting and growth.
+- **Trunk trail:** a denser trail, majors that read (zoom or caption), and a hitchhiker
+  follow checked in frame.
+- **Waste:** follow a corpse to the midden if one comes in the window, else re-caption.
+- **Grade:** brighten the sealed nest and the leaf close-up.
+
+Files: `scenarios/leafcutter_life.json`, render files for the marker and the ring option,
+README, tests for any new render keys.
+Verify: story probe (seed 3, and a re-pick of the seed if the nurseries moved the beats
+badly), stills of every beat, a `FORMAT=avi` draft checked for resolution, fps and
+duration, and the full suite.
 
 ### M17d: the queen's landing (prologue)
 

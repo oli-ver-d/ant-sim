@@ -187,12 +187,16 @@ func _top_seed(k: int) -> int:
 	return -1
 
 ## Chambers seeds are kept in: the royal chamber (the founding cache) and
-## every chamber dug but the brood chamber.
+## every chamber dug but the brood chamber and the nurseries.
 func is_granary(k: int) -> bool:
 	if k == 0:
 		return true
 	var c := chambers_layout.list[k]
-	return c.dug and k != brood_chamber()
+	return c.dug and k != brood_chamber() and not is_nursery(k)
+
+## Larvae are fed seed meal: their nursery goes next to a granary.
+func holds_food(k: int) -> bool:
+	return is_granary(k) and k < stored_in.size() and stored_in[k] > CRUMB
 
 ## Seed mass chamber k holds when full.
 func capacity_of(k: int) -> float:

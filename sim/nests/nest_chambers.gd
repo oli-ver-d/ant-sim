@@ -346,7 +346,9 @@ func _inner(cell: int, k: int) -> bool:
 ## orders it among other digging (galleries before the chamber, stubs and
 ## links after). With `carve` everything is dug out at once (a nest that
 ## starts established).
-func plan_chamber(plan: ExcavationPlan, priority: float, carve: bool = false) -> Chamber:
+## With `near` (not Vector2.INF) sites close to that point are strongly
+## preferred (the nest's nurseries, kept close to the queen).
+func plan_chamber(plan: ExcavationPlan, priority: float, carve: bool = false, near: Vector2 = Vector2.INF) -> Chamber:
 	# A new gallery when junctions run short, but not while two are still
 	# being dug (the nest would sprawl faster than it can dig).
 	var digging := 0
@@ -355,10 +357,10 @@ func plan_chamber(plan: ExcavationPlan, priority: float, carve: bool = false) ->
 			digging += 1
 	if galleries.is_empty() or (_free_sites() < 3 and digging < 2):
 		_plan_gallery(plan, priority - 0.6, carve)
-	var ch := _site(plan)
+	var ch := _site(plan, near)
 	if ch == null and digging < 2:
 		_plan_gallery(plan, priority - 0.6, carve)
-		ch = _site(plan)
+		ch = _site(plan, near)
 	if ch == null:
 		return null
 	_add_chamber(ch, plan, priority, carve)
@@ -389,10 +391,15 @@ func _free_sites() -> int:
 			n += 1
 	return n
 
+## Site order key (higher first) when sites near `near` are wanted: by
+## distance, a little shuffled (r in 0-1).
+static func _near_key(r: float, at: Vector2, near: Vector2) -> float:
+	return r * 0.15 - at.distance_to(near) / 60.0
+
 ## A chamber at a free junction that fits, or null. Candidates are
 ## tried in a seeded order: stub ends first, then slots on the galleries
 ## nearer the middle; ones that don't fit are marked used.
-func _site(plan: ExcavationPlan) -> Chamber:
+func _site(plan: ExcavationPlan, near: Vector2 = Vector2.INF) -> Chamber:
 	var cands: Array[Vector4] = []  # (gallery, slot key, s, side), sorted by score in keys
 	var keys: PackedFloat32Array = []
 	var centre := royal().centre
@@ -402,7 +409,8 @@ func _site(plan: ExcavationPlan) -> Chamber:
 		if g.level == Level.STUB:
 			if not g.used.has(-1):
 				cands.append(Vector4(g.index, -1, g.length(), 0))
-				keys.append(_rng.randf() + 1.0)
+				var r := _rng.randf()
+				keys.append(r + 1.0 if near == Vector2.INF else _near_key(r, g.points[g.points.size() - 1], near))
 			continue
 		if g.level != Level.MAIN and g.level != Level.SECONDARY:
 			continue
@@ -414,7 +422,8 @@ func _site(plan: ExcavationPlan) -> Chamber:
 					continue
 				var out := g.at(slots[k]).distance_to(centre) / 400.0
 				cands.append(Vector4(g.index, key, slots[k], side))
-				keys.append(_rng.randf() - out * 0.8)
+				var r := _rng.randf()
+				keys.append(r - out * 0.8 if near == Vector2.INF else _near_key(r, g.at(slots[k]), near))
 	var order: Array[int] = []
 	for k in cands.size():
 		order.append(k)

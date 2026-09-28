@@ -720,6 +720,29 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
   to a drier spot, fetch gongylidia from the garden to feed larvae, groom, and free callows,
   which become real workers where they lie and take a role or walk up. Brood needs (dirt,
   hunger) are data the brood renderer shows.
+- **Nurseries** (core `ColonyNest`, every nest with brood care, always on): once the colony has
+  `nurseries.population` ants (80) and `nurseries.chambers` chambers dug (3, the royal one
+  included), three chambers are planned for brood only, on top of `max_chambers` (they don't
+  hold up the species' own chambers): the first at the free site nearest the queen, the others
+  near it (`plan_chamber(..., near)`), so brood isn't carried far. When all three are dug each
+  stage gets one, the way of sharing them out with the least nurse walking
+  (`nursery_cost()`): eggs carried from the queen and on through the three, larvae fed with
+  food from the nearest chamber that holds it (`holds_food()`: a garden for leafcutters, a
+  granary with seeds for harvesters), pupae (and callows) near an entrance shaft (drier
+  air). From then on each
+  pile lies in its nursery: nurses carry brood lying elsewhere there before feeding larvae, and
+  brood that changes stage is carried on to the next nursery (more nurses are wanted while
+  brood lies away). With the brood spread over three chambers, nurses keep to local work: a
+  task counts one rank less per 40 units it lies away (`BroodCare.LOCAL_REACH`), idle nurses
+  wait spread over the nurseries (half by the larvae), a nurse fetches food for several larvae
+  at once and feeds those lying close (`FEED_LOAD`, `FEED_REACH`), and a starving larva is fed
+  before anything but freeing callows and taking eggs from the queen. Brood put down in a
+  gallery (its carrier died or was sent for a corpse) goes to its pile, since nurses can't
+  find their way to it there. Species keep their stores out (`is_nursery()`: no garden, no granary). A
+  nursery whose digging failed is planned again. `"carve": true` gives an established nest
+  (`initial_chambers`) its nurseries dug at the start. The soil renderer lines each nursery's
+  floor with its own tone: eggs on damp, smoothed dark clay, larvae on warm tamped red clay,
+  pupae on dry pale sand (`egg_floor`, `larva_floor`, `pupa_floor` in `soil.gdshader`).
 - **Founding** (`"open": false`): the queen starts sealed in with a pellet of fungus, manures her
   garden from her reserves (`queen_reserve`) until the first leaf arrives, and tends her first
   brood herself (all minims: `first_caste`, `first_workers`). Once there are `open_entrance_at`
@@ -750,6 +773,7 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
   "lanes": 0.8}`), `entrances` (`{"at": [900, 2200], "spacing": 150}`), `initial_chambers`,
   `open_entrance_at`, `queen_reserve`, `queen_feed_rate`,
   `brood_per_nurse`, `retinue_max`, `dig_fraction`, `inside_share`, `queen_groom_time`,
+  `nurseries` (`{"population": 80, "chambers": 3, "carve": false}`),
   `garden_reserve` (0: use `brood_reserve`; else a share of garden capacity); in `brood`:
   `dirt_rate`, `hunger_rate`, `starve_time`, `brood_per_worker`, `first_caste`, `first_workers`.
 - Rendering: `FungusUnderground` ("underground:fungus_nest") draws the gardens
@@ -776,7 +800,8 @@ dug as the nest needs room, founding sealed in, busy tunnels widening, more entr
 the harvester's own:
 - **Seeds are stored, one by one**: a forager home with a seed carries it down (`store_seed`)
   and drops it on the heap in a granary, the first with room (the first chamber dug is the
-  brood chamber; every other one is a granary). Each stored seed is a record (where it lies,
+  brood chamber until the nurseries are in use; every other one but the nurseries is a
+  granary). Each stored seed is a record (where it lies,
   its mass, its look) and is drawn where it was put, so heaps grow seed by seed.
 - **Founding**: the queen starts sealed in with a cache of seeds (`initial_seeds`) in the royal
   chamber, and feeds her first brood from it until the first forager comes home.
@@ -883,7 +908,10 @@ All drawing lives in `render/` (plus each species' own renderers):
   Fresh digging is paler and moist and darkens as it dries (the mask's A channel: dig time,
   aged over 1,200 simulated seconds); busy floors (the layer's traffic map, uploaded as a
   float texture) are worn smooth and dark with a polished line down the middle. Only changed
-  cells are re-uploaded.
+  cells are re-uploaded. A nest's nurseries (a second mask, R/G/B = eggs/larvae/pupae,
+  rebuilt when `ColonyNest.nursery_version` changes) get lined floors: damp dark clay under
+  the eggs, warm red clay under the larvae, dry pale sand under the pupae (less worn by
+  traffic).
 - `portal_renderer.gd`: the bottom of a shaft (daylight falling in), or a soil plug while sealed;
   `spoil_heap_renderer.gd`: the heap of dug soil beside an entrance, crumb by crumb.
 - Ants going through a portal fade out and in (`ant.gdshader`); filler ants stand in for an

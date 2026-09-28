@@ -20,7 +20,9 @@ extends NestType
 ##       - a founding nest ("open": false) starts sealed: the queen tends her
 ##         brood alone until workers hatch, and once there are
 ##         open_entrance_at workers they dig the entrance shaft open;
-##       - more entrances as the colony grows (nest_params "entrances").
+##       - more entrances as the colony grows (nest_params "entrances");
+##       - nurseries: once the colony is big enough, eggs, larvae and pupae
+##         each get a chamber of their own (see _plan_nurseries()).
 ##
 ## Species nests provide the food interface below (food_stock(), eat_stock(),
 ## food_point(), take_food_at(), return_food(), make_brood_food()) and
@@ -32,7 +34,8 @@ extends NestType
 ##         underground (optional, see NestType and NestChambers) with, for it:
 ##         open_entrance_at, brood_per_nurse, retinue_max, dig_fraction,
 ##         inside_share, queen_groom_time, initial_chambers, entrances,
-##         shaft_hardness (in underground)
+##         nurseries ({"population": 80, "chambers": 3}), shaft_hardness
+##         (in underground)
 
 var ant_cost: float = 1.5
 var brood_reserve: float = 30.0
@@ -76,6 +79,18 @@ var _entrance_planned: bool = false
 var entrance_steps: PackedInt32Array = []
 var entrance_spacing: float = 150.0
 var _entrance_retry_at: float = 0.0
+## Nurseries (nest_params "nurseries"): planned once the colony has
+## `population` ants and `chambers` chambers dug (the royal one included).
+var nursery_population: int = 80
+var nursery_chambers: int = 3
+## Chamber of each stage's nursery, indexed by Brood.Stage (EGG, LARVA, PUPA;
+## callows stay with the pupae), or -1 until the nurseries are in use.
+var nursery: PackedInt32Array = [-1, -1, -1]
+## Chambers planned as nurseries (dug or not): no species store goes in them.
+var nursery_planned: PackedInt32Array = []
+## Bumped when the nurseries change (for views).
+var nursery_version: int = 0
+var _nursery_retry_at: float = 0.0
 var _role_timer: float = 0.0
 var _plan_retry_at: float = 0.0
 var _rescue_timer: float = 60.0
@@ -179,6 +194,9 @@ func _prepare_underground(sim: Simulation, under: Dictionary, params: Dictionary
 	dig_fraction = float(params.get("dig_fraction", dig_fraction))
 	inside_share = float(params.get("inside_share", inside_share))
 	queen_groom_time = float(params.get("queen_groom_time", queen_groom_time))
+	var nurseries: Dictionary = params.get("nurseries", {})
+	nursery_population = int(nurseries.get("population", nursery_population))
+	nursery_chambers = int(nurseries.get("chambers", nursery_chambers))
 	return u
 
 ## Sets up the underground once the layer exists: chambers, the sealed shaft,
@@ -193,6 +211,13 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary, f
 	# An established nest starts with chambers already dug.
 	for n in int(params.get("initial_chambers", 0)):
 		chambers_layout.plan_chamber(plan, float(n + 1), true)
+	# ... and with nurseries "carve": true, its nurseries too (shared out
+	# among the stages at the first role count, see _plan_nurseries).
+	if bool(params.get("nurseries", {}).get("carve", false)):
+		for n in 3:
+			var ch := chambers_layout.plan_chamber(plan, float(chambers_layout.count()), true, _nursery_site())
+			if ch != null:
+				nursery_planned.append(ch.index)
 	# The entrance shaft of a sealed nest takes extra digging (it goes all
 	# the way up to the surface).
 	if not portal.open:
@@ -241,6 +266,7 @@ func _update_colony(sim: Simulation, dt: float) -> void:
 		if not _entrance_planned and workers >= open_entrance_at:
 			_plan_entrance()
 		_plan_chambers(sim)
+		_plan_nurseries(sim)
 		# Now and then, reconnect digging whose way in will never open.
 		_rescue_timer -= 1.0
 		if _rescue_timer <= 0.0:
@@ -249,6 +275,13 @@ func _update_colony(sim: Simulation, dt: float) -> void:
 	if chambers_layout.update_dug(plan) > 0:
 		chambers = chambers_layout.dug_count()
 		_chambers_dug(sim)
+
+func hash_underground(ctx: HashingContext) -> void:
+	super.hash_underground(ctx)
+	if chambers_layout != null:
+		ctx.update(nursery.to_byte_array())
+		if not nursery_planned.is_empty():
+			ctx.update(nursery_planned.to_byte_array())
 
 ## Called when chambers have finished digging (chambers_layout.list[k].dug).
 func _chambers_dug(_sim: Simulation) -> void:
@@ -283,18 +316,39 @@ func queen_heading() -> float:
 		return 0.0
 	return (royal.alcoves[0] - royal.centre).angle()
 
-## The chamber brood lives in: the first chamber dug, else the royal one.
+## The chamber brood lives in: the larvae's nursery once there are
+## nurseries, else the first chamber dug (not a nursery being dug), else
+## the royal one.
 func brood_chamber() -> int:
+	if nursery[Brood.Stage.LARVA] >= 0:
+		return nursery[Brood.Stage.LARVA]
 	for c in chambers_layout.list:
-		if c.kind == NestChambers.Kind.CHAMBER and c.dug:
+		if c.kind == NestChambers.Kind.CHAMBER and c.dug and not nursery_planned.has(c.index):
 			return c.index
 	return 0
 
-## Centre of a brood pile (Brood.Pile): eggs at the mouth of the queen's
-## niche, larvae in the brood chamber, pupae in an alcove (a drier niche)
-## where the chamber has one.
+## True if chamber k is (or is being dug as) a nursery: species keep their
+## stores (gardens, granaries) out of it.
+func is_nursery(k: int) -> bool:
+	return nursery_planned.has(k)
+
+## True while eggs, larvae and pupae each have their own chamber.
+func has_nurseries() -> bool:
+	return nursery[0] >= 0
+
+## Centre of a brood pile (Brood.Pile). With nurseries, the middle of the
+## stage's nursery. Before: eggs at the mouth of the queen's niche, larvae in
+## the brood chamber, pupae in an alcove (a drier niche) where the chamber
+## has one.
 func pile_centre(p: int) -> Vector2:
 	var royal := chambers_layout.royal()
+	if p >= Brood.Pile.EGGS and p <= Brood.Pile.PUPAE and has_nurseries():
+		# Pile EGGS/LARVAE/PUPAE -> Stage EGG/LARVA/PUPA; a little off the
+		# middle, away from the chamber's way in.
+		var k := nursery[p - Brood.Pile.EGGS]
+		var c := chambers_layout.list[k]
+		var away := (c.centre - c.door).angle() if c.door != c.centre else 0.0
+		return _spot(k, Vector2.from_angle(away) * 0.15)
 	match p:
 		Brood.Pile.EGGS, Brood.Pile.QUEEN:
 			if royal.alcoves.is_empty():
@@ -406,6 +460,18 @@ func _count_roles(sim: Simulation) -> void:
 	# Larvae need feeding; eggs and pupae only moving and grooming.
 	var larvae := brood.count_stage(Brood.Stage.LARVA)
 	role_need["nurse"] = ceili(larvae / brood_per_nurse + (brood.count() - larvae) / (brood_per_nurse * 4.0)) if brood.count() > 0 else 0
+	# With nurseries the walks are longer: brood lying away from its stage's
+	# nursery needs carrying there, and larvae going hungry need more hands
+	# fetching food (a nurse per few of each).
+	if has_nurseries():
+		var away := 0
+		var hungry := 0
+		for k in brood.count():
+			if brood.carrier[k] < 0 and brood.pile[k] != Brood.Pile.QUEEN and not brood.is_home(k, self):
+				away += 1
+			if brood.stage[k] == Brood.Stage.LARVA and brood.hunger[k] >= BroodCare.HUNGRY:
+				hungry += 1
+		role_need["nurse"] += ceili(away / 3.0) + ceili(hungry / 3.0)
 	@warning_ignore("integer_division")
 	role_need["tend_queen"] = clampi(workers / 25, 1, retinue_max) if workers >= 3 else 0
 	var dig_work := 0
@@ -483,14 +549,18 @@ func _plan_entrance() -> void:
 ## Plans a new chamber when the nest is running short of room
 ## (space_pressure(); one at a time, up to max_chambers).
 func _plan_chambers(sim: Simulation) -> void:
-	if not has_entrance() or chambers_layout.count() >= max_chambers:
+	# (Nurseries come on top of max_chambers.)
+	if not has_entrance() or chambers_layout.count() >= max_chambers + nursery_planned.size():
 		return
 	# One chamber at a time, more at once (up to four) the more the nest is
 	# overflowing.
 	# Chambers still being dug; one waiting a long time for its way in to open
-	# (e.g. its gallery was abandoned) doesn't hold up new ones.
+	# (e.g. its gallery was abandoned) doesn't hold up new ones. Nurseries
+	# being dug don't hold them up either.
 	var undug := 0
 	for c in chambers_layout.list:
+		if nursery_planned.has(c.index):
+			continue
 		if not c.dug and not c.failed and c.job >= 0 and (plan.is_open(plan.job_by_id(c.job)) or plan.is_open(plan.job_by_id(c.tunnel_job))
 				or sim.time() - c.planned_at < STUCK_CHAMBER):
 			undug += 1
@@ -505,6 +575,93 @@ func _plan_chambers(sim: Simulation) -> void:
 		_plan_retry_at = sim.time() + PLAN_RETRY
 	if ch != null:
 		ch.planned_at = sim.time()
+
+## Nurseries: once the colony has nursery_population ants and
+## nursery_chambers chambers dug, three chambers are planned for brood only
+## (dug like any other, on top of max_chambers). When all three are dug each
+## stage gets one (_assign_nurseries()); from then on pile_centre() is in
+## them, so nurses carry every egg, larva and pupa lying elsewhere to its
+## stage's nursery, and brood that changes stage moves on to the next one.
+## A nursery whose digging failed is planned again.
+func _plan_nurseries(sim: Simulation) -> void:
+	if has_nurseries() or not has_entrance():
+		return
+	var kept := PackedInt32Array()
+	for k in nursery_planned:
+		if not chambers_layout.list[k].failed:
+			kept.append(k)
+	nursery_planned = kept
+	if nursery_planned.is_empty() and (sim.colonies[colony_id].total_population() < nursery_population
+			or chambers_layout.dug_count() < nursery_chambers):
+		return
+	while nursery_planned.size() < 3 and sim.time() >= _nursery_retry_at:
+		var ch := chambers_layout.plan_chamber(plan, float(chambers_layout.count()), false, _nursery_site())
+		if ch == null:
+			_nursery_retry_at = sim.time() + PLAN_RETRY
+			break
+		ch.planned_at = sim.time()
+		nursery_planned.append(ch.index)
+	if nursery_planned.size() < 3:
+		return
+	for k in nursery_planned:
+		if not chambers_layout.list[k].dug:
+			return
+	_assign_nurseries()
+
+## Where the next nursery is best sited: near the queen for the first, then
+## near the ones planned already, so the three lie close together (brood is
+## carried from one to the next).
+func _nursery_site() -> Vector2:
+	if nursery_planned.is_empty():
+		return chambers_layout.royal().centre
+	var sum := Vector2.ZERO
+	for k in nursery_planned:
+		sum += chambers_layout.list[k].centre
+	return sum / nursery_planned.size()
+
+## Gives each stage one of the three nursery chambers: the way of sharing
+## them out with the least nursery_cost().
+func _assign_nurseries() -> void:
+	var best := PackedInt32Array()
+	var best_cost := INF
+	for perm: Array in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]:
+		var cost := nursery_cost(nursery_planned[perm[0]], nursery_planned[perm[1]], nursery_planned[perm[2]])
+		if cost < best_cost:
+			best_cost = cost
+			best = PackedInt32Array([nursery_planned[perm[0]], nursery_planned[perm[1]], nursery_planned[perm[2]]])
+	nursery = best
+	nursery_version += 1
+
+## Weight of the larvae's trips to the food in nursery_cost() (each larva
+## is fed several times, but carried on once).
+const FEED_TRIPS := 3.0
+
+## Nurses' walking (in nest units) with eggs in chamber e, larvae in l and
+## pupae in p: every egg carried from the queen to e, then to l, then to p,
+## larvae fed with food fetched from the nearest chamber that holds it
+## (holds_food(); FEED_TRIPS times), and a little for pupae near an entrance
+## shaft (drier air; callows walk out from there). Species may override.
+func nursery_cost(e: int, l: int, p: int) -> float:
+	var ce := chambers_layout.list[e].centre
+	var cl := chambers_layout.list[l].centre
+	var cp := chambers_layout.list[p].centre
+	var food := INF
+	for c in chambers_layout.list:
+		if c.dug and not is_nursery(c.index) and holds_food(c.index):
+			food = minf(food, c.centre.distance_to(cl))
+	if food == INF:
+		food = cl.distance_to(chambers_layout.royal().centre)
+	var shaft := cp.distance_to(portal.pos_b)
+	for q in extra_portals:
+		if q.open:
+			shaft = minf(shaft, cp.distance_to(q.pos_b))
+	return ce.distance_to(chambers_layout.royal().centre) + ce.distance_to(cl) + cl.distance_to(cp) \
+			+ FEED_TRIPS * food + 0.3 * shaft
+
+## True if chamber k holds the colony's food (larvae are best kept near it).
+## Species nests override.
+func holds_food(_k: int) -> bool:
+	return false
 
 ## Once the colony has passed the next of `entrance_steps`, plans another
 ## entrance: a shaft up to the surface, facing food, spaced from the others,

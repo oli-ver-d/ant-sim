@@ -27,6 +27,12 @@ const DIRTY := 0.45
 ## Brood this dirty is groomed before anything but freeing callows and
 ## taking eggs from the queen (at 1 it stops developing).
 const FILTHY := 0.75
+## Feeds a nurse fetches at once with nurseries, and how far from the larva
+## just fed the next one may lie.
+const FEED_LOAD := 4.0
+const FEED_REACH := 24.0
+## With nurseries, a task counts one rank less per this distance away.
+const LOCAL_REACH := 40.0
 ## Seconds between looks for work when there is none.
 const LOOK_EVERY := 1.0
 
@@ -68,7 +74,10 @@ static func tick(sim: Simulation, i: int, dt: float, nest: ColonyNest, move_spee
 			elif step == 1:
 				_work(sim, i, dt, sim.target[i] + Vector2(1, 0))
 				if sim.scratch_f0[i] >= HARVEST_TIME:
-					var m := nest.take_food_at(sim.target[i], brood.feed_mass(nest))
+					# With nurseries (larvae together, often away from the food) a
+					# nurse brings enough for several larvae lying there.
+					var load := FEED_LOAD if nest.has_nurseries() else 1.0
+					var m := nest.take_food_at(sim.target[i], brood.feed_mass(nest) * load)
 					if m <= 0.0:
 						# Too little here: try another spot next time.
 						abandon(sim, i, nest)
@@ -83,11 +92,27 @@ static func tick(sim: Simulation, i: int, dt: float, nest: ColonyNest, move_spee
 				_work(sim, i, dt, brood.pos[k])
 				if sim.scratch_f0[i] >= FEED_TIME:
 					var item := sim.item_of(i)
-					brood.feed(k, item.mass / brood.feed_mass(nest) if item != null else 1.0)
-					if item != null:
-						sim.carried[i] = -1
-						item.carrier = -1
-						sim.destroy_item(item.id)
+					var fm := brood.feed_mass(nest)
+					if item == null:
+						brood.feed(k)
+						_finish(sim, i, k)
+						return true
+					var share := minf(item.mass, fm)
+					brood.feed(k, share / fm)
+					item.mass -= share
+					# Food left: on to the nearest hungry larva lying close by.
+					var next := _hungry_near(brood, brood.pos[k], FEED_REACH) if item.mass >= fm * 0.5 else -1
+					if next >= 0:
+						brood.claimed[k] = -1
+						brood.claimed[next] = i
+						sim.scratch_i[i] = brood.id[next]
+						_set_task(sim, i, task, 2)
+						return true
+					if item.mass > 1e-6:
+						nest.return_food(sim.pos[i], item.mass)
+					sim.carried[i] = -1
+					item.carrier = -1
+					sim.destroy_item(item.id)
 					_finish(sim, i, k)
 		Task.GROOM, Task.FREE:
 			if step == 0:
@@ -123,6 +148,19 @@ static func abandon(sim: Simulation, i: int, nest: ColonyNest) -> void:
 		sim.destroy_item(item.id)
 	_clear(sim, i)
 
+## The unclaimed hungry larva lying nearest `at` within `reach`, or -1.
+static func _hungry_near(brood: Brood, at: Vector2, reach: float) -> int:
+	var best := -1
+	var best_d := reach * reach
+	for k in brood.count():
+		if brood.stage[k] != Stage.LARVA or brood.claimed[k] >= 0 or brood.carrier[k] >= 0 or brood.hunger[k] < HUNGRY:
+			continue
+		var d := at.distance_squared_to(brood.pos[k])
+		if d <= best_d:
+			best_d = d
+			best = k
+	return best
+
 static func has_task(sim: Simulation, i: int) -> bool:
 	return int(sim.scratch_f1[i]) >> 2 != Task.NONE
 
@@ -132,27 +170,39 @@ static func _pick(sim: Simulation, i: int, nest: ColonyNest, only_chamber: int) 
 	var at := sim.pos[i]
 	var best := -1
 	var best_task := Task.NONE
-	var best_rank := 0
+	var best_score := -INF
 	var best_d := INF
 	var can_feed := nest.food_stock() > nest.reserve()
+	# With nurseries, brood lying in the wrong one is taken to its own before
+	# larvae are fed (a larva just hatched is fed in the larvae's nursery).
+	var nurseries := nest.has_nurseries()
 	for k in brood.count():
 		if brood.claimed[k] >= 0 or brood.carrier[k] >= 0:
 			continue
 		if only_chamber >= 0 and nest.chambers_layout.chamber_at(brood.pos[k]) != only_chamber:
 			continue
 		var task := Task.NONE
-		var rank := 0
+		var rank := 0.0
+		var larva := brood.stage[k] == Stage.LARVA
 		if brood.callow_ready(k):
 			task = Task.FREE
-			rank = 6
+			rank = 7
 		elif brood.pile[k] == Pile.QUEEN:
 			task = Task.CARRY
-			rank = 5
+			rank = 6
+		elif nurseries and larva and brood.hunger[k] >= 1.0 and can_feed:
+			# Starving (with nurseries the stores are further away): fed first,
+			# wherever it lies.
+			task = Task.FEED
+			rank = 5.5
 		elif brood.dirt[k] >= FILTHY:
 			# Nearly too dirty to develop: nothing else helps it until groomed.
 			task = Task.GROOM
+			rank = 5
+		elif nurseries and not brood.is_home(k, nest):
+			task = Task.CARRY
 			rank = 4
-		elif brood.stage[k] == Stage.LARVA and brood.hunger[k] >= HUNGRY and can_feed:
+		elif larva and brood.hunger[k] >= HUNGRY and can_feed:
 			task = Task.FEED
 			rank = 3
 		elif not brood.is_home(k, nest):
@@ -164,10 +214,14 @@ static func _pick(sim: Simulation, i: int, nest: ColonyNest, only_chamber: int) 
 		else:
 			continue
 		var d := at.distance_squared_to(brood.pos[k])
-		if rank > best_rank or (rank == best_rank and d < best_d):
+		# With nurseries (brood spread over chambers far apart) work close by
+		# comes first: a task loses a rank per LOCAL_REACH it lies away, so
+		# nurses mostly care for the nursery they are in.
+		var score := rank - (sqrt(d) / LOCAL_REACH if nurseries else 0.0)
+		if score > best_score or (score == best_score and d < best_d):
 			best = k
 			best_task = task
-			best_rank = rank
+			best_score = score
 			best_d = d
 	if best < 0:
 		return false

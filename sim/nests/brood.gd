@@ -342,10 +342,13 @@ func pick_up(k: int, ant: int) -> void:
 	pile[k] = Pile.CARRIED
 
 ## The carrier puts record k down at `at`: into its stage's pile if that's
-## where it is, otherwise loose on the floor.
+## where it is, otherwise loose on the floor. Never in a gallery (dropped
+## there when its carrier dies or is called away): nurses can't find their
+## way to it there (their nav fields lead to chambers), so it goes to its pile
+## as if carried on.
 func put_down(k: int, at: Vector2, nest: ColonyNest) -> void:
 	var want := home_pile(stage[k])
-	if at.distance_to(nest.pile_centre(want)) <= PILE_REACH * 3.0:
+	if at.distance_to(nest.pile_centre(want)) <= PILE_REACH * 3.0 or nest.chambers_layout.chamber_at(at) < 0:
 		_drop_in_pile(k, want, nest)
 		return
 	carrier[k] = -1

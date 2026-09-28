@@ -8,6 +8,9 @@ extends Behaviour
 ##
 ## params: stint (s, 90), on_done ("nest_role")
 
+## Piles idle nurses wait by when there are nurseries (by ant slot).
+const WAIT_PILES: Array[int] = [Brood.Pile.EGGS, Brood.Pile.LARVAE, Brood.Pile.PUPAE, Brood.Pile.LARVAE]
+
 func enter(sim: Simulation, i: int) -> void:
 	sim.scratch_f1[i] = 0.0
 	sim.scratch_f0[i] = 0.0
@@ -29,8 +32,12 @@ func tick(sim: Simulation, i: int, dt: float) -> String:
 		return ""
 	if sim.timer[i] > float(p.get("stint", 90.0)) or (sim.timer[i] > 5.0 and nest.short_elsewhere("nurse")):
 		return p.get("on_done", "nest_role")
-	# Nothing to do: wait by the brood.
-	var spot := nest.pile_centre(Brood.Pile.LARVAE) + Vector2.from_angle(i * 2.39996) * 12.0
+	# Nothing to do: wait by the brood (with nurseries, spread over them: half
+	# by the larvae, a quarter each by the eggs and the pupae).
+	var pile: int = Brood.Pile.LARVAE
+	if nest.has_nurseries():
+		pile = WAIT_PILES[i % WAIT_PILES.size()]
+	var spot := nest.pile_centre(pile) + Vector2.from_angle(i * 2.39996) * 12.0
 	if sim.pos[i].distance_to(spot) > 4.0:
 		Travel.go(sim, i, nest.underground_layer, spot, nest.field_toward(spot), speed * 0.5, dt, 3.0,
 				nest.direct_range(spot) * 0.9)

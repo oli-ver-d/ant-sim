@@ -175,7 +175,7 @@ func _setup_layered(sim: Simulation, owner_colony: Colony, params: Dictionary, f
 				and not layout.in_alcove(0, at) \
 				and not l.world.is_blocked(at))
 	for c in chambers_layout.list:
-		if c.dug and c.kind == NestChambers.Kind.CHAMBER:
+		if c.dug and c.kind == NestChambers.Kind.CHAMBER and not is_nursery(c.index):
 			_add_garden_chamber(c)
 	_seed_garden(fungus)
 	_sync_garden_totals(0.0)
@@ -199,10 +199,11 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 	_sync_garden_totals(before)
 	_update_colony(sim, dt)
 
-## Newly dug chambers get their garden, started with fungus from another.
+## Newly dug chambers get their garden, started with fungus from another
+## (not nurseries: brood only).
 func _chambers_dug(sim: Simulation) -> void:
 	for c in chambers_layout.list:
-		if c.dug and c.kind == NestChambers.Kind.CHAMBER and not garden.has_chamber(c.index):
+		if c.dug and c.kind == NestChambers.Kind.CHAMBER and not garden.has_chamber(c.index) and not is_nursery(c.index):
 			_add_garden_chamber(c)
 			_seed_new_garden(sim, c.index)
 
@@ -238,6 +239,10 @@ func return_food(at: Vector2, mass: float) -> void:
 
 func space_pressure() -> float:
 	return garden_pressure()
+
+## Larvae are fed gongylidia: their nursery goes next to a garden.
+func holds_food(k: int) -> bool:
+	return garden != null and garden.has_chamber(k)
 
 func role_order() -> Array[String]:
 	return ["nurse", "tend_queen", "garden", "dig"]

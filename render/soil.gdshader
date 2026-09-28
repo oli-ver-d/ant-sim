@@ -14,6 +14,8 @@ shader_type canvas_item;
 // bicubically with a little noise, as in obstacle.gdshader, so outlines are
 // rounded and organic instead of following the cells.
 // traffic: the layer's traffic map (raw values, times traffic_scale), if any.
+// nursery: a nest's nurseries, one texel per cell (R eggs, G larvae, B pupae),
+// if any: their floors are lined with a tone per stage.
 // Everything but freshness and wear is a function of world position (no
 // time), so it stays static and compresses well in video.
 
@@ -33,6 +35,14 @@ uniform vec4 stone_color : source_color = vec4(0.52, 0.5, 0.46, 1.0);
 uniform sampler2D traffic : filter_linear;
 uniform bool has_traffic = false;
 uniform float traffic_scale = 0.0;
+uniform sampler2D nursery : filter_linear;
+uniform bool has_nursery = false;
+// Nursery floors (SoilRenderer's nursery mask: R eggs, G larvae, B pupae):
+// eggs on damp, smoothed dark clay, larvae on warm tamped red clay, pupae
+// on dry pale sand.
+uniform vec4 egg_floor : source_color = vec4(0.36, 0.3, 0.25, 1.0);
+uniform vec4 larva_floor : source_color = vec4(0.58, 0.36, 0.23, 1.0);
+uniform vec4 pupa_floor : source_color = vec4(0.66, 0.6, 0.46, 1.0);
 
 float hash(vec2 p) {
 	// Sine-free hash (Dave Hoskins), as in ground.gdshader.
@@ -93,6 +103,25 @@ vec4 texture_bicubic(sampler2D tex, vec2 uv) {
 	return mix(mix(s3, s2, sx), mix(s1, s0, sx), sy);
 }
 
+
+// The nursery mask, bicubic like texture_bicubic (a sampler parameter can't
+// take both TEXTURE and a uniform).
+vec3 nursery_bicubic(vec2 uv) {
+	vec2 tex_size = vec2(textureSize(nursery, 0));
+	vec2 inv = 1.0 / tex_size;
+	uv = uv * tex_size - 0.5;
+	vec2 f = fract(uv);
+	uv -= f;
+	vec4 xc = bspline(f.x);
+	vec4 yc = bspline(f.y);
+	vec4 c = uv.xxyy + vec2(-0.5, 1.5).xyxy;
+	vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+	vec4 o = (c + vec4(xc.yw, yc.yw) / s) * inv.xxyy;
+	float sx = s.x / (s.x + s.y);
+	float sy = s.z / (s.z + s.w);
+	return mix(mix(texture(nursery, o.yw).rgb, texture(nursery, o.xw).rgb, sx),
+			mix(texture(nursery, o.yz).rgb, texture(nursery, o.xz).rgb, sx), sy);
+}
 // Palette pick for a stratum.
 vec3 stratum(float pick) {
 	return pick < 0.3 ? soil_dark.rgb : (pick < 0.6 ? soil_mid.rgb : (pick < 0.85 ? clay.rgb : sand.rgb));
@@ -221,13 +250,26 @@ void fragment() {
 	// moist, darkening as it dries.
 	vec3 fl = floor_color.rgb * (0.9 + 0.18 * fbm(w / 22.0 + 3.0));
 	fl = mix(fl, fresh_color.rgb * (0.92 + 0.14 * fbm(w / 5.0 + 11.0)), fresh * 0.75);
+	// Nurseries: the floor lined and kept clean, a tone per stage.
+	vec3 nurs = has_nursery ? nursery_bicubic(uv) : vec3(0.0);
+	float nurs_sum = nurs.r + nurs.g + nurs.b;
+	float lined = smoothstep(0.08, 0.55, nurs_sum);
+	if (lined > 0.0) {
+		vec3 egg = egg_floor.rgb * (0.93 + 0.12 * fbm(w / 14.0 + 61.0));
+		egg += vec3(0.05) * smoothstep(0.62, 0.85, noise(w / 4.0 + 71.0));
+		vec3 lar = larva_floor.rgb * (0.84 + 0.26 * fbm(w / 6.0 + 83.0));
+		vec2 gc2 = floor(w / 1.4);
+		vec3 pup = pupa_floor.rgb * (0.9 + 0.12 * fbm(w / 18.0 + 97.0)) * (0.88 + 0.22 * hash(gc2 + 91.0));
+		vec3 lining = (egg * nurs.r + lar * nurs.g + pup * nurs.b) / max(nurs_sum, 1e-4);
+		fl = mix(fl, lining, lined * 0.92);
+	}
 	float grain = (noise(w * 1.3) - 0.5) * 0.12;
 	// Traffic wear: busy floors packed smooth and darker, a polished line
 	// down the middle of the busiest (away from the walls), and faint paths
 	// where only a few ants walk.
 	float wear = 0.0;
 	if (has_traffic) {
-		wear = 1.0 - exp(-texture(traffic, UV).r * traffic_scale);
+		wear = (1.0 - exp(-texture(traffic, UV).r * traffic_scale)) * (1.0 - 0.75 * lined);
 	}
 	fl = mix(fl, worn_color.rgb * (0.95 + 0.08 * fbm(w / 30.0)), wear * 0.7);
 	fl *= 1.0 + grain * (1.0 - 0.7 * wear);
