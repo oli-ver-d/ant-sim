@@ -144,6 +144,18 @@ func emerge_tick(n: int) -> int:
 func index_of(brood_id: int) -> int:
 	return id.find(brood_id)
 
+## Returned by emerged_as() for an item not in the emergence log.
+const NOT_EMERGED := -2
+
+## The ant brood item `brood_id` became when it emerged: -1 if it joined the
+## abstract population (no ant), NOT_EMERGED if it hasn't emerged (or died,
+## or its event has left the last EVENT_LOG). Read-only, for views.
+func emerged_as(brood_id: int) -> int:
+	for n in range(emerged - 1, maxi(0, emerged - EVENT_LOG) - 1, -1):
+		if emerge_ids[n % EVENT_LOG] == brood_id:
+			return emerge_ants[n % EVENT_LOG]
+	return NOT_EMERGED
+
 ## Fingerprint of the brood, for Simulation.state_hash().
 func hash_into(ctx: HashingContext) -> void:
 	ctx.update(PackedInt64Array([_next_id, eggs_laid, emerged]).to_byte_array())

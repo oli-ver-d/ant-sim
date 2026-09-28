@@ -407,12 +407,25 @@ Playback (video) settings:
 - `duration`: video length in seconds
 - `warmup`: simulated seconds to run before the first frame
 - `ticks_per_frame`: a number, or `[{"t": video s, "tpf": n}, ...]` ramped linearly.
-  0.5 = real time (30 ticks/s at 60 fps); 5 = 10× timelapse
+  0.5 = real time (30 ticks/s at 60 fps); 5 = 10× timelapse. A point may add `"jump": s`
+  (`{"t": 40, "tpf": 0.5, "jump": 120}`): that many sim seconds run at once in the first
+  frame at or after `t` (put it under a fade); the cameras snap to their targets after it
 - `camera`: keyframes `{"t", "pos": [x, y], "zoom", "ease"}`; `"follow": {"near": [x, y],
-  "state": "carry_home"}` in place of `pos` tracks the nearest matching ant;
+  "state": "carry_home"}` in place of `pos` tracks the nearest matching ant on that camera's
+  layer (`"smoothing": s` per keyframe, default 0.35, larger is slower and calmer, 0 locks on);
   `"fit": "excavation"` (with `margin`, `min_zoom`, `max_zoom`) frames everything dug so far,
   easing as the nest grows. For a nest that digs, `"camera": {"surface": [...], "nest": [...]}`
-  gives each part of the layout its own keyframes (see `render/camera_director.gd`)
+  gives each part of the layout its own keyframes (see `render/camera_director.gd`).
+  Story follows:
+  - `"follow": {"ant": "same"}` keeps whatever the latest follow on either camera chose (an
+    ant, or a brood item until it ecloses), so the nest camera can pick up the surface's ant
+  - `"follow": {"brood": "first" | "last" | "near" | <id>, "stage": "egg", "near": [x, y],
+    "colony": 0}` follows a brood record (brood care on) by id through its stages, carried or
+    not, then the worker it becomes
+  - `"across": true` in a follow keeps its ant through nest entrances: the camera of the
+    layout part showing its new layer takes it over (at the keyframe's zoom and smoothing);
+    `"switch_mode": true` also switches the layout (`surface` ↔ `nest`) when its layer isn't
+    shown, until the next `render.layout.modes` point
 - `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45}` splits
   the frame: the surface (the world, in a 1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
   that part) and, full width below it, the colony's nest: its underground layer, top-down and

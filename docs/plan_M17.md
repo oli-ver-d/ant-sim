@@ -22,7 +22,7 @@ Slow-paced means: near real time (tpf 0.5) or slow motion (tpf 0.25) on close-up
 holds, gentle camera moves, time-lapse only in transitions (preferably under a fade), about
 150–180 s of video (so a PNG final render takes ~2 h; draft with AVI).
 
-Status: M17a done (presentation layer). Next: M17b.
+Status: M17a done (presentation layer), M17b done (camera storytelling). Next: M17c.
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -94,7 +94,7 @@ so it grades whatever is under it (both split parts, seam, stats). Captions/fade
 the grade. The nest's stats readout (`SplitLayout._stats`) is still shown; a scenario that
 wants it gone should get `render.layout.stats: false` in M17c if needed.
 
-### M17b: camera storytelling
+### M17b: camera storytelling — DONE
 
 Goal: camera keyframes that tell a story across layers.
 - `"follow": {"ant": "same"}` keeps following the ant a previous keyframe chose, and a
@@ -115,6 +115,45 @@ Files: `render/camera_director.gd`, `scenes/scenario_player.gd`, maybe `sim/nest
 Verify: tests with a small scenario (queen founding): brood follow keeps the same id through
 stages; across-follow switches parts when an ant takes a portal; hashes unchanged.
 Hands on: keyframe syntax for M17c.
+
+**Done.** Keyframe syntax for M17c (all render side; `tests/test_camera.gd` checks hashes
+are unchanged):
+- Per keyframe `"smoothing": s` (default 0.35; 0 locks on). Applies to follows only.
+- `"follow": {"ant": "same"}`: continues the cameras' shared *story* (`CameraDirector.story`,
+  one dictionary shared by the surface and nest cameras): the ant (or brood item) the latest
+  follow keyframe on either camera chose, or the ant an across follow was handed on as.
+  Resolved when the keyframe first comes into use (from the previous keyframe's time), like
+  every follow. `"ant": <slot>` follows a slot directly.
+- `"follow": {"brood": "first" | "last" | "near" | <id>, "stage": "egg", "near": [x, y],
+  "colony": 0}`: oldest / newest record (in that stage), nearest to `near`, or an id. Needs
+  brood care (positions); belongs on the **nest** camera (brood is on the nest layer; on
+  another camera the target just holds). Tracks the id through stages (carried brood rides
+  with the nurse, drawn like the brood renderer), then the ant from `Brood.emerged_as(id)`
+  (new read-only accessor; `Brood.NOT_EMERGED` = not in the last 32 emergences). A brood
+  item that dies, or joins the abstract population, leaves the camera where it was.
+- `"across": true` (+ optional `"switch_mode": true`) in any follow with an ant: while that
+  keyframe is the one in effect (from its `t` until the next keyframe on that camera), the
+  ant is handed to the other camera whenever it's on that camera's layer
+  (`CameraDirector.carry()`; cut to the ant, then smoothed, at the across keyframe's zoom and
+  smoothing). With `switch_mode` the layout changes to `"nest"` / `"surface"` when the ant's
+  layer isn't shown (split shows both, so no switch). If both cameras have an across
+  keyframe in effect, the one with the later `t` wins.
+- Time jump: `"jump": s` on a `ticks_per_frame` point, e.g.
+  `[{"t": 0, "tpf": 0.5}, {"t": 40, "tpf": 0.5, "jump": 120}]` (a point may also have only
+  `"jump"`, no `"tpf"`). Runs in the first frame at or after `t`, on top of that frame's tpf;
+  the cameras `snap()` (fit and follow smoothing) after it. Put it under a fade.
+
+Changed from the plan: `"follow": {"state", "layer": "nest"}` needs no `layer` key — each
+camera already chooses on its own layer (nest camera → nest layer; tested with `"state":
+"dig"`). `"brood": "last"` added. `ScenarioPlayer.setup_data(dict, ...)` added (tests build
+scenarios in code). `render.layout.modes` now applies only when a new point is reached (it
+used to re-apply every frame), so a `switch_mode` switch holds until the next point.
+
+Caveats for M17c: a followed ant's slot can be reused after it dies (the camera would then
+follow the newcomer; rare, avoid following ants near `worker_lifespan`). The nest camera
+only updates while the nest is shown; an across keyframe on it keeps working in `"surface"`
+mode, but its non-across targets freeze. Across hands off at the moment the ant changes
+layer (end of portal transit); the source camera holds at the entrance meanwhile.
 
 ### M17c: scenario draft from existing features, story probe
 

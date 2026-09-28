@@ -8,6 +8,17 @@ extends Node2D
 ## Speed: the scenario's "ticks_per_frame" schedule says how many sim ticks
 ## to run per 60 fps video frame (0.5 = real time at 30 ticks/s); values
 ## between schedule points are ramped linearly so speed-ups are smooth.
+## A point may add "jump": sim seconds run all at once in the first frame at
+## or after its time ({"t": 40, "tpf": 0.5, "jump": 120}), for time skips
+## hidden under a fade; the cameras then snap to their targets.
+##
+## Camera stories (see CameraDirector): both cameras share one `story`, so
+## {"ant": "same"} on the nest camera continues what the surface camera
+## followed. An "across" follow's ant is handed each frame to the camera of
+## the part that shows its layer (_update_across), and with "switch_mode"
+## the layout mode changes when its layer isn't shown: to "nest" when it goes
+## underground from "surface", to "surface" when it comes up from "nest".
+## The mode then stays until the next render.layout.modes point.
 
 const VIDEO_FPS := 60.0
 
@@ -40,15 +51,25 @@ var video_time: float = 0.0
 var duration: float = 20.0
 
 var _tpf_points: Array[Vector2] = []  # (video time, ticks per frame)
+## Time jumps (video time, sim seconds), sorted, and how many have been made.
+var _jumps: Array[Vector2] = []
+var _jumps_done: int = 0
+## Index of the render.layout.modes point applied last.
+var _mode_point: int = -1
 
 ## seed_value < 0 uses the scenario's seed. extra_ticks run after the
 ## scenario's own warmup, before the first frame. layout_mode ("split" or
 ## "normal") overrides the scenario's render.layout mode.
 func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 		debug_readout: RichTextLabel = null, layout_mode: String = "") -> void:
+	setup_data(ScenarioLoader.load_data(scenario_name), seed_value, extra_ticks, debug_readout, layout_mode)
+
+## setup() from scenario data already loaded (or built in code, e.g. tests).
+func setup_data(scenario: Dictionary, seed_value: int = -1, extra_ticks: int = 0,
+		debug_readout: RichTextLabel = null, layout_mode: String = "") -> void:
 	registry = Registry.create_default()
 	CoreRenderers.register(registry)
-	data = ScenarioLoader.load_data(scenario_name)
+	data = scenario
 	sim = ScenarioLoader.build(data, registry, config, seed_value)
 	duration = float(data.get("duration", 20.0))
 
@@ -102,14 +123,26 @@ func setup(scenario_name: String, seed_value: int = -1, extra_ticks: int = 0,
 func advance(delta: float, speed: float = 1.0) -> void:
 	video_time += delta
 	_apply_mode_schedule()
-	runner.advance(ticks_per_frame_at(video_time) * VIDEO_FPS * delta * speed)
+	var jump := 0.0
+	while _jumps_done < _jumps.size() and _jumps[_jumps_done].x <= video_time + 1e-6:
+		jump += _jumps[_jumps_done].y
+		_jumps_done += 1
+	runner.advance(ticks_per_frame_at(video_time) * VIDEO_FPS * delta * speed + jump * config.tick_rate)
 	view.alpha = runner.alpha()
 	camera.alpha = runner.alpha()
-	camera.update_camera(video_time, delta)
-	if nest_view != null and _mode != "surface":
+	if nest_view != null:
 		nest_view.alpha = runner.alpha()
 		nest_camera.alpha = runner.alpha()
+	_update_across()
+	camera.update_camera(video_time, delta)
+	if nest_view != null and _mode != "surface":
 		nest_camera.update_camera(video_time, delta)
+	if jump > 0.0:
+		camera.snap()
+		if nest_camera != null:
+			nest_camera.snap()
+			nest_camera.update_camera(video_time, 0.0)
+		camera.update_camera(video_time, 0.0)
 	if presentation != null:
 		presentation.update(video_time)
 
@@ -125,10 +158,16 @@ func ticks_per_frame_at(t: float) -> float:
 
 func _parse_tpf(spec: Variant) -> void:
 	_tpf_points.clear()
+	_jumps.clear()
+	_jumps_done = 0
 	if spec is Array:
 		for p: Dictionary in spec:
-			_tpf_points.append(Vector2(float(p["t"]), float(p["tpf"])))
+			if p.has("tpf"):
+				_tpf_points.append(Vector2(float(p["t"]), float(p["tpf"])))
+			if float(p.get("jump", 0.0)) > 0.0:
+				_jumps.append(Vector2(float(p["t"]), float(p["jump"])))
 		_tpf_points.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+		_jumps.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
 	if _tpf_points.is_empty():
 		_tpf_points.append(Vector2(0.0, float(spec) if (spec is float or spec is int) else config.ticks_per_frame))
 
@@ -173,6 +212,8 @@ func _build_nest_view() -> void:
 	layout.nest_viewport.add_child(nest_camera)
 	var frames := _nest_keyframes if not _nest_keyframes.is_empty() else [{"t": 0, "fit": "excavation", "margin": 80}]
 	nest_camera.setup(sim, frames, nest.underground_layer)
+	nest_camera.story = camera.story
+	nest_camera.alpha = runner.alpha() if runner != null else 1.0
 	nest_camera.make_current()
 
 ## Current layout mode: "surface", "split" or "nest".
@@ -213,9 +254,61 @@ func screen_to_world(screen: Vector2) -> Vector2:
 func _apply_mode_schedule() -> void:
 	if _mode_schedule.is_empty():
 		return
-	var want := ""
-	for m in _mode_schedule:
-		if float(m["t"]) <= video_time + 1e-6:
-			want = str(m["mode"])
-	if want != "" and want != _mode:
+	var point := -1
+	for n in _mode_schedule.size():
+		if float(_mode_schedule[n]["t"]) <= video_time + 1e-6:
+			point = n
+	# Only when a new point is reached, so an "across" follow's switch holds.
+	if point < 0 or point == _mode_point:
+		return
+	_mode_point = point
+	var want := str(_mode_schedule[point]["mode"])
+	if want != _mode:
 		set_mode(want)
+
+## The layer of the nest shown in the layout's nest part (-1 if none).
+func nest_layer() -> int:
+	var c := int(_layout_spec.get("colony", 0))
+	if c < 0 or c >= sim.colonies.size():
+		return -1
+	return sim.colonies[c].nest.underground_layer
+
+## True if the current layout mode shows `l` (the surface or the nest's layer).
+func shows_layer(l: int) -> bool:
+	if l == camera.layer:
+		return _mode != "nest"
+	return l == nest_layer() and _mode != "surface"
+
+## Hands an "across" follow's ant to the camera showing its layer (and
+## switches layout mode for it if the keyframe asks); every other camera
+## plays its own keyframes.
+func _update_across() -> void:
+	# The later of the two cameras' current across keyframes wins.
+	var spec := camera.across_at(video_time)
+	var source := camera
+	if nest_camera != null:
+		var under := nest_camera.across_at(video_time)
+		if not under.is_empty() and (spec.is_empty() or float(under["t"]) > float(spec["t"])):
+			spec = under
+			source = nest_camera
+	var holder: CameraDirector = null
+	if not spec.is_empty():
+		var ant: int = spec["ant"]
+		var l := sim.layer[ant]
+		if bool(spec["switch_mode"]) and not shows_layer(l):
+			if l == camera.layer:
+				set_mode("surface")
+			elif l == nest_layer():
+				set_mode("nest")
+		if l != source.layer:
+			if l == camera.layer:
+				holder = camera
+			elif nest_camera != null and l == nest_camera.layer:
+				holder = nest_camera
+	for cam: CameraDirector in [camera, nest_camera]:
+		if cam == null:
+			continue
+		if cam == holder:
+			cam.carry(int(spec["ant"]), float(spec["zoom"]), float(spec["smoothing"]))
+		else:
+			cam.carry(-1)
