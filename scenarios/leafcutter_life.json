@@ -1,0 +1,155 @@
+{
+	"name": "leafcutter_life",
+	"description": "Cinematic, captioned life of a leafcutter colony (M17 draft, chapters 2-6): a queen sealed in with her fungus garden lays her first egg, followed through larva, pupa and callow to a new worker; the workers break ground; a fragment is cut from a leaf, carried down and planted in the garden; months later majors clear debris off the busy trunk trail while minims ride the fragments; spent garden and the dead go out to the refuse heaps; a closing pull-back at dusk. Real-time close-ups, time skips under fades. About 150 s.",
+	"seed": 3,
+	"duration": 150,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1060],
+			"population": {"queen": 1, "minim": 4},
+			"params": {"worker_lifespan": 1500},
+			"nest_params": {
+				"initial_fungus": 12,
+				"queen_reserve": 60,
+				"open_entrance_at": 8,
+				"chamber_capacity": 90,
+				"max_chambers": 30,
+				"max_population": 6000,
+				"entrances": {"at": [900, 2200], "spacing": 150},
+				"brood_rate": 0.006, "digest_rate": 0.03, "garden_reserve": 0,
+				"brood_reserve": 8,
+				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 40, "garden_life": 1500},
+				"brood": {"lay_interval": 1.2, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 700,
+					"first_workers": 6, "brood_per_worker": 1.2, "initial": {"egg": 3, "larva": 3, "pupa": 3}}
+			}
+		}
+	],
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "litter", "noise": {"scale": 240, "cover": 0.45}},
+			{"material": "moss", "noise": {"scale": 180, "cover": 0.25, "soft": 0.6}, "strength": 0.75}
+		]
+	},
+	"scenery": [
+		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.3,
+			"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]}},
+		{"scatter": {"preset": "meadow", "blocking": false, "density": 1.6,
+			"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]}}
+	],
+	"max_agents": {"surface": 900, "nest": 700},
+	"food": [
+		{"type": "leaf", "pos": [610, 880], "rotation": -25, "length": 250, "width": 120, "shape": "elliptic", "teeth": 24, "seed": 3}
+	],
+	"events": [
+		{"t": 700, "type": "spawn_food", "food": {"type": "leaf", "pos": [800, 1300], "rotation": -55, "length": 320, "width": 140, "shape": "lanceolate", "teeth": 24, "seed": 30}},
+		{"t": 900, "type": "spawn_food", "food": {"type": "leaf", "pos": [540, 520], "rotation": 0, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 57}},
+		{"t": 2150, "type": "drop_debris", "scatter": {"count": 9, "near": [545, 790], "radius": 150, "on_channel": "c0.food", "min_spacing": 40}}
+	],
+	"warmup": 0,
+	"ticks_per_frame": [
+		{"t": 0, "tpf": 0.5},
+		{"t": 25.5, "tpf": 0.5, "jump": 30},
+		{"t": 36.5, "tpf": 0.5, "jump": 40},
+		{"t": 46, "tpf": 0.5, "jump": 30},
+		{"t": 66, "tpf": 0.5},
+		{"t": 69, "tpf": 4},
+		{"t": 73, "tpf": 4},
+		{"t": 76, "tpf": 0.5},
+		{"t": 106.5, "tpf": 0.5, "jump": 1886.5},
+		{"t": 150, "tpf": 0.5}
+	],
+	"camera": {
+		"surface": [
+			{"t": 0, "pos": [540, 1060], "zoom": 3.0},
+			{"t": 57.5, "pos": [540, 1045], "zoom": 3.4},
+			{"t": 66, "pos": [545, 1030], "zoom": 3.2},
+			{"t": 72, "pos": [565, 985], "zoom": 2.3},
+			{"t": 78, "pos": [540, 975], "zoom": 3.2},
+			{"t": 83, "pos": [530, 955], "zoom": 4.2},
+			{"t": 84, "follow": {"near": [528, 952], "state": "cut_leaf", "across": true}, "zoom": 4.2, "smoothing": 0.7},
+			{"t": 91, "pos": [540, 1040], "zoom": 3.0},
+			{"t": 106.5, "pos": [535, 800], "zoom": 1.35},
+			{"t": 112, "pos": [520, 800], "zoom": 1.8},
+			{"t": 114, "pos": [510, 805], "zoom": 3.8},
+			{"t": 119, "pos": [540, 785], "zoom": 3.6},
+			{"t": 123, "pos": [550, 770], "zoom": 3.2},
+			{"t": 124.5, "follow": {"near": [540, 760], "state": "hitchhike"}, "zoom": 4.2, "smoothing": 1.0},
+			{"t": 130, "pos": [440, 1070], "zoom": 3.0},
+			{"t": 142, "pos": [520, 1000], "zoom": 1.2},
+			{"t": 150, "pos": [520, 980], "zoom": 0.9}
+		],
+		"nest": [
+			{"t": 0, "pos": [684, 716], "zoom": 5.5},
+			{"t": 10, "pos": [686, 714], "zoom": 8},
+			{"t": 14, "pos": [686, 714], "zoom": 8.5},
+			{"t": 16, "follow": {"brood": 9}, "zoom": 11, "smoothing": 0.8},
+			{"t": 27, "follow": {"ant": "same"}, "zoom": 11, "smoothing": 0.8},
+			{"t": 47, "follow": {"ant": "same"}, "zoom": 11, "smoothing": 0.8},
+			{"t": 54, "follow": {"ant": "same"}, "zoom": 7, "smoothing": 1.0},
+			{"t": 57.5, "pos": [720, 612], "zoom": 4.5},
+			{"t": 66, "pos": [715, 640], "zoom": 3.4},
+			{"t": 76, "pos": [720, 612], "zoom": 4.5},
+			{"t": 86, "pos": [708, 655], "zoom": 4},
+			{"t": 92, "pos": [695, 708], "zoom": 6},
+			{"t": 96, "pos": [712, 708], "zoom": 6.5},
+			{"t": 104, "pos": [705, 700], "zoom": 5},
+			{"t": 129, "pos": [700, 700], "zoom": 3},
+			{"t": 131, "follow": {"near": [690, 705], "state": "carry_spent"}, "zoom": 5, "smoothing": 1.0},
+			{"t": 142, "fit": "excavation", "margin": 50, "max_zoom": 3, "min_zoom": 0.5}
+		]
+	},
+	"render": {
+		"pheromone_opacity": 0.3,
+		"layout": {"mode": "split", "colony": 0, "surface": "top", "ratio": 0.42, "stats": false,
+			"modes": [{"t": 0, "mode": "nest"}, {"t": 57.5, "mode": "split"}, {"t": 90, "mode": "nest"},
+				{"t": 106.5, "mode": "surface"}, {"t": 130, "mode": "split"}]},
+		"captions": [
+			{"t": 1.5, "until": 7, "text": "The Life of a\nLeafcutter Colony", "style": "title", "pos": "middle", "fade": 1.2},
+			{"t": 7.5, "until": 13.5, "text": "Sealed deep underground, a young queen starts her colony."},
+			{"t": 14, "until": 19.5, "text": "Beside her grows a fungus garden, from a pellet carried from her mother's nest."},
+			{"t": 20, "until": 25, "text": "She lays her first eggs."},
+			{"t": 27, "until": 32, "text": "Egg, larva, pupa, worker", "style": "chapter", "pos": "top"},
+			{"t": 30, "until": 36, "text": "The egg hatches. Nurses feed the larva on the fungus's swollen tips."},
+			{"t": 38, "until": 44.5, "text": "Fully grown, it rests as a pupa. Leafcutters spin no cocoon."},
+			{"t": 47, "until": 52, "text": "A pale callow is freed from its pupal skin..."},
+			{"t": 52.5, "until": 57, "text": "...and a new worker joins the colony."},
+			{"t": 59, "until": 64, "text": "Breaking ground", "style": "chapter", "pos": "top"},
+			{"t": 60.5, "until": 66, "text": "Workers dig up to the surface, and the nest opens."},
+			{"t": 68, "until": 74.5, "text": "Foragers set out to find fresh leaves."},
+			{"t": 77, "until": 82, "text": "Leaf to fungus", "style": "chapter", "pos": "top"},
+			{"t": 82.5, "until": 88, "text": "A worker saws a fragment from the leaf and carries it home."},
+			{"t": 89, "until": 95, "text": "Below, gardeners chew it to pulp and plant it in the fungus garden."},
+			{"t": 96, "until": 104, "text": "The ants cannot digest leaves. They farm the fungus, and its tips feed the larvae."},
+			{"t": 108, "until": 113, "text": "The trunk trail", "style": "chapter", "pos": "top"},
+			{"t": 113, "until": 118, "text": "The colony has grown to hundreds. Their trail is a cleared highway."},
+			{"t": 118.5, "until": 124, "text": "When debris falls across it, majors, the largest workers, carry it away."},
+			{"t": 124.5, "until": 129.5, "text": "Tiny minims ride the fragments, guarding carriers from parasitic flies."},
+			{"t": 131, "until": 136, "text": "Taking out the waste", "style": "chapter", "pos": "top"},
+			{"t": 136, "until": 141.5, "text": "Spent garden and the dead are carried out to refuse heaps, away from the fungus."},
+			{"t": 143, "until": 149, "text": "From one queen, a colony of hundreds. In time, it may hold millions."}
+		],
+		"fades": [
+			{"t": 0, "to": 1}, {"t": 2.5, "to": 0},
+			{"t": 24.8, "to": 0}, {"t": 25.5, "to": 1}, {"t": 26.3, "to": 0},
+			{"t": 35.8, "to": 0}, {"t": 36.5, "to": 1}, {"t": 37.3, "to": 0},
+			{"t": 45.3, "to": 0}, {"t": 46, "to": 1}, {"t": 46.8, "to": 0},
+			{"t": 56.8, "to": 0}, {"t": 57.5, "to": 1}, {"t": 58.3, "to": 0},
+			{"t": 89.4, "to": 0}, {"t": 90, "to": 0.85}, {"t": 90.6, "to": 0},
+			{"t": 105.3, "to": 0}, {"t": 106.5, "to": 1}, {"t": 107.8, "to": 0},
+			{"t": 129.4, "to": 0}, {"t": 130, "to": 1}, {"t": 130.7, "to": 0},
+			{"t": 147.5, "to": 0}, {"t": 150, "to": 1}
+		],
+		"grade": [
+			{"t": 0, "tint": [0.93, 0.92, 1.0], "brightness": 0.92, "saturation": 0.9, "vignette": 0.45},
+			{"t": 57, "tint": [0.93, 0.92, 1.0], "brightness": 0.92, "saturation": 0.9, "vignette": 0.45},
+			{"t": 58, "tint": [1.06, 0.96, 0.86], "brightness": 0.96, "saturation": 0.95, "vignette": 0.35},
+			{"t": 90, "tint": [1.0, 0.97, 0.94], "brightness": 0.95, "saturation": 0.95, "vignette": 0.4},
+			{"t": 106, "tint": [1.0, 0.97, 0.94], "brightness": 0.95, "saturation": 0.95, "vignette": 0.4},
+			{"t": 107, "tint": [1.02, 1.0, 0.96], "brightness": 1.04, "saturation": 1.05, "vignette": 0.25},
+			{"t": 130, "tint": [1.05, 0.98, 0.9], "brightness": 1.0, "saturation": 1.0, "vignette": 0.3},
+			{"t": 150, "tint": [1.12, 0.88, 0.74], "brightness": 0.85, "saturation": 0.95, "vignette": 0.45}
+		]
+	}
+}

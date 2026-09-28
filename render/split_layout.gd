@@ -7,7 +7,8 @@ extends Control
 ## Scenario: "render": {"layout": {"mode": "split", "colony": 0,
 ##                                 "surface": "top", "ratio": 0.5}}
 ## ratio is the surface's share of the frame height; "surface": "bottom" puts
-## it below. "mode": "nest" shows only the nest, full screen.
+## it below. "mode": "nest" shows only the nest, full screen. "stats": false
+## hides the nest's readout (e.g. for a captioned, cinematic scenario).
 ##
 ## The nest part is the nest's underground layer (NestType.underground_layer)
 ## in a second SubViewport (nest_viewport), where ScenarioPlayer puts a
@@ -82,6 +83,7 @@ static func create(simulation: Simulation, spec: Dictionary) -> SplitLayout:
 	layout._split_under = below
 	layout.underground = view
 	layout._build(on_top)
+	layout._stats.visible = bool(spec.get("stats", true))
 	return layout
 
 func _build(surface_on_top: bool) -> void:

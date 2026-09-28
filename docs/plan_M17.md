@@ -22,7 +22,8 @@ Slow-paced means: near real time (tpf 0.5) or slow motion (tpf 0.25) on close-up
 holds, gentle camera moves, time-lapse only in transitions (preferably under a fade), about
 150–180 s of video (so a PNG final render takes ~2 h; draft with AVI).
 
-Status: M17a done (presentation layer), M17b done (camera storytelling). Next: M17c.
+Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
+scenario, story probe). Next: user reviews the M17c draft, then M17d.
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -172,6 +173,94 @@ cleared, first corpse to midden, population steps).
 Verify: probe output; `test_scenario`-style load test (scenario loads and runs 60 s); AVI
 draft (`FORMAT=avi tools/record.sh leafcutter_life`, in the background).
 Hands on: timings, chosen seed, a list of what reads badly in the draft.
+
+**Done.** Files: `scenarios/leafcutter_life.json`, `tests/story_probe.gd`,
+`tests/test_scenario.gd` (`test_leafcutter_life_loads_and_runs`, 60 sim s, ~5 s),
+`render/split_layout.gd` (`render.layout.stats: false` hides the nest readout; render only),
+README (scenario list, probe command, `stats`). No sim change; hashes untouched.
+
+Sim setup (differs from `colony_founding`): queen + 4 minims, `open_entrance_at: 8` (so the
+first brood is raised sealed in and the dig starts ~65 s), `brood_rate: 0.006` (first egg at
+13 s instead of 28 s; later growth is leaf-limited, not brood-limited), `worker_lifespan:
+1500` (first death ~1100 s, ~40 by 2100 s), initial brood egg 3 / larva 3 / pupa 3, only non-blocking
+scenery. Food: one leaf close to the entrance, (610, 880), for the cutting close-up; a leaf at
+(800, 1300) at 700 s; the "trunk" leaf at (540, 520) at 900 s (by 2100 s the only one, so
+all traffic is on one trail); `drop_debris` (9, on `c0.food` near (545, 790)) at 2150 s. The
+extra leaves of `colony_founding` pulled traffic onto several weak trails, so they're gone.
+A queen-only founding (no minims) stalls in the current sim (one worker, brood stuck) — M17d
+must keep the minims or fix that.
+
+Seed 3 (six seeds probed with the first setup, three with the final one; seed 3 has the
+busiest trunk trail at 2150 s — 17 cutting, 190 on the surface — and its debris clearing is
+spread over 18 s so it can be watched; seed 2 opens and cuts sooner but its trail is thin).
+Probe (`story_probe.gd -- leafcutter_life 3 2350 150`), sim seconds:
+- queen (nest) (680, 725); main entrance surface (540, 1060), nest (720, 608)
+- first egg 13.3 (id 9, at (685, 713)); larva 43.3; fed 60.6 and 87.6 at (713, 708); pupa
+  103.4; callow 143.4 at (750, 715); ecloses 152.5 as a minim (ant 14)
+- first digger 65; entrance open 158; first spent garden out 161; midden m0 (502, 1152) 166
+- first cut 231 at (528, 952) on the close leaf; carried down 236; underground 239 at
+  (695, 708); gardener with pulp 242; first hitchhiker 281
+- first major 450; population 50 at 774, 100 at 1237, 200 at 1708, 300 at 2095
+- first worker death 1114, first corpse on a midden 1120; middens m1 (415, 1143), m2 (440, 1060)
+- debris 2150: picked up 2150.1 at (493, 810), cleared 2152.8, then 2153.6, 2159.9, 2166.9,
+  2168.5 (all between y 700 and 875 on the trail)
+
+Video layout (150 s; ~2,180 sim s; the prologue M17d goes before 0, the finale M17e after
+150, so every time here shifts by the prologue's length in M17g):
+| video s | sim s | layout | content |
+|---|---|---|---|
+| 0–25.5 | 0–25 | nest | fade in, title, queen and pellet garden close (zoom 5.5→8.5), first egg laid at 13 |
+| 25.5 | +30 jump | | dip; chapter "Egg, larva, pupa, worker"; brood id 9 followed (zoom 11) |
+| 26–36.5 | 56–66 | nest | larva, fed at 60.6 (V30.6) |
+| 36.5 | +40 jump | | dip |
+| 37–46 | 107–116 | nest | pupa |
+| 46 | +30 jump | | dip |
+| 46–57.5 | 146–157.5 | nest | callow freed, ecloses at V52.5, followed as a minim |
+| 57.5–76 | 157.5–225 | split | "Breaking ground": entrance opens at V58; time-lapse (tpf 4) V69–73 |
+| 76–90 | 225–239 | split | "Leaf to fungus": cutter followed from V84 (across) to the garden |
+| 90–106.5 | 239–255 | nest | garden, pulp, brood pile; captions on fungus farming |
+| 106.5 | +1886.5 jump | | long fade; grade to daylight |
+| 106.5–130 | 2142–2165 | surface | "The trunk trail": establishing at zoom 1.35, debris at V114.5, majors, hitchhiker follow |
+| 130–142 | 2165–2177 | split | "Taking out the waste": middens (surface), `carry_spent` follow (nest) |
+| 142–150 | 2177–2185 | split | pull-back (nest fit excavation, surface zoom 0.9), dusk grade, fade out |
+
+Draft: see "Draft video" below. Stills of every beat were checked (framing, captions, subject
+in shot); fixed after them: brood zoom 9 → 11, nest camera onto the chamber for the arriving
+fragment, trunk-trail zoom 2.8 → 3.8 on the first pickup.
+
+Draft video: `renders/leafcutter_life_seed3_20260928_084235.mp4` (AVI capture, 150 s, 9000
+frames; recording took 24 min, most of it the 1886 s jump at V106.5 and the late sim).
+
+What reads badly (for review and M17d–g):
+- The followed brood item isn't marked: in a pile of eggs or pupae you can't tell which one
+  is "ours". A soft ring on the story target (render only, like the split layout's
+  highlight ring) would fix it.
+- Four fades in 35 s during the lifecycle; the dips may feel choppy. The larva's feed
+  (V30.6) falls under the chapter caption and the gongylidia hand-over is tiny.
+- The sim seals four minims in with the queen (Atta queens raise the first brood alone);
+  captions avoid saying otherwise. A queen-only founding stalls in the current sim (one
+  worker, brood stuck): M17d must keep the minims or fix that.
+- Breaking ground skips the dig (sim 65–158): the hole just appears after the dip at V57.5.
+  The time-lapse V69–73 (tpf 4) is visible as a speed-up with no cue that time passes.
+- Leaf to fungus: the fragment is followed from the leaf to the garden, but chewing to pulp,
+  planting and fungus growing over it are small at zoom 6 and don't read as a sequence.
+- Trunk trail: only ~320 ants (~190 on the surface) at sim 2150, so the trail is sparse for
+  a "trunk trail"; majors are hard to tell from medias at zoom 3–4; the twigs are small.
+  The hitchhiker follow (V124.5) takes whichever hitchhiker is nearest; not checked in frame.
+- Waste: deaths are ~1 per 9 s, so the nest camera follows spent garden, not a corpse; the
+  dead aren't singled out. Middens lie ~100 units from the entrance, not "far".
+- Closing: the nest is 5–6 chambers and a few hundred ants, not a sprawling mature nest.
+  A later closing (more sim time) or a bigger colony needs more recording time.
+- Length: 150 s + ~15 s prologue + ~20 s finale ≈ 185 s, over the 180 s target: trim in
+  M17g (lifecycle holds, waste).
+- Grade: the sealed-nest grade is dim; the surface under the close leaf (V58–90) is dark.
+- The split layout's new-worker ring (`NestType.highlight_ant`) pops up on the surface
+  (seen at V71 and V133–145); a cinematic scenario probably wants it off.
+- V53–57: the freshly eclosed minim is followed at zoom 7 but isn't identifiable among the
+  others (same as the brood marker point above).
+Frames spot-checked from the MP4 (26 times): framing, captions and safe zones are right;
+the fragment carrier is in shot from the leaf to the garden; debris and trail read at zoom
+3.2–3.8.
 
 ### M17d: the queen's landing (prologue)
 

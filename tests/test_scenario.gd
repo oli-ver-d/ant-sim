@@ -106,3 +106,19 @@ func test_runner_runs_every_requested_tick() -> void:
 	for f in 10:
 		runner.advance(30.0)
 	check_eq(sim.completed_ticks(), 300, "30 ticks per frame for 10 frames")
+
+## The cinematic leafcutter_life scenario (M17) loads, plays its sealed
+## founding for a minute of sim time and has presentation and both cameras.
+func test_leafcutter_life_loads_and_runs() -> void:
+	var data := ScenarioLoader.load_data("leafcutter_life")
+	var sim := ScenarioLoader.build(data, _registry, _config)
+	var nest := sim.colonies[0].nest as ColonyNest
+	check(nest != null and nest.underground_layer >= 0, "a nest that digs")
+	check(not nest.has_entrance(), "sealed at the start")
+	_run_seconds(sim, 60.0)
+	check(nest.queen_ant >= 0 and sim.alive[nest.queen_ant] != 0, "the queen lives")
+	check(nest.brood.eggs_laid > 0, "she has laid")
+	var render: Dictionary = data["render"]
+	check(Presentation.wanted(render), "captions, fades or grade")
+	var cams: Dictionary = data["camera"]
+	check(cams.has("surface") and cams.has("nest"), "a camera for each part")

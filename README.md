@@ -68,6 +68,7 @@ godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000 -1 --
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300    # a nest's growth: chambers, highways, entrances, ms/tick
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300 2  # the same with 2-unit underground cells
 godot --headless --path . -s res://tests/midden_probe.gd -- fungus_farm 1800 300     # middens: sites, deposits, mass on them / stain / rotted
+godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life 3 2350 150  # story beats (first egg ... debris cleared, corpses) with times and places
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
 tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
@@ -332,7 +333,13 @@ carry seeds down into granaries that fill heap by heap, husks of eaten seeds go 
 midden, and the nest grows chamber by chamber with more entrances), `meadow_forage` (scenery
 showcase: a leafcutter mound in a mossy meadow and a harvester crater on a sandy rise, trails
 bending round a fallen branch, boulders and plant stems under the canopy; workers live 400 s,
-so the dead go out to a heap of spent garden and a ring of chaff). Every scenario has ground
+so the dead go out to a heap of spent garden and a ring of chaff), `leafcutter_life`
+(cinematic and captioned, ~150 s, M17 draft: a queen sealed in with her fungus garden, her
+first egg followed through larva, pupa and callow to a worker, breaking ground, a leaf
+fragment cut, carried down and planted, majors clearing debris off the trunk trail months
+later, waste and the dead carried out, a pull-back at dusk; real-time close-ups with time
+skips under fades; `tests/story_probe.gd` prints when and where its story beats happen).
+Every scenario has ground
 materials and scenery; only `meadow_forage` and the two founding runs have blocking props
 (scattered clear of the later food sites).
 
@@ -430,7 +437,7 @@ Playback (video) settings:
   the frame: the surface (the world, in a 1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
   that part) and, full width below it, the colony's nest: its underground layer, top-down and
   fully simulated, with its own camera, for a nest that digs (the nest's size and brood are
-  shown top left). `"mode": "nest"` shows the underground full screen, and
+  shown top left; `"stats": false` hides that readout). `"mode": "nest"` shows the underground full screen, and
   `"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]` switches mode at video
   times. Nests without an underground layer play full screen. See `render/split_layout.gd`
 - `render.pheromones` (default true) and `render.pheromone_opacity` (e.g. 0.55): the pheromone
