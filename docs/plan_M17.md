@@ -24,8 +24,8 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
 scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish), M17d done (the
-queen's landing), M17e done (alates and the nuptial flight), M17f done (phorid flies).
-Next: M17g (final assembly and render).
+queen's landing), M17e done (alates and the nuptial flight), M17f done (phorid flies),
+M17g done (final assembly and render). M17 is complete. Next: M16 (scenario editor).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -642,3 +642,82 @@ re-run the story probe, retime captions/camera, check frames against the safe zo
 (`tests/frame_probe.gd`), update the README (scenario list, captions/fades/grade, camera
 keyframes, landing/alates params), AVI draft then the PNG final (background, ~2 h).
 Verify: full suite; draft reviewed; final MP4 in `renders/`.
+
+**Done.** `leafcutter_life.json` now tells the whole story in 198 s (was 163): the colony has
+`founding.landing` (queen_landing's), `alates` (from_population 150, count 14, gyne 1 :
+male 2, nuptial_flight's flight params except `stagger` 0.4 and `gather` 20, see below),
+`phorids` count 10 and a `nuptial_flight` event at sim 2172. No sim or render code changed;
+no hash moved (leafcutter_life isn't in the hash tables; queen_landing and nuptial_flight
+keep their native parity runs).
+
+Story probe (seed 3; `tests/story_probe.gd` now also prints the landing phases, the alate
+beats and, during a flight, per-second counts of alates waiting / going up / on the mound /
+taking off / flown). Seed 3 kept: every beat happens, in view. The landing delays the
+underground by more than its 38 s (the entrance opens at 305, was 158):
+| beat | sim s |
+|---|---|
+| lands / walks / digs / goes down / home | 7 / 12 / 25 / 37 / 38 |
+| first egg (id 9) | 50.6 |
+| entrance open / first cut / fragment underground | 305 / 371 / 383 |
+| alate eggs laid / all 14 alates waiting | 1544–1597 / 1737 |
+| nursery egg 258: laid, carried, larva, carried, fed | 1791.4, 1793.5–1799.5, 1821.4, 1822.9–1837.6, 1854.1 |
+| pupa, carried, callow, ecloses (a media) | 1886.2, 1887.5–1892.3, 1926.2, 1935.2 |
+| debris dropped / first 5 cleared | 2150 / 2150–2155 |
+| flight called / 13 on the mound / all gone | 2172 / 2193 / ~2214 |
+
+| video s | sim s | layout | content |
+|---|---|---|---|
+| 0–20.3 | 0–37 | surface | title over the flight; landing, wing shedding, walk (3x), dig (4x) |
+| 21.2–38.5 | 38–55.5 | nest | queen home, pellet garden, first egg (brood 9, marked) |
+| 38.5 | +240 jump | | dip; "Breaking ground": marked digger at the shaft face |
+| 48–74.7 | 305–383 | split | nest opens; "Days pass..." time-lapse (tpf 6); "Leaf to fungus": marked cutter followed across into the nest (2x on the walk home) |
+| 75–94 | 383–462 | nest | garden close-up, pulp; growth time-lapse (tpf 8) |
+| 94 | +1330 jump | | dip; egg 258 followed and marked through the three nurseries (1x on carries and the feed, 3–16x between) to a new worker at V135.6 |
+| 138–155 | 2145–2162 | surface | trunk trail; marked major clearing debris; marked hitchhiker, phorids |
+| 155–164 | 2162–2171 | split | waste: marked corpse carrier, `carry_spent` in the nest |
+| 164–172 | 2171–2191 | split | dusk; "The next generation": marked alate in the nest; flight called V165, 3x over the walk up |
+| 172–198 | 2191–2216 | surface | alates crowd the mound and take off one by one; closing captions, fade |
+
+Timing was placed with the new `tests/timeline_probe.gd` (the "throwaway script" of M17c3,
+now a documented probe: sim time at video times and video time/speed at sim times, from a
+scenario's `ticks_per_frame`).
+
+Fixed on the way (scenario data, and documented in the README's camera section):
+- A follow picks its target at the *previous* keyframe's time. The first-egg, nursery-egg
+  (across the jump), debris-major and cutter follows all resolved before their target
+  existed and the camera went to `near` or the world's corner. Each now has a `pos` keyframe
+  just after the egg / jump / event, and the follow after it.
+- A follow eases toward the next `pos` keyframe over the whole gap, so the major,
+  hitchhiker and corpse follows drifted off their ants; `{"ant": "same"}` holds before the
+  cuts now (not on the nest's `carry_spent` shot: that ant leaves the layer).
+- The alates' waiting chamber is far from the shaft in the grown nest: the walk up took
+  ~12 s, and take-offs at `gather` 9 drained the mound as it filled (at most 6 on it). With
+  `stagger` 0.4 and `gather` 20 all 14 set off within 6 s and 13 are on the mound when the
+  first takes off.
+- Hitchhiker follow: the trail runs at x≈460 there (near [540, 760] picked a far one).
+- Phorids 6 → 10: at 6 about one fly was in frame on the trail close-ups.
+- The dusk grade brightened a little (1.0 → 1.06 at the start, 0.86 → 0.92 at the end).
+
+Safe zones: frames of the draft every few seconds (46) were checked with the TikTok/Reels
+zones (top 150, bottom 400, right 120 px) drawn over them (ffmpeg `drawbox`; `frame_probe.gd`,
+named in the plan, is an FPS probe and doesn't check zones). Captions sit inside the safe
+area by construction; the story targets and marker rings were inside in every frame
+checked. The only miss was the cutter at the top of the split view at V68, from the
+unresolved follow above, and that is fixed now.
+
+Tests: `test_scenario::test_leafcutter_life_loads_and_runs` also checks the landing (in the
+air at the start, home by 60 s), alates, phorids and one nuptial_flight event. Full suite
+passes.
+
+Draft video (M17g): `renders/leafcutter_life_seed3_20260929_103508.mp4` (AVI capture,
+1080x1920, 60 fps, 198.0 s, 11880 frames). The camera fixes after it (cutter, holds, nest
+waste shot) were checked with stills (`renders/stills_g3`); they change only the cameras, so
+the sim is the same. Stills tool quirk seen: the first still of a run can miss ants and the
+garden (the same moment was fine in the video and in the next still).
+
+Final video: PNG capture with `tools/record.sh leafcutter_life`, started after the full
+suite passed. It was still rendering at this commit; the next commit records its file.
+
+Left for later (not blocking): the pupa nursery's blocky pale-sand floor (M17c3 note), the
+colony is ~250 ants at the trunk trail (a denser trail needs more sim time), and gynes vs
+males are told apart only by size and colour.

@@ -47,7 +47,8 @@ Scenario per-colony overrides still take precedence over the sliders.
 `godot --path . -- --scenario=chaos_to_highway --at=12.5`
 
 `--layout=split` (or `normal`, or `nest`) overrides the scenario's layout:
-`godot --path . -- --scenario=colony_founding --layout=nest`. In the split layout the mouse
+`godot --path . -- --scenario=colony_founding --layout=nest`. `--captions=0` hides the
+scenario's captions (`render.captions`). In the split layout the mouse
 (walls, food, zoom, **F**, the debug readout) works on the surface part. The HUD counts every
 ant of a colony, including its abstract population (see "Scale" below).
 
@@ -68,7 +69,8 @@ godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000 -1 --
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300    # a nest's growth: chambers, highways, entrances, ms/tick
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300 2  # the same with 2-unit underground cells
 godot --headless --path . -s res://tests/midden_probe.gd -- fungus_farm 1800 300     # middens: sites, deposits, mass on them / stain / rotted
-godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life 3 2350 150 [track_after]  # story beats (first egg ... debris cleared, corpses, nurseries and one egg through them) with times and places
+godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life 3 2350 150 [track_after]  # story beats: scenario, seed, sim_seconds, every, track_after (first egg ... debris cleared, corpses, nurseries and one egg through them; the queen's landing phases; alate eggs laid, emerged, flight called, take-off, all gone) with times and places
+godot --headless --path . -s res://tests/timeline_probe.gd -- leafcutter_life 21.2,94 s:50.6,1935.2  # playback schedule: sim time at video times, video time (and speed) at sim times
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
 tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
@@ -162,7 +164,7 @@ tools/ tests/
   underground waits: no colony update (development, laying, roles, digging), a leafcutter queen
   doesn't manure her garden, and the scenario's starting workers (`population`) are held back
   and placed in the royal chamber when she arrives. Params: `from` [x, y] (default 480 units
-  from `land`, away from the entrance, inside the world), `land` [x, y] (default 30 units from
+  from `land`, up and left of the entrance, inside the world), `land` [x, y] (default 30 units from
   the entrance toward `from`), `altitude` 220, `flight` 9 s, `shed` 6 s, `loop_radius` 14,
   `dig` 20 s, `spoil_pellets` 6, `wing_life` 900 s; about 50 s in all with the defaults.
   Without `landing` nothing changes (existing runs hash the same). The queen's allowed states
@@ -179,8 +181,8 @@ tools/ tests/
   `gather_radius`, 45, keeping off the hole), milling and now and then spreading their wings,
   while up to `escort` surface workers (10; the biggest first, then the nearest within
   `escort_reach`, 160) mill round them. From `gather` s (12) after the call they take off one
-  every ~`every` s (1.2, not quite regular), first out first: each beats its wings on the
-  ground for `warm_up` s (0.8), then climbs to `altitude` (420) over `climb` s (7) while
+  every ~`every` s (1.2, not quite regular), first out first: each has spent `settle` s (3) on
+  the mound, beats its wings on the ground for `warm_up` s (0.8), then climbs to `altitude` (420) over `climb` s (7) while
   drifting `distance` units (260) toward `drift` (default up and right, fanned over `spread`
   radians), and leaves the world. Alates that emerge after a flight wait for the next one;
   escorts go back to their caste's first state when the last alate is gone. Views draw
@@ -376,21 +378,24 @@ midden, and the nest grows chamber by chamber with more entrances), `meadow_fora
 showcase: a leafcutter mound in a mossy meadow and a harvester crater on a sandy rise, trails
 bending round a fallen branch, boulders and plant stems under the canopy; workers live 400 s,
 so the dead go out to a heap of spent garden and a ring of chaff), `leafcutter_life`
-(cinematic and captioned, ~163 s, M17 draft: a queen sealed in with her fungus garden lays
-her first eggs, her first workers dig up and open the nest, a leaf fragment is cut, carried
-down and planted and fungus grows over it, months later one egg is followed through the egg,
-larva and pupa nurseries to a worker, majors clear debris off the trunk trail, waste and the
-dead are carried out, a pull-back at dusk; real-time close-ups, cued time-lapses and time
-skips under fades, a story marker ring on whatever the camera follows;
-`tests/story_probe.gd` prints when and where its story beats happen, including the
-nurseries and one egg laid after them), `queen_landing` (~25 s, the prologue of
-`leafcutter_life` (M17d; to be merged into it in M17g): the same colony, ground and scenery
-with `founding.landing` on; a winged queen glides down onto the forest floor, sheds her
-wings, walks the site, digs down and seals herself in; surface layout, the camera follows
-the queen with `"follow": {"state": "found_nest"}`), `nuptial_flight` (~32 s, the finale
-of `leafcutter_life` (M17e; to be merged in M17g): the same ground with an established nest
-of ~140 workers and 14 alates; at dusk a `nuptial_flight` event sends the gynes and males up
-onto the mound, majors and workers mill round them, and they take off one by one).
+(cinematic and captioned, ~198 s, M17: a winged queen glides down, sheds her wings and digs
+herself in (`founding.landing`); sealed in with her fungus garden she lays her first eggs,
+her first workers dig up and open the nest, a leaf fragment is cut, carried down and planted
+and fungus grows over it, months later one egg is followed through the egg, larva and pupa
+nurseries to a worker, majors clear debris off the trunk trail while minims ride the
+fragments and phorid flies dive at the carriers (`phorids`), waste and the dead are carried
+out, and at dusk the colony's 14 gynes and males (`alates`) come up and take off on their
+nuptial flight; real-time close-ups, cued time-lapses and time skips under fades, a story
+marker ring on whatever the camera follows; `tests/story_probe.gd` prints when and where
+its story beats happen, including the landing, the nurseries, one egg laid after them and
+the flight), `queen_landing` (~25 s, the prologue of `leafcutter_life` on its own (M17d):
+the same colony, ground and scenery with `founding.landing` on; a winged queen glides down
+onto the forest floor, sheds her wings, walks the site, digs down and seals herself in;
+surface layout, the camera follows the queen with `"follow": {"state": "found_nest"}`),
+`nuptial_flight` (~32 s, the finale of `leafcutter_life` on its own (M17e): the same ground
+with an established nest of ~140 workers and 14 alates; at dusk a `nuptial_flight` event
+sends the gynes and males up onto the mound, majors and workers mill round them, and they
+take off one by one).
 Every scenario has ground
 materials and scenery; only `meadow_forage` and the two founding runs have blocking props
 (scattered clear of the later food sites).
@@ -483,11 +488,18 @@ Playback (video) settings:
   - `"follow": {"brood": "first" | "last" | "near" | <id>, "stage": "egg", "near": [x, y],
     "colony": 0}` follows a brood record (brood care on) by id through its stages, carried or
     not, then the worker it becomes
+  - a follow picks its ant or brood item once, at the **previous** keyframe's time (so the
+    camera can ease toward it): the target must exist by then. Put a `pos` keyframe just
+    after the egg is laid, a time jump or a scenario event, and the follow after it; if
+    nothing matches, the camera goes to `near` (or the world's corner without one)
+  - like any keyframe, a follow eases toward the next one over the whole gap: to stay on the
+    ant until a cut, add a `{"ant": "same"}` follow shortly before the next `pos` keyframe
+    (only while the ant is still on that camera's layer, else it too eases to `near`)
   - `"across": true` in a follow keeps its ant through nest entrances: the camera of the
     layout part showing its new layer takes it over (at the keyframe's zoom and smoothing);
     `"switch_mode": true` also switches the layout (`surface` ↔ `nest`) when its layer isn't
     shown, until the next `render.layout.modes` point
-- `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45}` splits
+- `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45}` (`ratio` defaults to 0.5, `surface` to `top`) splits
   the frame: the surface (the world, in a 1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
   that part) and, full width below it, the colony's nest: its underground layer, top-down and
   fully simulated, with its own camera, for a nest that digs (the nest's size and brood are
@@ -503,8 +515,9 @@ Playback (video) settings:
   overlay
 - Cinematic presentation over the whole frame (render only, see `render/presentation.gd`):
   `render.captions`: `[{"t": 2, "until": 8, "text": "A queen lands", "style": "title",
-  "pos": "middle", "fade": 0.8}]` (styles `title`, `chapter`, `caption`; `pos` `top`,
-  `middle`, `bottom`, all inside the safe area; `\n` breaks lines); `render.fades`:
+  "pos": "middle", "fade": 0.8}]` (styles `title`, `chapter`, `caption` (default); `pos` `top`,
+  `middle`, `bottom` (default), all inside the safe area; `until` defaults to `t` + 4, `fade`
+  to 0.8; `\n` breaks lines); `render.fades`:
   `[{"t": 58, "to": 0}, {"t": 60, "to": 1, "color": [0, 0, 0]}, {"t": 61, "to": 0}]` (a
   full-frame colour whose opacity ramps between points); `render.grade`: `[{"t": 0, "tint":
   [1.08, 0.82, 0.62], "brightness": 0.92, "contrast": 1.08, "saturation": 0.85, "vignette":

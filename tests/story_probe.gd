@@ -277,6 +277,36 @@ func _check_second() -> void:
 			_beat("corpse_midden", "first corpse on a midden (m%d at %s)" % [m.index, _v(m.dep_pos[d]) if d >= 0 else _v(m.position)])
 	if nest.dumped_items > 0 and not nest.middens.is_empty():
 		_beat("midden", "first load on a midden: m0 at %s" % _v(nest.middens[0].position))
+	var founding: Variant = nest.get("founding")
+	if founding is Founding:
+		var f := founding as Founding
+		var names := ["flying", "shedding wings", "walking the site", "digging down", "going down", "home in her niche"]
+		_beat("landing_%d" % f.phase, "queen's landing: %s" % names[f.phase])
+	var alates: Variant = nest.get("alates")
+	if alates is Alates:
+		var a := alates as Alates
+		if a.raised > 0:
+			_beat("alate_egg", "first alate egg laid (of %d)" % a.count)
+		if a.raised >= a.count:
+			_beat("alate_eggs", "all %d alate eggs laid" % a.count)
+		if a.alive_count() > 0:
+			_beat("alate_1", "first alate emerged")
+			if a.alive_count() >= a.count:
+				_beat("alate_all", "all %d alates emerged and waiting" % a.count)
+			_beat("alates_%d" % a.alive_count(), "  alates alive %d" % a.alive_count())
+		if a.flying:
+			_beat("flight", "nuptial flight called (%d alates)" % a.alive_count())
+		if a.flying:
+			var n := [0, 0, 0, 0]
+			for k in a.ants.size():
+				n[a.phase[k]] += 1
+			print("t=%7.1f    alates waiting %d, going up %d, on the mound %d, taking off %d, flown %d" % [sim.time(), n[0], n[1], n[2], n[3], a.flown])
+		if a.launched > 0:
+			_beat("take_off", "first alate takes off")
+		if a.flown > 0:
+			_beat("flown_1", "first alate gone")
+		if a.flown >= a.count:
+			_beat("flown_all", "all %d alates gone" % a.count)
 	var pop := colony.total_population()
 	while _pop_step < POP_STEPS.size() and pop >= POP_STEPS[_pop_step]:
 		print("t=%7.1f  population %d" % [sim.time(), POP_STEPS[_pop_step]])

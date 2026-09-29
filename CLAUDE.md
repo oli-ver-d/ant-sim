@@ -41,7 +41,7 @@ PASS/FAIL lines and the exit code matter. A script error inside a test counts as
 `tools/test.sh` spreads tests over processes by their last times (`.godot/test_times.txt`)
 and prints only PASS/FAIL lines; each process's full output is in `.godot/test_runs/`. A
 test that crashes its process is reported as a FAIL with no result. Other headless
-diagnostics are `tests/*_probe.gd` (story, frame, fingerprint, midden, scatter, nest); each
+diagnostics are `tests/*_probe.gd` (story, timeline, frame, fingerprint, midden, scatter, nest); each
 documents its args in its header.
 
 - Use `--quick` or a filter while iterating; always run the **full** suite before a commit.

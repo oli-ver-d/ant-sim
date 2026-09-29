@@ -107,15 +107,22 @@ func test_runner_runs_every_requested_tick() -> void:
 		runner.advance(30.0)
 	check_eq(sim.completed_ticks(), 300, "30 ticks per frame for 10 frames")
 
-## The cinematic leafcutter_life scenario (M17) loads, plays its sealed
-## founding for a minute of sim time and has presentation and both cameras.
+## The cinematic leafcutter_life scenario (M17) loads, plays the queen's
+## landing and sealed founding for a minute of sim time, has alates, phorids
+## and a nuptial flight to come, presentation and both cameras.
 func test_leafcutter_life_loads_and_runs() -> void:
 	var data := ScenarioLoader.load_data("leafcutter_life")
 	var sim := ScenarioLoader.build(data, _registry, _config)
 	var nest := sim.colonies[0].nest as ColonyNest
 	check(nest != null and nest.underground_layer >= 0, "a nest that digs")
 	check(not nest.has_entrance(), "sealed at the start")
+	check(nest.founding != null and not nest.queen_home(), "the queen starts in the air")
+	check(nest.alates != null, "alates on")
+	check(nest.get("phorids") is Dictionary and not (nest.get("phorids") as Dictionary).is_empty(), "phorid flies on")
+	var flights: Array = (data["events"] as Array).filter(func(e: Dictionary) -> bool: return e["type"] == "nuptial_flight")
+	check_eq(flights.size(), 1, "a nuptial flight")
 	_run_seconds(sim, 60.0)
+	check(nest.queen_home(), "she has landed and gone down")
 	check(nest.queen_ant >= 0 and sim.alive[nest.queen_ant] != 0, "the queen lives")
 	check(nest.brood.eggs_laid > 0, "she has laid")
 	var render: Dictionary = data["render"]
