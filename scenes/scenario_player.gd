@@ -52,6 +52,10 @@ var _marker_windows: Array[Vector3] = []
 var video_time: float = 0.0
 ## Video length from the scenario ("duration"), in seconds.
 var duration: float = 20.0
+## Output frame size override ("WxH", from --size=); set before setup().
+var size_override: String = ""
+## The output frame (the scenario's "output" section and size_override).
+var frame := OutputFrame.new()
 
 var _tpf_points: Array[Vector2] = []  # (video time, ticks per frame)
 ## Time jumps (video time, sim seconds), sorted, and how many have been made.
@@ -73,6 +77,7 @@ func setup_data(scenario: Dictionary, seed_value: int = -1, extra_ticks: int = 0
 	registry = Registry.create_default()
 	CoreRenderers.register(registry)
 	data = scenario
+	frame = OutputFrame.from_scenario(data, size_override)
 	sim = ScenarioLoader.build(data, registry, config, seed_value)
 	duration = float(data.get("duration", 20.0))
 
@@ -120,7 +125,7 @@ func setup_data(scenario: Dictionary, seed_value: int = -1, extra_ticks: int = 0
 	_parse_tpf(data.get("ticks_per_frame", config.ticks_per_frame))
 	if Presentation.wanted(render):
 		presentation = Presentation.new()
-		presentation.setup(render)
+		presentation.setup(render, frame)
 		add_child(presentation)
 
 ## Advances video time by `delta` seconds; `speed` multiplies the scenario's
@@ -197,7 +202,7 @@ func set_mode(new_mode: String) -> bool:
 	if new_mode == "normal":
 		new_mode = "surface"
 	if new_mode != "surface" and layout == null:
-		layout = SplitLayout.create(sim, _layout_spec)
+		layout = SplitLayout.create(sim, _layout_spec, frame)
 		if layout == null:
 			return false
 		_layout_layer.add_child(layout)
@@ -259,11 +264,11 @@ func toggle_layout() -> void:
 		_:
 			set_mode("surface")
 
-## True if a screen point (1080x1920 frame pixels) shows the world.
+## True if a screen point (output frame pixels) shows the world.
 func shows_world_at(screen: Vector2) -> bool:
 	return _mode == "surface" or (_mode == "split" and layout.is_on_surface(screen))
 
-## World position under a screen point (1080x1920 frame pixels).
+## World position under a screen point (output frame pixels).
 func screen_to_world(screen: Vector2) -> Vector2:
 	if is_split():
 		return layout.screen_to_world(screen)

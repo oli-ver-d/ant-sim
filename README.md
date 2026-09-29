@@ -1,7 +1,8 @@
 # Ant Colony Simulator
 
 A 2D top-down ant colony simulator in Godot 4, built to produce smooth vertical
-videos (1080×1920) for TikTok and Instagram Reels. Behaviour emerges from simple
+videos (1080×1920) for TikTok and Instagram Reels; other frame sizes (landscape, square)
+are a per-scenario setting (`output`). Behaviour emerges from simple
 agent rules (pheromone trails, foraging, cutting, carrying).
 
 ## Requirements
@@ -26,7 +27,7 @@ godot --path . -- --scenario=basic_forage --seed=42
 
 The scenario plays exactly as it will be recorded (camera script and speed schedule).
 Keys: **Space** pause, **P** pheromone overlay, **D** debug overlay (ant states, sensors, traffic heat,
-channel values under the cursor), **S** TikTok/Reels safe zones,
+channel values under the cursor), **S** safe zones (TikTok/Reels by default, see `output`),
 **L** layout: cycles surface / split (surface on top, the nest underground below) / nest
 (the underground full screen); only for nests that dig their own, see `render.layout`,
 **T** tuning panel, **F** follow the ant under the cursor (again to stop), **C** back to the
@@ -45,6 +46,9 @@ Scenario per-colony overrides still take precedence over the sliders.
 
 `--at=12.5` fast-forwards to a video time, e.g. to check a camera move:
 `godot --path . -- --scenario=chaos_to_highway --at=12.5`
+
+`--size=1920x1080` plays in another output frame than the scenario's `output.size` (default
+1080×1920); the window is sized to half the frame, or less to fit the screen, at its aspect.
 
 `--layout=split` (or `normal`, or `nest`) overrides the scenario's layout:
 `godot --path . -- --scenario=colony_founding --layout=nest`. `--captions=0` hides the
@@ -487,8 +491,14 @@ JSON files in `scenarios/`. Simulation content:
   the nuptial flight"); see `sim/scenario_events.gd`
 
 - `output`: `{"size": [w, h], "safe_zones": "tiktok" | "youtube_shorts" | "none"}`, the output
-  frame and the safe-zone guides. Read by the editor schema now; takes effect in M16b (absent
-  = 1080x1920, `tiktok`)
+  frame (absent = 1080×1920, `tiktok`): the video size (any even width and height, e.g.
+  1920×1080 landscape, 1080×1080 square, 1080×1350 4:5, 2160×3840) and which platform's UI
+  safe zones the **S** overlay shows and captions keep clear of (`none`: the whole frame).
+  Render only: the run (state hash) is the same at any size. `--size=WxH` overrides it for one
+  run (`main.tscn`, `record.tscn`; `SIZE=WxH` for the tools). The world size is separate:
+  camera `zoom` is world units per frame pixel, so a wider frame shows more world, and `fit`
+  keyframes fit the frame they are in. Safe-zone margins, caption and readout text scale with
+  the frame's short side (1080 = as in the portrait frame); see `render/output_frame.gd`
 
 Every option is described by the editor schema: `editor/schema/` for the core format and
 `species/<name>/schema.gd` for species options (registered with `Registry.register_schema`).
@@ -529,10 +539,12 @@ Playback (video) settings:
     `"switch_mode": true` also switches the layout (`surface` ↔ `nest`) when its layer isn't
     shown, until the next `render.layout.modes` point
 - `render.layout`: `{"mode": "split", "colony": 0, "surface": "top", "ratio": 0.45}` (`ratio` defaults to 0.5, `surface` to `top`) splits
-  the frame: the surface (the world, in a 1080×(1920×ratio) SubViewport, so camera keyframes, clamping and follow work against
+  the frame: the surface (the world, in a SubViewport of the frame's width × `ratio` of its height, so camera keyframes, clamping and follow work against
   that part) and, full width below it, the colony's nest: its underground layer, top-down and
   fully simulated, with its own camera, for a nest that digs (the nest's size and brood are
-  shown top left; `"stats": false` hides that readout). `"mode": "nest"` shows the underground full screen, and
+  shown top left; `"stats": false` hides that readout). `"surface": "bottom"` puts the surface
+  below; `"left"`/`"right"` put the parts side by side (for landscape frames), `ratio` then
+  being the surface's share of the width. `"mode": "nest"` shows the underground full screen, and
   `"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]` switches mode at video
   times. Nests without an underground layer play full screen. `"highlight": false` turns off
   the ring on each new worker. See `render/split_layout.gd`
@@ -561,6 +573,7 @@ tools/record.sh chaos_to_highway            # scenario seed and duration
 tools/record.sh chaos_to_highway 7 15       # seed 7, 15 seconds
 CAPTIONS=0 tools/record.sh <scenario>       # without the scenario's captions
 FORMAT=avi tools/record.sh chaos_to_highway # fast draft (MJPEG capture)
+SIZE=1920x1080 tools/record.sh <scenario>   # another frame size than the scenario's output.size
 ```
 
 | `FORMAT` | Capture | 20 s video takes | Notes |
@@ -568,14 +581,16 @@ FORMAT=avi tools/record.sh chaos_to_highway # fast draft (MJPEG capture)
 | `png` (default) | lossless PNG frames | ~13 min | best quality, for final uploads |
 | `avi` | MJPEG, `MJPEG_QUALITY=1.0` | ~2 min | very slightly softer (SSIM 0.989 vs PNG), ~70% larger MP4 |
 
-Writes `renders/<scenario>_seed<N>_<timestamp>.mp4` (1080×1920, 60 fps, H.264 yuv420p,
-CRF 18, no audio). How it works:
+Writes `renders/<scenario>_seed<N>_<timestamp>.mp4` (the output frame, 1080×1920 unless
+`SIZE=` or the scenario's `output.size` say otherwise, then `_<W>x<H>` is added to the name;
+60 fps, H.264 yuv420p, CRF 18, no audio). `tools/stills.sh` takes `SIZE=` too. How it works:
 1. `scenes/record.tscn` runs under Godot's Movie Maker (`--write-movie`, `--fixed-fps 60`),
    so every frame advances exactly 1/60 s of video however slow the simulation is.
    The output is perfectly smooth and the same seed gives the same video.
 2. Movie Maker records at the window size chosen at startup, so `record.sh` writes a
-   temporary `override.cfg` (1080×1920 window) and deletes it afterwards. Godot renders
-   the full frame even when the screen is smaller.
+   temporary `override.cfg` (a window of the frame size, from `tools/frame_size.sh`) and
+   deletes it afterwards; `record.tscn` gets `--size=` and lays its content out in frame
+   pixels. Godot renders the full frame even when the screen is smaller.
 3. The capture (PNG frames or `capture.avi`) goes to `renders/capture_<name>/`;
    `tools/encode.sh` turns it into the MP4 and deletes it (`KEEP_FRAMES=1` keeps it).
    MJPEG is full-range colour, so `encode.sh` converts it to standard TV range; without
@@ -1060,5 +1075,7 @@ All drawing lives in `render/` (plus each species' own renderers):
   callows in split casings, dirt as a grey fuzz).
 - `overlays.gd`: safe zones and the debug view (**D**; on the surface and in the nest view),
   which also shows the layer's traffic as a heat map (amber to red) where it is counted.
+- `output_frame.gd`: the output frame (size, safe-zone preset, the window fit); the split
+  layout, presentation, safe zones and the scenes read it instead of a fixed 1080×1920.
 
 Shaders use a sine-free hash: `sin()`-based hashes show seams on some GPUs.

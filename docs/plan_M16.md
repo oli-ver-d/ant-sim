@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16a done; next M16b. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16b done; next M16c. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -272,6 +272,56 @@ split options (`render.layout.surface` = `left`/`right`) or other presets, add t
 - Hands on: `OutputFrame` API, `--size=` everywhere, the landscape split options
   (needed in the schema and the timeline's layout track).
 
+**Done (M16b).** What exists now:
+
+- `render/output_frame.gd` (`OutputFrame`, RefCounted): `size` (Vector2i), `safe_zones`;
+  `from_scenario(data, size_override)` (bad values push_error and keep the default /
+  scenario size), `parse_size("WxH" or preset name)`, `valid_size` (even, 64–8192),
+  `PRESETS` (portrait, landscape, square, 4:5, portrait_4k, landscape_4k), `SAFE_ZONES`
+  (`tiktok` 150/400/right 120 as before, `youtube_shorts` 120/360/right 190, `none`),
+  `scale()` (short side / 1080), `margins()`, `safe_rect()`, `unsafe_rects()`,
+  `window_size(screen)` (half the frame, shrunk to fit), `apply_to_window(window, resize)`
+  (sets `content_scale_size`; resizes/centres the window only for interactive runs).
+- `ScenarioPlayer.frame` (built in `setup_data` from the data and `size_override`, which
+  the scenes set from `--size=` before `setup`), passed to `SplitLayout.create(sim, spec,
+  frame)` and `Presentation.setup(render, frame)`. The player does **not** touch the window
+  (the editor will host it in a SubViewport); `main.gd` and `record.gd` call
+  `apply_to_window` right after `setup` (before `--at` fast-forwarding, since camera
+  clamping and `fit` read the viewport size).
+- Pure static helpers (tested): `SplitLayout.split_rects(frame_size, spec)` (`surface`
+  top/bottom stacked, left/right side by side with `ratio` along the width),
+  `SplitLayout.seam_rect`, `SplitLayout.stats_origin(frame, nest_part)`,
+  `Presentation.caption_column(frame)` (the portrait column width scaled by the short side,
+  centred) and `Presentation.caption_top(frame, pos, box_h)`. Text sizes, outlines and the
+  nest readout scale with `frame.scale()`. `Overlays.SafeZones.set_frame(frame)` draws the
+  preset (nothing for `none`).
+- `main.gd`: `--size=`; the tuning panel is placed from the frame's right edge.
+  `record.gd`: `--size=`, warns if the window isn't the frame size.
+- Tools: `tools/frame_size.sh` (sourced; `SIZE=` env, else the scenario file's one-line
+  `"output": {"size": [w, h]}`, else 1080x1920; validates) used by `record.sh` and
+  `stills.sh`, which write that size into their temporary `override.cfg` and pass
+  `--size=`; `record.sh` adds `_WxH` to the file name for non-default sizes.
+  `screenshot.sh` passes `SIZE=` as `--size=`. `encode.sh` needed nothing.
+- Schema: `render.layout.surface` also takes `left`/`right`.
+- Tests: `tests/test_output_frame.gd` (parsing, defaults, overrides, bad values; the default
+  frame gives exactly the old safe-zone, split, seam, caption and readout rects; presets,
+  landscape/square/4k maths; window sizing; an `output` section leaves the state hash
+  unchanged).
+
+Changed from the plan:
+
+- `override.cfg` is kept (it is known to give an exact window larger than the screen) and now
+  carries the frame size; `--resolution` was not adopted.
+- Captions in landscape keep the portrait column width (scaled by the short side), centred,
+  instead of spanning the frame (open question answered: scale by the short side).
+- Open question on `fps`: kept at 60 (not in `output`).
+- The `project.godot` note was stale: the tree was clean, nothing there changed.
+
+Next (M16c) needs: the preview's frame overlay can use
+`OutputFrame.from_scenario(doc.data)` and its `safe_rect()`/`unsafe_rects()`; the frame
+presets for a dropdown are `OutputFrame.PRESETS`; `ScenarioPlayer` never resizes the
+window, so it can be hosted in a SubViewport sized to `frame.size`.
+
 ### M16c: editor scene, file handling and static preview
 
 - `scenes/editor.tscn`, `editor/editor_main.gd`: landscape window, panel layout
@@ -462,3 +512,5 @@ split options (`render.layout.surface` = `left`/`right`) or other presets, add t
 - M16a: schema (every option read by code; 3 schema areas filled by subagents against
   the coverage tests), `ScenarioJson`, `ScenarioDoc`, shipped scenarios reformatted
   once; README documents the options found only in code and the `output` section.
+- M16b: `OutputFrame` and `--size=`/`SIZE=` through the player, scenes and tools; side-by-side
+  split; default frame pixel-identical (tests of the old rects, before/after stills).

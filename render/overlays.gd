@@ -2,32 +2,42 @@ class_name Overlays
 extends RefCounted
 ## Factory for the toggleable overlays. Both are hidden by default.
 
-## TikTok / Reels UI safe zones on the 1080x1920 output frame: areas covered
-## by the app's UI (top bar, caption and buttons at the bottom, action column
-## on the right). Keep important action out of the shaded areas.
+## The platform UI safe zones of the output frame (OutputFrame.safe_zones,
+## e.g. TikTok / Reels: top bar, caption and buttons at the bottom, action
+## column on the right). Keep important action out of the shaded areas. The
+## "none" preset draws nothing.
 class SafeZones extends Control:
-	const FRAME := Vector2(1080, 1920)
-	const TOP := 150.0
-	const BOTTOM := 400.0
-	const RIGHT := 120.0
 	const SHADE := Color(1.0, 0.2, 0.25, 0.22)
 	const LINE := Color(1.0, 0.35, 0.4, 0.9)
+	var frame := OutputFrame.new()
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		size = FRAME
+		size = frame.size_f()
+
+	func set_frame(f: OutputFrame) -> void:
+		frame = f
+		size = frame.size_f()
+		queue_redraw()
 
 	func _draw() -> void:
-		var top := Rect2(0, 0, FRAME.x, TOP)
-		var bottom := Rect2(0, FRAME.y - BOTTOM, FRAME.x, BOTTOM)
-		var right := Rect2(FRAME.x - RIGHT, TOP, RIGHT, FRAME.y - TOP - BOTTOM)
+		var rects := frame.unsafe_rects()
+		if rects.is_empty():
+			return
+		var m := frame.margins()
+		var s := frame.scale()
 		var font := ThemeDB.fallback_font
-		for r: Rect2 in [top, bottom, right]:
+		for r in rects:
 			draw_rect(r, SHADE)
-		draw_rect(Rect2(0, TOP, FRAME.x - RIGHT, FRAME.y - TOP - BOTTOM), LINE, false, 3.0)
-		draw_string(font, Vector2(24, TOP - 24), "top UI %d px" % TOP, HORIZONTAL_ALIGNMENT_LEFT, -1, 32, LINE)
-		draw_string(font, Vector2(24, FRAME.y - BOTTOM + 48), "caption / buttons %d px" % BOTTOM, HORIZONTAL_ALIGNMENT_LEFT, -1, 32, LINE)
-		draw_string(font, Vector2(FRAME.x - RIGHT + 8, TOP + 48), "%d px" % RIGHT, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, LINE)
+		var inner := frame.safe_rect()
+		var edge := frame.size_f()
+		draw_rect(inner, LINE, false, 3.0 * s)
+		if m["top"] > 0.0:
+			draw_string(font, Vector2(24 * s, m["top"] - 24 * s), "top UI %d px" % m["top"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(32 * s), LINE)
+		if m["bottom"] > 0.0:
+			draw_string(font, Vector2(24 * s, edge.y - m["bottom"] + 48 * s), "caption / buttons %d px" % m["bottom"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(32 * s), LINE)
+		if m["right"] > 0.0:
+			draw_string(font, Vector2(edge.x - m["right"] + 8 * s, m["top"] + 48 * s), "%d px" % m["right"], HORIZONTAL_ALIGNMENT_LEFT, -1, int(28 * s), LINE)
 
 ## Debug view in world space: the layer's traffic heat (if it counts traffic),
 ## every ant as a dot coloured by behaviour state;

@@ -170,8 +170,8 @@ static func render() -> FieldSpec:
 		"layout": F.dict({
 			"mode": F.choice(["split", "nest", "surface", "normal"], "split", "split (surface and nest), nest (nest full screen) or surface/normal (world full screen)"),
 			"colony": F.integer(0, "Colony whose nest is shown").limits(0),
-			"surface": F.choice(["top", "bottom"], "top", "Where the surface part sits"),
-			"ratio": F.number(0.5, "The surface's share of the frame height").limits(0.2, 0.8),
+			"surface": F.choice(["top", "bottom", "left", "right"], "top", "Where the surface part sits (left/right: side by side)"),
+			"ratio": F.number(0.5, "The surface's share of the frame height (of the width when side by side)").limits(0.2, 0.8),
 			"stats": F.boolean(true, "Show the nest's readout"),
 			"highlight": F.boolean(true, "Ring new workers emerging on the surface"),
 			"modes": F.list(F.dict({

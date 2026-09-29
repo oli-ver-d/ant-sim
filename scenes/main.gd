@@ -5,6 +5,8 @@ extends Node2D
 ##
 ## Command-line (after "--"):
 ##   --scenario=<name>      scenario in res://scenarios (default basic_forage)
+##   --size=<W>x<H>         output frame size (overrides the scenario's
+##                          output.size; the window keeps its aspect)
 ##   --seed=<n>             override the scenario seed
 ##   --ticks=<n>            run n extra ticks before the first frame
 ##   --at=<s>               fast-forward to video time s before the first frame
@@ -80,17 +82,23 @@ func _ready() -> void:
 
 	player = ScenarioPlayer.new()
 	add_child(player)
+	player.size_override = str(args.get("size", ""))
 	player.setup(args.get("scenario", "basic_forage"), int(args.get("seed", -1)), int(args.get("ticks", 0)),
 			debug_readout, str(args.get("layout", "")))
 	sim = player.sim
+	var frame := player.frame
+	frame.apply_to_window(get_window(), true)
+	safe_zones.set_frame(frame)
 	player.view.debug_view.mouse_world = _mouse_world
 	if player.presentation != null and args.get("captions", "1") == "0":
 		player.presentation.captions_visible = false
 
 	tuning = TuningPanel.new()
 	tuning.setup(sim, player.registry)
-	tuning.position = Vector2(1080 - TuningPanel.WIDTH - 16, 170)
-	tuning.size = Vector2(TuningPanel.WIDTH, 1920 - 170 - 420)
+	# Right-hand side, between the top bar and the bottom captions (the
+	# portrait frame's TikTok zones, whatever the frame's own preset).
+	tuning.position = Vector2(frame.size.x - TuningPanel.WIDTH - 16, 170)
+	tuning.size = Vector2(TuningPanel.WIDTH, maxf(frame.size.y - 170 - 420, 300))
 	tuning.visible = false
 	layer.add_child(tuning)
 	_food_rng.randomize()

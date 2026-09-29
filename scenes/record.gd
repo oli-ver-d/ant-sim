@@ -3,7 +3,10 @@ extends Node
 ##
 ##   godot --path . --write-movie out/frame.png --fixed-fps 60 res://scenes/record.tscn \
 ##         -- --scenario=<name> [--seed=<n>] [--duration=<s>] [--layout=split|normal|nest] [--at=<s>]
-##         [--captions=0]
+##         [--captions=0] [--size=<W>x<H>]
+##
+## --size overrides the scenario's output.size (OutputFrame); the window must
+## have that size from startup (see below).
 ##
 ## --at fast-forwards to that video time before the first frame (for drafts
 ## and stills of a later moment).
@@ -16,9 +19,9 @@ extends Node
 ## order (the mapping is printed).
 ##
 ## tools/record.sh does this and encodes the result. Movie Maker records at the
-## window size fixed at startup, so record.sh also writes a temporary
-## override.cfg that sets the window to 1080x1920 (Godot renders the full
-## frame even if the screen is smaller).
+## window size fixed at startup, so record.sh also sets the window to the
+## output frame's size (Godot renders the full frame even if the screen is
+## smaller); this scene lays its content out in frame pixels.
 ##
 ## No UI is shown. Each rendered frame advances exactly one video frame, so a
 ## recording is identical however long frames take. Quits after the duration.
@@ -41,7 +44,12 @@ func _ready() -> void:
 	player = ScenarioPlayer.new()
 	add_child(player)
 	_layout_arg = str(args.get("layout", ""))
+	player.size_override = str(args.get("size", ""))
 	player.setup(scenario, int(args.get("seed", -1)), 0, null, _layout_arg)
+	player.frame.apply_to_window(get_window(), false)
+	if DisplayServer.get_name() != "headless" and get_window().size != player.frame.size:
+		push_warning("Window is %s but the output frame is %s: start Godot with --resolution %dx%d (tools/record.sh does)"
+				% [get_window().size, player.frame.size, player.frame.size.x, player.frame.size.y])
 	if player.presentation != null and args.get("captions", "1") == "0":
 		player.presentation.captions_visible = false
 	if args.has("stills"):

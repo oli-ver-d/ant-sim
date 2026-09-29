@@ -1,13 +1,14 @@
 class_name SplitLayout
 extends Control
-## Split-screen layout of the 1080x1920 frame: the world (the surface) in a
-## SubViewport on one part, and a colony's nest full width on the other, so
+## Split-screen layout of the output frame (OutputFrame): the world (the
+## surface) in a SubViewport on one part, and a colony's nest on the other, so
 ## the nest reads as continuing underground below the surface.
 ##
 ## Scenario: "render": {"layout": {"mode": "split", "colony": 0,
 ##                                 "surface": "top", "ratio": 0.5}}
 ## ratio is the surface's share of the frame height; "surface": "bottom" puts
-## it below. "mode": "nest" shows only the nest, full screen. "stats": false
+## it below. "surface": "left"/"right" puts the parts side by side (e.g. in a
+## landscape frame), and ratio is then the surface's share of the width. "mode": "nest" shows only the nest, full screen. "stats": false
 ## hides the nest's readout (e.g. for a captioned, cinematic scenario), and
 ## "highlight": false the ring on new workers (below).
 ##
@@ -23,8 +24,7 @@ extends Control
 ## (e.g. a worker that has just come out), the layout rings it on the surface
 ## for a moment.
 
-const FRAME := Vector2(1080, 1920)
-## Height of the seam drawn where the two parts meet.
+## Thickness of the seam drawn where the two parts meet.
 const SEAM := 5.0
 const SEAM_COLOR := Color(0.06, 0.04, 0.03)
 ## Seconds a highlighted ant stays ringed.
@@ -39,6 +39,7 @@ var underground_rect: Rect2
 var underground: SubViewportContainer
 var nest: NestType
 var sim: Simulation
+var frame := OutputFrame.new()
 ## "split" or "nest" (the nest full screen); see set_mode().
 var mode: String = "split"
 ## Ring NestType.highlight_ant on the surface ("highlight": false turns it off).
@@ -56,12 +57,28 @@ var _stats: Control
 
 ## Builds the layout for spec's colony, or returns null if its nest has no
 ## underground layer.
-static func create(simulation: Simulation, spec: Dictionary) -> SplitLayout:
+## The surface and nest parts of a frame of `frame_size` for a layout spec:
+## [surface, nest]. "surface" top/bottom stacks them (ratio = the surface's
+## share of the height), left/right puts them side by side (ratio = its share
+## of the width).
+static func split_rects(frame_size: Vector2, spec: Dictionary) -> Array[Rect2]:
 	var ratio := clampf(float(spec.get("ratio", 0.5)), 0.2, 0.8)
-	var surface_h := roundf(FRAME.y * ratio)
-	var on_top := str(spec.get("surface", "top")) != "bottom"
-	var surface := Rect2(0, 0 if on_top else FRAME.y - surface_h, FRAME.x, surface_h)
-	var below := Rect2(0, surface_h if on_top else 0, FRAME.x, FRAME.y - surface_h)
+	var side := str(spec.get("surface", "top"))
+	if side == "left" or side == "right":
+		var surface_w := roundf(frame_size.x * ratio)
+		var on_left := side == "left"
+		return [Rect2(0 if on_left else frame_size.x - surface_w, 0, surface_w, frame_size.y),
+				Rect2(surface_w if on_left else 0, 0, frame_size.x - surface_w, frame_size.y)]
+	var surface_h := roundf(frame_size.y * ratio)
+	var on_top := side != "bottom"
+	return [Rect2(0, 0 if on_top else frame_size.y - surface_h, frame_size.x, surface_h),
+			Rect2(0, surface_h if on_top else 0, frame_size.x, frame_size.y - surface_h)]
+
+static func create(simulation: Simulation, spec: Dictionary, output: OutputFrame = null) -> SplitLayout:
+	var f := output if output != null else OutputFrame.new()
+	var rects := split_rects(f.size_f(), spec)
+	var surface := rects[0]
+	var below := rects[1]
 	var colony_id := int(spec.get("colony", 0))
 	if colony_id < 0 or colony_id >= simulation.colonies.size():
 		return null
@@ -85,13 +102,23 @@ static func create(simulation: Simulation, spec: Dictionary) -> SplitLayout:
 	layout._split_surface = surface
 	layout._split_under = below
 	layout.underground = view
-	layout._build(on_top)
+	layout.frame = f
+	layout._build()
 	layout._stats.visible = bool(spec.get("stats", true))
 	layout.highlight = bool(spec.get("highlight", true))
 	return layout
 
-func _build(surface_on_top: bool) -> void:
-	size = FRAME
+## The seam band where the two parts of a split meet: SEAM thick, centred
+## on their shared edge (horizontal when stacked, vertical side by side).
+static func seam_rect(surface: Rect2, below: Rect2) -> Rect2:
+	if is_equal_approx(surface.position.y, below.position.y) and is_equal_approx(surface.size.y, below.size.y):
+		var x := surface.end.x if surface.position.x < below.position.x else below.end.x
+		return Rect2(x - SEAM * 0.5, surface.position.y, SEAM, surface.size.y)
+	var y := surface.end.y if surface.position.y < below.position.y else below.end.y
+	return Rect2(surface.position.x, y - SEAM * 0.5, surface.size.x, SEAM)
+
+func _build() -> void:
+	size = frame.size_f()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_container = SubViewportContainer.new()
 	_container.position = surface_rect.position
@@ -114,8 +141,9 @@ func _build(surface_on_top: bool) -> void:
 	add_child(underground)
 	_seam = Control.new()
 	_seam.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_seam.position = Vector2(0, (surface_rect.end.y if surface_on_top else underground_rect.end.y) - SEAM * 0.5)
-	_seam.size = Vector2(FRAME.x, SEAM)
+	var seam := seam_rect(surface_rect, underground_rect)
+	_seam.position = seam.position
+	_seam.size = seam.size
 	_seam.draw.connect(_draw_seam)
 	add_child(_seam)
 	_stats = Control.new()
@@ -128,7 +156,7 @@ func set_mode(new_mode: String) -> void:
 	mode = new_mode
 	var full := mode == "nest"
 	surface_rect = Rect2() if full else _split_surface
-	underground_rect = Rect2(Vector2.ZERO, FRAME) if full else _split_under
+	underground_rect = frame.rect() if full else _split_under
 	_container.visible = not full
 	surface_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED if full else SubViewport.UPDATE_ALWAYS
 	_ring.visible = not full
@@ -175,18 +203,26 @@ func screen_to_world(screen: Vector2) -> Vector2:
 func screen_to_nest(screen: Vector2) -> Vector2:
 	return nest_viewport.canvas_transform.affine_inverse() * (screen - underground_rect.position)
 
-## The nest's readout, top left of the nest part inside the TikTok/Reels
-## safe area (see Overlays.SafeZones).
+## Top left of the nest's readout: in the nest part, inside the output
+## frame's safe area.
+static func stats_origin(f: OutputFrame, nest_part: Rect2) -> Vector2:
+	var s := f.scale()
+	var safe := f.safe_rect()
+	return Vector2(maxf(nest_part.position.x, safe.position.x) + 40.0 * s,
+			maxf(nest_part.position.y, safe.position.y) + 24.0 * s)
+
+## The nest's readout, top left of the nest part (stats_origin).
 func _draw_stats() -> void:
 	var lines := nest.stats_lines(sim)
 	if lines.is_empty():
 		return
 	var font := ThemeDB.fallback_font
-	var at := Vector2(40, maxf(underground_rect.position.y, Overlays.SafeZones.TOP) + 24)
-	var sizes: PackedInt32Array = [46, 28]
+	var s := frame.scale()
+	var at := stats_origin(frame, underground_rect)
+	var sizes: PackedInt32Array = [roundi(46 * s), roundi(28 * s)]
 	for n in lines.size():
 		var fs := sizes[mini(n, 1)]
 		at.y += fs
-		_stats.draw_string_outline(font, at, lines[n], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 7, Color(0.05, 0.03, 0.02, 0.8))
+		_stats.draw_string_outline(font, at, lines[n], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, roundi(7 * s), Color(0.05, 0.03, 0.02, 0.8))
 		_stats.draw_string(font, at, lines[n], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 0.97, 0.9, 0.95))
-		at.y += 10
+		at.y += 10 * s

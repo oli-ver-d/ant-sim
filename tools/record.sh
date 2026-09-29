@@ -4,6 +4,10 @@
 #   tools/record.sh <scenario> [seed] [duration_seconds]
 #   FORMAT=avi tools/record.sh <scenario> ...      # fast MJPEG capture for drafts
 #   CAPTIONS=0 tools/record.sh <scenario> ...      # without the scenario's captions
+#   SIZE=1920x1080 tools/record.sh <scenario> ...  # another output frame size
+#
+# The frame size is SIZE, else the scenario's "output": {"size": [w, h]}, else
+# 1080x1920 (tools/frame_size.sh).
 #
 # Runs res://scenes/record.tscn under Godot's Movie Maker at a fixed 60 fps
 # (so the video is perfectly smooth however slow the simulation is), then
@@ -15,7 +19,7 @@
 #                  very slightly softer, larger final MP4
 #
 # Movie Maker records at the window size chosen at startup, so a temporary
-# override.cfg sets the window to 1080x1920 for this run only.
+# override.cfg sets the window to the frame size for this run only.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 GODOT="${GODOT:-godot}"
@@ -27,6 +31,8 @@ seed="${2:--1}"
 duration="${3:-}"
 scenario_file="scenarios/${scenario}.json"
 [ -f "$scenario_file" ] || { echo "No such scenario: $scenario_file" >&2; exit 1; }
+. tools/frame_size.sh
+frame_size "$scenario_file" || exit 1
 case "$FORMAT" in
 	png|avi) ;;
 	*) echo "FORMAT must be png or avi (got '$FORMAT')" >&2; exit 1 ;;
@@ -37,7 +43,7 @@ seed_label="$seed"
 if [ "$seed" -lt 0 ]; then
 	seed_label="$(sed -n 's/.*"seed": *\([0-9]*\).*/\1/p' "$scenario_file" | head -1)"
 fi
-name="${scenario}_seed${seed_label}$([ "${CAPTIONS:-1}" = "0" ] && echo _nocaptions)_$(date +%Y%m%d_%H%M%S)"
+name="${scenario}_seed${seed_label}$([ "$FRAME_SIZE" != "1080x1920" ] && echo "_$FRAME_SIZE")$([ "${CAPTIONS:-1}" = "0" ] && echo _nocaptions)_$(date +%Y%m%d_%H%M%S)"
 capture_dir="renders/capture_${name}"
 mkdir -p "$capture_dir"
 
@@ -47,7 +53,8 @@ if [ -e override.cfg ]; then
 	exit 1
 fi
 trap 'rm -f override.cfg' EXIT
-printf '[display]\n\nwindow/size/window_width_override=1080\nwindow/size/window_height_override=1920\n\n[editor]\n\nmovie_writer/mjpeg_quality=%s\n' "$MJPEG_QUALITY" > override.cfg
+printf '[display]\n\nwindow/size/window_width_override=%s\nwindow/size/window_height_override=%s\n\n[editor]\n\nmovie_writer/mjpeg_quality=%s\n' \
+	"$FRAME_W" "$FRAME_H" "$MJPEG_QUALITY" > override.cfg
 
 if [ "$FORMAT" = "avi" ]; then
 	capture="$capture_dir/capture.avi"
@@ -57,11 +64,11 @@ fi
 capture_native="$capture"
 if command -v cygpath >/dev/null; then capture_native="$(cygpath -w "$capture")"; fi
 
-args=(--scenario="$scenario" --seed="$seed")
+args=(--scenario="$scenario" --seed="$seed" --size="$FRAME_SIZE")
 [ -n "$duration" ] && args+=(--duration="$duration")
 [ "${CAPTIONS:-1}" = "0" ] && args+=(--captions=0)
 
-echo "Recording $scenario ($FORMAT) -> $capture_dir"
+echo "Recording $scenario ($FORMAT, $FRAME_SIZE) -> $capture_dir"
 "$GODOT" --path . --write-movie "$capture_native" --fixed-fps 60 res://scenes/record.tscn -- "${args[@]}"
 rm -f override.cfg
 

@@ -10,6 +10,9 @@ res://sim/router.gd *    # route params SimLayer.route callers pass in code
 res://render/rain_renderer.gd start    # reads the Simulation's internal shower dictionary
 res://render/presentation.gd caption outline    # internal STYLES table (style id and outline width)
 res://render/bridge_renderer.gd rot texture at    # internal twig records
+res://render/output_frame.gd top bottom left right    # internal SAFE_ZONES margin tables
+res://render/overlays.gd top bottom right    # OutputFrame.margins() values
+res://render/presentation.gd top bottom    # OutputFrame.margins() values
 
 # Nests: behaviour and role names, flags and job tags set in code
 res://sim/nests/alates.gd alate    # behaviour name
