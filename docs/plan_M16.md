@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16c done; next M16d. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16d done; next M16e. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -422,6 +422,62 @@ path)` gives the field spec for a selected path; "Add ..." actions belong in the
 - Tests: inspector edits go through doc commands (headless, drive the widgets'
   signals); every schema field type has a widget; every schema key is shown.
 
+**Done (M16d).** What exists now:
+
+- `editor/inspector.gd` (`ScenarioInspector`, ScrollContainer; `EditorInspector` is a Godot
+  class name): `setup(doc, schema)`, `show_path(path)` (`[]` = the scenario's own
+  `EditorOutline.SCENARIO_KEYS`, a section, an item, or an unknown key), `rebuild()`,
+  `on_doc_changed(path)` (rebuilds unless the change is the inspector's own, so a field
+  being edited keeps focus), `rows` (path string → row or group header, metas `type`,
+  `present`, `widget`, `reset`; `"<list or map>/+"` for add rows), `row_at(path)`,
+  `expand_all`. Widgets: int SpinBox; float LineEdit (+ HSlider when both limits are
+  finite, committed on drag end); bool CheckBox; string LineEdit (TextEdit for `text`,
+  `description` or multi-line values); enum OptionButton (`choices` or
+  `schema.choices_for`, context = the nearest enclosing dict with a `species`); vec2 /
+  size / rect LineEdits (meta `edits`; `output/size` also a preset OptionButton from
+  `OutputFrame.PRESETS`, meta `presets`); color ColorPickerButton (committed on popup close,
+  written in the old value's form: array or "#hex"); points rows of [x, y] with add/remove;
+  dict / map / list / variant as fold groups (open by default when set, depth ≤ 1 and ≤ 8
+  entries; built lazily when opened); variant tag OptionButton →
+  `EditorDefaults.variant_value`; any_of a form OptionButton (meta `form`, nested any_ofs
+  flattened) → `EditorDefaults.value_for`; raw / unknown keys JSON TextEdit (committed on
+  focus exit when it parses). Absent keys greyed with the default; reset (x) =
+  `doc.remove_at`. Header: "Edit as JSON" (whole item, Apply) and Delete for list items.
+- `editor/widgets/field_values.gd` (`FieldValues`): number parse (clamped, ints rounded) and
+  format, colour ⇄ JSON, `tidy` (whole floats → ints), raw JSON text parse.
+- `editor/editor_defaults.gd` (`EditorDefaults`, written by a subagent): `value_for(spec,
+  schema, context)` (required fields only), `variant_value(spec, schema, tag, old)`,
+  `add_actions(data, path)` → `{label, id, list}`, `new_item(id, data, schema, at)` (ids
+  `colony food obstacle ground_region prop scatter debris event camera_key nest_camera_key
+  caption`), `example(spec, schema, k)` (every key filled; k picks enum values, variants and
+  any_of alternatives, so different k reach different species' params and nest params).
+- `ScenarioEditor`: the right panel is the inspector; "Add..." MenuButton above the outline
+  (`_fill_add_menu`, `add_item(action)`: inserts at the preview's view centre and selects
+  it; a string `ground` becomes `{"base": <it>, "regions": [...]}`). `_on_doc_changed` keeps
+  the selection unless its path is gone.
+- Tests: `tests/test_inspector.gd` (FieldValues; scalar, absent/reset, bool/string/enum,
+  castes, colour/raw, variant switch, any_of switch, list add/move/remove, points and
+  nested-absent dicts, output presets, edit as JSON, every type has a widget, every key of
+  `EditorDefaults.example` k = 0..3 has a row, every `schema.all_key_names()` shown for
+  k = 0..5), `tests/test_editor_defaults.gd`, `test_editor.gd` (Add menu, inspector edit →
+  outline/preview, undo rebuilds the inspector).
+
+Changed from the plan / found on the way:
+
+- Lambdas capture locals by value in GDScript: widget state that changes between signals
+  lives in a small dictionary.
+- Props (rock, plant, grass) are placed by `center`, logs by `points` (not `pos`).
+- `params` is shown as a dict of every SimConfig export + species tunable (greyed defaults
+  from the config/species), not "against the species defaults" separately.
+- Add/remove of items is also in the inspector (list "+", item x, header Delete); the
+  outline has only the Add menu (Delete key and duplicate come with M16e).
+
+Next (M16e) needs: canvas edits must go through the same doc commands; the inspector then
+rebuilds itself via `on_doc_changed` (not an own edit). During a drag, don't `set_at` on
+every mouse move (each is an undo step and an inspector rebuild): move the gizmo overlay
+and commit once on release (decision 6). `EditorDefaults.new_item` is the place-tool
+factory; `EditorOutline.item_bounds` the hit test to replace with `GizmoGeometry`.
+
 ### M16e: canvas editing (gizmos)
 
 - `editor/gizmos/`: handles drawn over the preview for every positioned thing:
@@ -576,3 +632,6 @@ path)` gives the field spec for a selected path; "Add ..." actions belong in the
 - M16c: editor scene (menus, file handling, recent files, unsaved prompt), static preview
   with frame overlay and pan/zoom, outline with preview selection (outline model and
   recent files by a subagent); phorid renderer null crash fixed.
+- M16d: schema-driven inspector (every field type, greyed defaults with reset, variant and
+  any_of switches, lists/maps, edit as JSON), Add menu; `EditorDefaults` (new items,
+  variant switching, full examples for the every-key test) by a subagent.

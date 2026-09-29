@@ -67,7 +67,16 @@ A landscape window: the outline of the document (left: scenario settings, coloni
 obstacles, ground regions, scenery, debris, events, camera keys, render, output, and any
 unknown top-level keys), a static preview (centre: the scenario built by the real loader
 and drawn by the real renderers at t = 0, not stepped; rebuilt 0.25 s after an edit) and
-the selected item's JSON (right; forms come later). The preview shows the world bounds,
+the inspector (right): a form for the selected row built from the schema, so every option
+of the format can be edited. Keys the file doesn't set show their default greyed out;
+editing one adds it and its **x** removes it again (back to the default), so files stay
+minimal. Enums are filled from the Registry (castes follow the colony's species), a
+variant's type selector (obstacle `shape`, event or food `type`) swaps its fields keeping
+the ones they share, an any_of (e.g. `ticks_per_frame` as a number or a schedule) has a
+form selector, lists have add / move / remove, maps an add-key row, `output.size` a preset
+menu, and keys the schema doesn't know are edited as raw JSON; **Edit as JSON** edits a
+whole item as text. **Add...** above the outline adds an item of the selected row's
+section (every section on the Scenario row) at the centre of the view. The preview shows the world bounds,
 the output frame (`output.size`) where the first camera keyframe puts it, with its safe
 zones, and an outline around the selected item. Wheel zooms, middle or right drag pans,
 **Home** fits the world, **F** fits the output frame; left click selects the smallest item
@@ -146,7 +155,7 @@ species/<name>/       one folder per species; register.gd is discovered automati
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
 scenes/               main.tscn (interactive), record.tscn (Movie Maker), editor.tscn (scenario editor)
-editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview
+editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview, inspector
 tools/ tests/
 ```
 

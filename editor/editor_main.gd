@@ -3,8 +3,9 @@ extends Control
 ## The scenario editor (scenes/editor.tscn): opens a scenario JSON as a
 ## ScenarioDoc, shows it as an outline (left), a static preview built by the
 ## real loader and renderers (centre, EditorPreview) and the selected item
-## (right; the full inspector comes in M16d), and saves it back with
-## ScenarioJson.
+## (right, ScenarioInspector: every option as a form) and saves it back with
+## ScenarioJson. "Add..." above the outline adds an item of the selected
+## row's section (all sections on the Scenario row) at the view centre.
 ##
 ##   godot --path . res://scenes/editor.tscn [-- --scenario=<name or path>] [--screenshot=<path>]
 ##   tools/editor.sh [--scenario=...]
@@ -35,7 +36,9 @@ var registry: Registry
 var recent := EditorRecent.new()
 var preview: EditorPreview
 var outline: Tree
-var details: TextEdit
+## "Add ..." actions for the selected outline row (EditorDefaults.add_actions).
+var add_menu: MenuButton
+var inspector: ScenarioInspector
 var details_title: Label
 var status: Label
 ## Outline rows (EditorOutline.build) of the current document.
@@ -56,6 +59,7 @@ var _after_confirm: Callable
 var _screenshot_path := ""
 var _screenshot_frames := -1
 var _building_outline := false
+var _add_actions: Array[Dictionary] = []
 
 func _ready() -> void:
 	if args.is_empty():
@@ -150,11 +154,20 @@ func _build_ui() -> void:
 	var split := HSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(split)
+	var left := VBoxContainer.new()
+	left.custom_minimum_size = Vector2(300, 0)
+	split.add_child(left)
+	add_menu = MenuButton.new()
+	add_menu.text = "Add..."
+	add_menu.flat = false
+	add_menu.about_to_popup.connect(_fill_add_menu)
+	add_menu.get_popup().index_pressed.connect(func(i: int) -> void: add_item(_add_actions[i]))
+	left.add_child(add_menu)
 	outline = Tree.new()
-	outline.custom_minimum_size = Vector2(300, 0)
+	outline.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outline.hide_root = true
 	outline.item_selected.connect(_on_outline_selected)
-	split.add_child(outline)
+	left.add_child(outline)
 
 	var right := HSplitContainer.new()
 	split.add_child(right)
@@ -165,16 +178,13 @@ func _build_ui() -> void:
 	right.add_child(preview)
 
 	var side := VBoxContainer.new()
-	side.custom_minimum_size = Vector2(360, 0)
+	side.custom_minimum_size = Vector2(420, 0)
 	right.add_child(side)
 	details_title = Label.new()
 	side.add_child(details_title)
-	details = TextEdit.new()
-	details.editable = false
-	details.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	details.add_theme_font_override("font", SystemFont.new())
-	details.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	side.add_child(details)
+	inspector = ScenarioInspector.new()
+	inspector.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side.add_child(inspector)
 
 	status = Label.new()
 	status.clip_text = true
@@ -250,6 +260,7 @@ func _set_doc(d: ScenarioDoc) -> void:
 	doc = d
 	doc.changed.connect(_on_doc_changed)
 	selected = null
+	inspector.setup(doc, schema)
 	_rebuild_outline()
 	_show_selection()
 	preview.show_data(doc.data, true)
@@ -278,9 +289,15 @@ func _remember(path: String) -> void:
 	recent.save_to(settings_path)
 	_refresh_recent()
 
-func _on_doc_changed(_path: Array) -> void:
+func _on_doc_changed(path: Array) -> void:
 	_rebuild_outline()
-	_show_selection()
+	if selected != null and not (doc.has_at(selected) or (selected as Array).is_empty()):
+		# The selected item was removed (or undone away).
+		selected = null
+		_show_selection()
+	else:
+		_update_selection_bounds()
+		inspector.on_doc_changed(path)
 	preview.show_data(doc.data)
 	# changed() comes before UndoRedo counts the action (is_dirty() is still
 	# the old answer), so the title waits for the end of the frame.
@@ -400,24 +417,46 @@ func _select_path(path: Array) -> void:
 	_show_selection()
 
 func _show_selection() -> void:
+	_update_selection_bounds()
+	inspector.show_path(selected)
+
+## The inspector's title and the preview's selection outline.
+func _update_selection_bounds() -> void:
 	if selected == null or not (doc.has_at(selected) or (selected as Array).is_empty()):
 		preview.selection = Rect2()
 		details_title.text = "Nothing selected"
-		details.text = ""
 		return
 	var path: Array = selected
 	var i := EditorOutline.row_for(rows, path)
 	details_title.text = rows[i]["label"] if i >= 0 else "/".join(path)
 	preview.selection = EditorOutline.item_bounds(doc.data, path)
-	var value: Variant = doc.get_at(path)
-	if path.is_empty():
-		# The scenario's own settings, not the whole file.
-		var general := {}
-		for k: String in doc.data:
-			if not doc.data[k] is Dictionary and not doc.data[k] is Array:
-				general[k] = doc.data[k]
-		value = general
-	details.text = ScenarioJson.stringify(value) if value is Dictionary else ScenarioJson.inline(value)
+
+# --- adding items -----------------------------------------------------------------
+
+func _fill_add_menu() -> void:
+	_add_actions = EditorDefaults.add_actions(doc.data, selected if selected != null else [])
+	var popup := add_menu.get_popup()
+	popup.clear()
+	for a: Dictionary in _add_actions:
+		popup.add_item(a["label"])
+
+## Runs an "Add ..." action (EditorDefaults.add_actions): appends a new item at
+## the centre of the preview's view and selects it.
+func add_item(action: Dictionary) -> void:
+	var item: Variant = EditorDefaults.new_item(action["id"], doc.data, schema, preview.to_world(preview.size / 2.0))
+	if item == null:
+		return
+	var list: Array = action["list"]
+	var index := 0
+	if list == ["ground", "regions"] and not doc.data.get("ground") is Dictionary:
+		# A plain material becomes the base of a ground with regions.
+		var base: Variant = doc.data.get("ground", "soil")
+		doc.set_at(["ground"], {"base": base if base is String else "soil", "regions": [item]}, "Add ground region")
+	else:
+		var existing: Variant = doc.get_at(list)
+		index = existing.size() if existing is Array else 0
+		doc.insert_at(list + [index], item, action["label"])
+	_select_path(list + [index])
 
 ## Left click in the preview selects the smallest item whose bounds contain it.
 func _on_preview_input(event: InputEvent) -> void:

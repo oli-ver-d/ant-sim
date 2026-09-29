@@ -107,7 +107,9 @@ func test_editor_select_and_click() -> void:
 	ed._select_path(["food", 1, "amount"])
 	check_eq(ed.selected, ["food", 1], "deep path selects its item")
 	check(ed.preview.selection.has_point(Vector2(820, 800)), "selection outline around the food")
-	check(ed.details.text.contains("food_pile"), "details show the item")
+	var type_row := ed.inspector.row_at(["food", 1, "type"])
+	check(type_row != null and (type_row.get_meta("widget") as OptionButton).text == "food_pile",
+			"the inspector shows the item")
 	# A click at the nest selects the colony.
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
@@ -156,4 +158,41 @@ func test_editor_open_missing_keeps_document() -> void:
 	var before: ScenarioDoc = ed.doc
 	ed._open("res://scenarios/does_not_exist.json")
 	check(ed.doc == before, "document kept")
+	_cleanup(ed)
+
+func test_editor_add_items_and_inspect() -> void:
+	var ed := _editor("basic_forage")
+	ed.preview.camera.position = Vector2(300, 400)
+	var colonies := (ed.doc.data["colonies"] as Array).size()
+	ed._select_path(["colonies", 0])
+	ed._fill_add_menu()
+	check_eq(ed.add_menu.get_popup().item_count, 1, "a colony row offers Add colony")
+	ed.add_item(ed._add_actions[0])
+	check_eq((ed.doc.data["colonies"] as Array).size(), colonies + 1, "colony added")
+	check_eq(ed.doc.data["colonies"][colonies]["nest"], [300, 400], "at the view centre")
+	check_eq(ed.selected, ["colonies", colonies], "new colony selected")
+	check(ed.inspector.row_at(["colonies", colonies, "species"]) != null, "inspector shows it")
+	# A plain ground material becomes the base of a ground with regions.
+	ed.doc.set_at(["ground"], "sand")
+	ed._select_path([])
+	ed._fill_add_menu()
+	var region := ed._add_actions.filter(func(a: Dictionary) -> bool: return a["id"] == "ground_region")
+	check_eq(region.size(), 1, "the Scenario row offers every section")
+	ed.add_item(region[0])
+	check_eq(ed.doc.data["ground"]["base"], "sand", "base kept")
+	check_eq((ed.doc.data["ground"]["regions"] as Array).size(), 1, "region added")
+	# An inspector edit reaches the outline and the preview.
+	ed._select_path(["colonies", 0])
+	var nest := ed.inspector.row_at(["colonies", 0, "nest"]).get_meta("widget") as Control
+	var edits: Array = nest.get_meta("edits")
+	var x := edits[0] as LineEdit
+	x.text = "500"
+	x.text_submitted.emit("500")
+	check_eq(ed.doc.data["colonies"][0]["nest"][0], 500, "edited")
+	check(ed.preview.rebuild_pending(), "preview rebuild queued")
+	check(ed.rows[EditorOutline.row_for(ed.rows, ["colonies", 0])]["label"].contains("500"), "outline label updated")
+	ed.doc.undo()
+	check_eq(ed.doc.data["colonies"][0]["nest"][0], 540, "undo")
+	edits = ed.inspector.row_at(["colonies", 0, "nest"]).get_meta("widget").get_meta("edits")
+	check_eq((edits[0] as LineEdit).text, "540", "inspector rebuilt on undo")
 	_cleanup(ed)
