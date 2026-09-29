@@ -758,6 +758,16 @@ func hash_underground(ctx: HashingContext) -> void:
 func spawn_initial(sim: Simulation, caste: int) -> int:
 	return sim.spawn_ant(sim.colonies[colony_id], caste, entrance_position(), sim.rng.randf_range(-PI, PI))
 
+## States a caste may take in this nest besides its own lists (see
+## Colony.build_allowed_states), e.g. "found_nest" for a queen who lands.
+func extra_states(_caste: StringName) -> PackedStringArray:
+	return PackedStringArray()
+
+## Winged ants, for views: ant index -> Vector3(pairs of wings on, altitude
+## above the ground, beating 0-1). None by default.
+func winged_ants(_sim: Simulation) -> Dictionary[int, Vector3]:
+	return {}
+
 ## Called when ant i comes up onto the surface from the underground (the
 ## core "go_up" behaviour), e.g. to point out a new worker.
 func ant_surfaced(_sim: Simulation, _i: int) -> void:

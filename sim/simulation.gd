@@ -237,9 +237,10 @@ func add_portal(layer_a: int, pos_a: Vector2, layer_b: int, pos_b: Vector2, radi
 ## Starts taking ant i through `portal` (it must be near the end on its
 ## layer). The ant walks into the hole for the portal's transit time, then
 ## comes out at the other end. Riders on its item get off here. Returns false
-## if the portal is closed or the ant is already going through one.
-func enter_portal(i: int, portal: Portal) -> bool:
-	if not portal.open or transit_until[i] != 0 or not portal.connects(layer[i]):
+## if the portal is closed (unless `force`, e.g. a founding queen going down
+## the shaft she dug) or the ant is already going through one.
+func enter_portal(i: int, portal: Portal, force: bool = false) -> bool:
+	if (not portal.open and not force) or transit_until[i] != 0 or not portal.connects(layer[i]):
 		return false
 	var item := item_of(i)
 	if item != null:

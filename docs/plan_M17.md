@@ -23,8 +23,8 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 150–180 s of video (so a PNG final render takes ~2 h; draft with AVI).
 
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
-scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish). Next: M17d
-(the queen's landing).
+scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish), M17d done (the
+queen's landing). Next: M17e (alates and the nuptial flight).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -429,6 +429,82 @@ tests (`test_founding_landing.gd`): queen ends sealed underground, entrance reop
 old scenarios' hashes unchanged, native parity test still passes.
 Verify: tests, full suite, windowed stills of the landing, then a nest_probe run of
 `colony_founding` with the landing turned on (background) to check the nest still grows.
+
+**Done.** Sim (all opt-in; without `"landing"` nothing runs, draws random numbers or is
+hashed):
+- `sim/nests/founding.gd` (`Founding`, owned by `ColonyNest.founding`): phases FLYING →
+  SHEDDING → WALKING → DIGGING → GOING_DOWN → HOME. Flight: a quadratic curve from `from` to
+  `land`, eased out, altitude `altitude * (1 - t)^1.5`; she is placed on the curve each tick
+  (no collisions). Shedding: right pair at 35%, left at 75% of `shed` (`Wing` items,
+  `sim/items/wing.gd`, item type `"wing"`, destroyed at `wing_life`). Walk: four waypoints
+  round the entrance at `loop_radius`, then its middle (`Steering.move_to`). Dig: she turns
+  over the hole; `spoil_pellets` pellets go on the heap (`receive_spoil`). Then
+  `sim.enter_portal(i, portal, true)` (new `force` arg: through the closed portal) and, on
+  the nest layer, she is put in her niche (fading in) and the state becomes `"queen"`.
+- `sim/behaviours/found_nest.gd` (core, registered after `carry_corpse`); allowed only for a
+  queen of a nest with a landing, through a new `NestType.extra_states(caste)` hook in
+  `Colony.build_allowed_states` (so other runs' state ranks, and hashes, are unchanged).
+- `ColonyNest`: `spawn_initial` spawns the queen in the air and holds workers back
+  (`Founding.waiting`, placed in the royal chamber when she's home); `_update_colony` returns
+  early until she's home (brood, laying, roles, digging wait); `queen_home()`; FungusNest
+  doesn't manure before. `entrance_sites()`: no main entrance drawn before she digs, an open
+  hole growing while she digs, then as the nest has it (sealed: refilled).
+Render: `NestType.winged_ants(sim)` (ant → pairs on, altitude, beating); `render/wing_renderer.gd`
+(`WingRenderer`, two passes per WorldView: ground shadow under the ants, offset along the
+light by altitude; wings over the riders: beating blur fan in flight, held out gliding in,
+folded over the abdomen on the ground), `render/wing_look.gd` (one wing: membrane, leading
+edge, vein, stigma), `AntRenderer.LIFT_SCALE` (body drawn larger in the air), `ItemRenderer`
+draws shed wings and fades them over their last third.
+Scenario: `scenarios/queen_landing.json` (the prologue on its own, 25 s: leafcutter_life's
+colony with `founding.landing` = from (300, 700), land (520, 1040), altitude 260, flight 7,
+shed 5, loop_radius 10, dig 12; real time for flight and shedding, 3x walk, 4x dig; three
+captions, fades). Phase times (seed 3): lands 7.0, walk 12.0, digs 24.7, goes down 36.7,
+home 37.3 (sim s) = video ~V7, V12, V16.3, V19.7, V20.3. `leafcutter_life.json` is **not**
+changed: the landing delays every underground beat by its length (~37 s), so M17g merges
+the prologue and re-runs the story probe.
+Tests: `tests/test_founding_landing.gd` (7: starts in the air with two pairs and no
+entrance; lands at `land`, hole drawn while digging, ends in her niche, 2 wings on the
+surface where shed, 5 ants, still sealed, pellets on the heap; underground waits (brood
+ages, eggs, manuring); wings decay; the first workers dig the shaft open later;
+deterministic; a `"founding"` key without `"landing"` hashes as none). `tests/test_native.gd`
+runs `queen_landing` (1800 ticks) both ways. Fingerprints of `colony_founding` (1500 ticks),
+`leafcutter_life` (1800) and `harvester_founding` (1500) match HEAD before M17d.
+Stills (`tools/screenshot.sh queen_landing <ticks> ... --layout=surface`): flight with
+beating wings and the shadow falling on the leaf, gliding in, folded wings, one pair shed,
+both pairs on the ground, digging (hole), sealed plug with the wings beside it.
+
+Fixed on the way (render): the ant MultiMesh now has fixed world-sized bounds
+(`multimesh.custom_aabb` in `AntRenderer.bind`). The canvas item only takes the MultiMesh's
+bounds when it's redrawn, so with a lone ant (the landing queen) the bounds went stale and
+her body was culled once the follow camera moved away from her start. Stills didn't show it;
+the first AVI draft did (wings with no body).
+
+Draft video (M17d): `renders/queen_landing_seed3_20260929_002040.mp4` (AVI capture,
+1080x1920, 60 fps, 25.0 s, 1500 frames). Frames at V4, V9.5, V14, V18, V20, V21 and V24 were
+checked. They show flight with beating wings and her shadow, the wings coming off, the
+walk, digging, going down and the sealed plug.
+
+Changed from the plan: no dig job from the surface. The shaft cells stay soil and she is
+moved to her niche after the portal fade (the nest camera isn't shown then); the minims later
+dig the same shaft (`chambers_layout.shaft`) open as before. The minims are kept (sealed in
+with her when she arrives), as M17c noted. Wings decay rather than being carried out.
+
+`nest_probe` over 7200 s, `colony_founding` against a copy of it with `"founding":
+{"landing": {}}` (default landing, ~50 s), run side by side:
+
+| sim s | without | with landing |
+|---|---|---|
+| 3000 | 575 ants | 494 ants |
+| 4200 | 1465 | 1464 |
+| 5400 | 2391 | 2408 |
+| 7200 | 3632 (25 chambers, 3 entrances) | 3808 (28 chambers, 3 entrances) |
+
+The landing run starts ~50 s late, catches up by 4200 s and grows as well after that (the
+runs differ by their random numbers from then on). The nest grows fine with the landing.
+
+For M17g: take the prologue's colony params, camera keyframes, tpf points and captions from
+`queen_landing.json` into `leafcutter_life.json` (shift everything after by ~20 s of video
+and every sim time by the landing's ~37 s), and re-run `story_probe`.
 
 ### M17e: alates and the nuptial flight (finale)
 

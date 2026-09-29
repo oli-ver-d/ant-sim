@@ -191,7 +191,7 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 	garden.update(dt, sim.rng)
 	fungus_eaten += garden.eat(upkeep_per_ant * colony.total_population() * dt)
 	# Until the first leaf comes in, the queen manures her garden.
-	if queen_reserve > 0.0 and leaf_items == 0 and queen_ant >= 0 and sim.alive[queen_ant] != 0:
+	if queen_reserve > 0.0 and leaf_items == 0 and queen_ant >= 0 and sim.alive[queen_ant] != 0 and queen_home():
 		var m := minf(queen_reserve, queen_feed_rate * dt)
 		if garden.plant(garden_spot(), m, chambers_layout.royal().radius * 0.4) > 0.0:
 			queen_reserve -= m

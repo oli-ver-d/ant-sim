@@ -21,6 +21,8 @@ static func register(registry: Registry) -> void:
 	registry.register_behaviour("carry_spent", CarrySpentBehaviour.new())
 	# Registered last: only colonies that leave corpses may use it.
 	registry.register_behaviour("carry_corpse", CarryCorpseBehaviour.new())
+	# Only for a founding queen that lands first (ColonyNest.founding).
+	registry.register_behaviour("found_nest", FoundNestBehaviour.new())
 
 	registry.register_food_source_type("food_pile", FoodPile)
 	registry.register_item_type("crumb", Item)
@@ -30,6 +32,7 @@ static func register(registry: Registry) -> void:
 	registry.register_item_type("spoil", Item)
 	registry.register_item_type("corpse", Corpse)
 	registry.register_item_type("brood_corpse", Corpse)
+	registry.register_item_type("wing", Wing)
 	# What middens hold (half-life in s, 0 = never rots; size per sqrt(mass)).
 	registry.register_refuse_kind("soil_clump", 0.0, 3.0, ["spoil", "pebble", "twig"])
 	registry.register_refuse_kind("husk", 2400.0, 4.0)

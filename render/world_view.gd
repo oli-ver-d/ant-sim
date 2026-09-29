@@ -7,7 +7,8 @@ extends Node2D
 ## traffic, WornGroundRenderer), scenery bases, bridges, nests (spoil heaps,
 ## the nest's own renderer, its middens: MiddenRenderer,
 ## then its entrances: EntranceRenderer), pheromone glow, food, ground
-## items (debris), ants, carried items, ants riding on carried items, scenery
+## items (debris), shadows of ants in the air, ants, carried items, ants
+## riding on carried items, wings (WingRenderer), scenery
 ## canopy (plant blades and their shadow: CanopyRenderer), falling rain, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
@@ -28,6 +29,9 @@ var ant_renderer: AntRenderer
 var item_renderer: ItemRenderer
 var ground_item_renderer: ItemRenderer
 var rider_renderer: AntRenderer
+## Winged ants: shadows of those in the air (under the ants), wings (over them).
+var wing_shadows: WingRenderer
+var wing_renderer: WingRenderer
 var rain_renderer: RainRenderer
 var debug_view: Overlays.DebugView
 ## Interpolation between the previous and current tick, in [0, 1].
@@ -39,6 +43,8 @@ var alpha: float = 1.0:
 			item_renderer.alpha = v
 			ground_item_renderer.alpha = v
 			rider_renderer.alpha = v
+			wing_shadows.alpha = v
+			wing_renderer.alpha = v
 			if rain_renderer != null:
 				rain_renderer.alpha = v
 
@@ -128,6 +134,12 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	ground_item_renderer.bind(sim)
 	add_child(ground_item_renderer)
 
+	wing_shadows = WingRenderer.new()
+	wing_shadows.pass_kind = WingRenderer.Pass.SHADOW
+	wing_shadows.layer = layer
+	wing_shadows.bind(sim)
+	add_child(wing_shadows)
+
 	ant_renderer = AntRenderer.new()
 	ant_renderer.layer = layer
 	ant_renderer.bind(sim)
@@ -144,6 +156,10 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 	rider_renderer.layer = layer
 	rider_renderer.bind(sim)
 	add_child(rider_renderer)
+	wing_renderer = WingRenderer.new()
+	wing_renderer.layer = layer
+	wing_renderer.bind(sim)
+	add_child(wing_renderer)
 	# Nest things carried over the ants (e.g. brood in a nurse's jaws).
 	_top_layer = Node2D.new()
 	add_child(_top_layer)

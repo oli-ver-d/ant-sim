@@ -94,6 +94,9 @@ var _nursery_retry_at: float = 0.0
 var _role_timer: float = 0.0
 var _plan_retry_at: float = 0.0
 var _rescue_timer: float = 60.0
+## A queen who lands first (nest_params "founding": {"landing": {...}}, see
+## Founding), or null: she starts in her chamber.
+var founding: Founding
 ## Cached places in chambers (see _spot).
 var _spots: Dictionary[Vector3, Vector2] = {}
 ## Default roughness of dug outlines (nest_params underground "overdig").
@@ -115,6 +118,10 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	brood_rate = params.get("brood_rate", brood_rate)
 	max_population = int(params.get("max_population", max_population))
 	max_chambers = int(params.get("max_chambers", max_chambers))
+	var landing: Variant = params.get("founding", {}).get("landing")
+	if landing is Dictionary and chambers_layout != null:
+		founding = Founding.new()
+		founding.setup(sim, self, landing)
 
 # --- What the colony lives on (species nests override) ---------------------------------
 
@@ -255,6 +262,11 @@ func _ensure_queen(sim: Simulation) -> void:
 ## roles, entrances and chamber planning; chambers finished digging go to
 ## _chambers_dug().
 func _update_colony(sim: Simulation, dt: float) -> void:
+	# A queen who lands first: the underground waits for her.
+	if founding != null:
+		founding.update(sim)
+		if not founding.is_home():
+			return
 	brood.update(sim, self, dt)
 	_role_timer -= dt
 	if _role_timer <= 0.0:
@@ -282,10 +294,38 @@ func hash_underground(ctx: HashingContext) -> void:
 		ctx.update(nursery.to_byte_array())
 		if not nursery_planned.is_empty():
 			ctx.update(nursery_planned.to_byte_array())
+	if founding != null:
+		founding.hash_into(ctx)
 
 ## Called when chambers have finished digging (chambers_layout.list[k].dug).
 func _chambers_dug(_sim: Simulation) -> void:
 	pass
+
+## True once the queen is in her chamber (at once without a landing).
+func queen_home() -> bool:
+	return founding == null or founding.is_home()
+
+func extra_states(caste: StringName) -> PackedStringArray:
+	if founding != null and caste == &"queen":
+		return PackedStringArray(["found_nest"])
+	return PackedStringArray()
+
+## The landing queen while she still has wings (see NestType.winged_ants).
+func winged_ants(sim: Simulation) -> Dictionary[int, Vector3]:
+	if founding == null or founding.wings_on <= 0 or queen_ant < 0 or sim.alive[queen_ant] == 0:
+		return {}
+	var flying := founding.phase == Founding.Phase.FLYING
+	return {queen_ant: Vector3(founding.wings_on, founding.queen_altitude(sim), 1.0 if flying else 0.0)}
+
+## While a landing queen digs, the main entrance is her hole (see
+## Founding.entrance_look); before, there is none to draw.
+func entrance_sites() -> Array[EntranceSite]:
+	var out := super.entrance_sites()
+	if founding != null and not founding.is_home() and portal != null:
+		var look := founding.entrance_look()
+		out[0].open = look.y > 0.0
+		out[0].radius *= look.z
+	return out
 
 ## Ants of this colony other than the queen.
 func workers_alive(sim: Simulation) -> int:
@@ -408,12 +448,20 @@ func direct_range(at: Vector2) -> float:
 	return (chambers_layout.list[k].reach_max + 8.0) if k >= 0 else 0.0
 
 ## Places a colony's starting ant: the queen at her spot in the royal
-## chamber, workers in the royal chamber taking nest roles.
+## chamber, workers in the royal chamber taking nest roles. With a landing
+## (Founding) the queen starts in the air and workers wait for her (-1).
 func spawn_initial(sim: Simulation, caste: int) -> int:
 	if chambers_layout == null:
 		return super.spawn_initial(sim, caste)
 	var colony := sim.colonies[colony_id]
-	if colony.species.castes[caste].id == &"queen":
+	var is_queen := colony.species.castes[caste].id == &"queen"
+	if founding != null and not founding.is_home():
+		if is_queen:
+			queen_ant = founding.spawn_queen(sim, self, caste)
+			return queen_ant
+		founding.waiting.append(caste)
+		return -1
+	if is_queen:
 		var q := sim.spawn_ant(colony, caste, queen_spot(), 0.0, underground_layer)
 		queen_ant = q
 		return q

@@ -148,6 +148,24 @@ tools/ tests/
   species nest provides the food store (`food_stock()`, `food_point()`, `take_food_at()`,
   `make_brood_food()`...), `space_pressure()` and any roles of its own. `FungusNest`
   (leafcutter gardens) and `GranaryNest` (harvester granaries) are both built on it.
+- **Founding landing** (opt-in, nest param `"founding": {"landing": {...}}`, any `ColonyNest`
+  with an underground; `Founding`, core state `found_nest`): the queen starts on the surface as
+  a winged alate at the end of her nuptial flight. She flies in along an eased curve from
+  `from` down to `land` (her altitude falls from `altitude` to 0; no collisions), lands and
+  sheds her two pairs of wings (two `wing` items, `Wing`, lie where she shed them and fade out
+  after `wing_life`), walks a short loop round the site (`loop_radius`), digs down where the
+  entrance will be (the opening is drawn growing; `spoil_pellets` go on the spoil heap), then
+  goes down the shaft and is put in her niche in the royal chamber, where the normal `queen`
+  state takes over. A sealed nest (`"open": false`) stays sealed: the entrance is drawn
+  refilled and the first workers dig the same shaft open later. Until she is home the
+  underground waits: no colony update (development, laying, roles, digging), a leafcutter queen
+  doesn't manure her garden, and the scenario's starting workers (`population`) are held back
+  and placed in the royal chamber when she arrives. Params: `from` [x, y] (default 480 units
+  from `land`, away from the entrance, inside the world), `land` [x, y] (default 30 units from
+  the entrance toward `from`), `altitude` 220, `flight` 9 s, `shed` 6 s, `loop_radius` 14,
+  `dig` 20 s, `spoil_pellets` 6, `wing_life` 900 s; about 50 s in all with the defaults.
+  Without `landing` nothing changes (existing runs hash the same). The queen's allowed states
+  include `NestType.extra_states(caste_id)` (`found_nest` here).
 - **Refuse**: a nest's refuse goes to middens (`Midden`, `NestType` "Refuse"). The first is
   sited when the first load is ready, another next to it when it is full (nest param
   `"midden"`: `style` pile / ring / scatter, `distance`, `sites`, `capacity`,
@@ -194,7 +212,8 @@ tools/ tests/
 - **Portals** (`Portal`) link two layers: an ant at one end calls `sim.enter_portal()`, walks into
   the hole for `transit_time` and comes out at the other end; renderers fade it out and in
   (`sim.portal_fade()`). A closed portal (a sealed founding nest, `has_entrance()` false) can't
-  be used from either side. `Travel.go()` gets an ant to a point on any layer, through portals.
+  be used from either side, unless `enter_portal(i, portal, true)` forces it (the landing queen
+  going down her sealed shaft). `Travel.go()` gets an ant to a point on any layer, through portals.
 - **Diggable soil**: `World.Cell.SOIL` cells hold the work left in them and block movement until
   `World.dig()` frees them. Digging only frees cells, so caches follow it incrementally through
   `World.dig_log` (renderers upload just the touched cells, nav fields relax just around them);
@@ -341,7 +360,11 @@ larva and pupa nurseries to a worker, majors clear debris off the trunk trail, w
 dead are carried out, a pull-back at dusk; real-time close-ups, cued time-lapses and time
 skips under fades, a story marker ring on whatever the camera follows;
 `tests/story_probe.gd` prints when and where its story beats happen, including the
-nurseries and one egg laid after them).
+nurseries and one egg laid after them), `queen_landing` (~25 s, the prologue of
+`leafcutter_life` (M17d; to be merged into it in M17g): the same colony, ground and scenery
+with `founding.landing` on; a winged queen glides down onto the forest floor, sheds her
+wings, walks the site, digs down and seals herself in; surface layout, the camera follows
+the queen with `"follow": {"state": "found_nest"}`).
 Every scenario has ground
 materials and scenery; only `meadow_forage` and the two founding runs have blocking props
 (scattered clear of the later food sites).
@@ -924,6 +947,14 @@ All drawing lives in `render/` (plus each species' own renderers):
   `spoil_heap_renderer.gd`: the heap of dug soil beside an entrance, crumb by crumb.
 - Ants going through a portal fade out and in (`ant.gdshader`); filler ants stand in for an
   abstract population.
+- Winged ants (`NestType.winged_ants(sim)`: ant -> pairs of wings on, altitude, beating; render
+  only): `wing_renderer.gd` draws, per layer, the ground shadow of an ant in the air (under the
+  ants; offset down-right along the light by its altitude, fainter and blurrier the higher it
+  is) and its wings (over the ants; a blurred beating fan in flight, held out while gliding
+  in, folded back over the abdomen on the ground). `AntRenderer` draws an ant in the air
+  larger (`LIFT_SCALE` per unit of altitude). `wing_look.gd` draws a wing (translucent
+  membrane, darker leading edge, mid vein, stigma spot); `ItemRenderer` draws shed wings
+  with it.
 - Leafcutter: `garden.gdshader` (a raised spongy mass: cellular bumps and pores, strands,
   self-shadowing, a lumpy cottony edge with a floor shadow, green pulp flecks, browning with
   age and mould, gongylidia bead clusters; fine detail fades with zoom), `brood.gdshader`

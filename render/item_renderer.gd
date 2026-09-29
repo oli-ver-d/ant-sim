@@ -21,6 +21,7 @@ var ground_layer: bool = false
 var layer: int = 0
 var _textures: Dictionary[int, ImageTexture] = {}
 var _drawn_version: int = -1
+var _has_wings: bool = false
 
 func bind(simulation: Simulation) -> void:
 	sim = simulation
@@ -31,10 +32,14 @@ func _process(_delta: float) -> void:
 	if not ground_layer or sim.items_version != _drawn_version:
 		_drawn_version = sim.items_version
 		queue_redraw()
+	# Shed wings fade as they decay.
+	elif _has_wings and Engine.get_process_frames() % 30 == 0:
+		queue_redraw()
 
 func _draw() -> void:
 	if sim == null:
 		return
+	_has_wings = false
 	for id: int in sim.items:
 		var item: Item = sim.items[id]
 		var carried := item.carrier >= 0
@@ -49,6 +54,10 @@ func _draw() -> void:
 		var shadow := CARRIED_SHADOW_OFFSET if carried else GROUND_SHADOW_OFFSET
 		if item is Corpse:
 			_draw_corpse(item as Corpse, at, shadow)
+			continue
+		elif item is Wing:
+			_has_wings = true
+			_draw_wing(item as Wing, at, rot)
 			continue
 		elif item.shape != null:
 			var tex: ImageTexture = _textures.get(id)
@@ -69,6 +78,19 @@ func _draw() -> void:
 	for id: int in _textures.keys():
 		if not sim.items.has(id):
 			_textures.erase(id)
+
+## A shed pair of wings, lying flat (fore wing over hind wing, a little
+## apart), fading over the last third of its time (Wing.gone_at).
+func _draw_wing(w: Wing, at: Vector2, rot: float) -> void:
+	var left := (w.gone_at - sim.time()) / maxf(1.0, w.gone_at - w.shed_at)
+	var fade := clampf(left * 3.0, 0.0, 1.0)
+	var c := SHADOW
+	c.a *= 0.35 * fade
+	draw_set_transform(at + GROUND_SHADOW_OFFSET * 0.5 + Vector2.from_angle(rot) * w.length * 0.5, rot,
+			Vector2(w.length * 0.5, w.length * 0.16))
+	draw_circle(Vector2.ZERO, 1.0, c)
+	draw_set_transform(Vector2.ZERO)
+	WingLook.draw_pair(self, at, rot + w.side * 0.12, rot - w.side * 0.1, w.length, -w.side, w.tint, fade)
 
 ## A dead worker or larva, drawn with its refuse kind's look (as it will lie
 ## on the midden, see MiddenRenderer), in its caste's colour.

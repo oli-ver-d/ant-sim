@@ -15,6 +15,9 @@ const STRIDE := 16
 ## Must match QUAD in ant.gdshader.
 const QUAD_SCALE := 2.4
 const HEADING_STEPS := 1023.0
+## How much larger an ant in the air is drawn per unit of altitude (nearer
+## the camera; see NestType.winged_ants and WingRenderer).
+const LIFT_SCALE := 0.003
 
 var sim: Simulation
 ## Fraction of the way from the previous tick to the current one (set by WorldView).
@@ -37,6 +40,11 @@ func bind(simulation: Simulation) -> void:
 	multimesh.use_colors = true
 	multimesh.use_custom_data = true
 	multimesh.mesh = _unit_quad()
+	# Fixed bounds over any world: the canvas item takes the MultiMesh's
+	# bounds only when redrawn, so with a few ants (a lone landing queen)
+	# computed bounds went stale and the ants were culled once the camera
+	# followed them away.
+	multimesh.custom_aabb = AABB(Vector3(-1e5, -1e5, -1.0), Vector3(2e5, 2e5, 2.0))
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://render/ant.gdshader")
 	material = mat
@@ -106,6 +114,11 @@ func _process(_delta: float) -> void:
 	var transit := sim.transit_until
 	var arrived := sim.arrive_tick
 	var fade_after := sim.completed_ticks() - 30
+	# Ants in the air (a landing queen) are drawn larger.
+	var lifted: Dictionary[int, Vector3] = {}
+	if not riders_only:
+		for colony in sim.colonies:
+			lifted.merge(colony.nest.winged_ants(sim))
 	var a := alpha
 	var o := 0
 	for k in n:
@@ -118,6 +131,8 @@ func _process(_delta: float) -> void:
 			continue
 		var look := _colony_base[colony_id[i]] + caste_id[i]
 		var s := _look_size[look]
+		if not lifted.is_empty() and lifted.has(i):
+			s *= 1.0 + lifted[i].y * LIFT_SCALE
 		var p := prev_pos[i].lerp(pos[i], a)
 		var h := lerp_angle(prev_heading[i], heading[i], a)
 		# Transform2D rows: [x.x, y.x, 0, origin.x], [x.y, y.y, 0, origin.y]
