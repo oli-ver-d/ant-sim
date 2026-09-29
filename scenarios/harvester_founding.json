@@ -22,10 +22,25 @@
 				"max_chambers": 30,
 				"max_population": 5000,
 				"entrances": {"at": [600, 1500, 2800], "spacing": 160},
-				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 34,
-					"chamber_min_radius": 30, "chamber_max_radius": 48, "tunnel_radius": 6.5},
-				"brood": {"lay_interval": 1.4, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 600,
-					"first_workers": 6, "brood_per_worker": 1.2, "initial": {"egg": 3, "larva": 3, "pupa": 2}}
+				"underground": {
+					"size": [1400, 1400],
+					"open": false,
+					"royal_radius": 34,
+					"chamber_min_radius": 30,
+					"chamber_max_radius": 48,
+					"tunnel_radius": 6.5
+				},
+				"brood": {
+					"lay_interval": 1.4,
+					"egg": 30,
+					"larva": 60,
+					"pupa": 40,
+					"callow": 5,
+					"max_brood": 600,
+					"first_workers": 6,
+					"brood_per_worker": 1.2,
+					"initial": {"egg": 3, "larva": 3, "pupa": 2}
+				}
 			}
 		}
 	],
@@ -37,80 +52,90 @@
 		]
 	},
 	"scenery": [
-		{"scatter": {"preset": "rocky", "density": 1.2,
-			"clear": [
-				{"shape": "circle", "center": [560, 620], "radius": 73},
-				{"shape": "circle", "center": [560, 620], "radius": 118, "reserve": true},
-				{"shape": "circle", "center": [260, 1300], "radius": 75},
-				{"shape": "circle", "center": [260, 1300], "radius": 120, "reserve": true},
-				{"shape": "circle", "center": [850, 1340], "radius": 75},
-				{"shape": "circle", "center": [850, 1340], "radius": 120, "reserve": true},
-				{"shape": "circle", "center": [220, 580], "radius": 81},
-				{"shape": "circle", "center": [220, 580], "radius": 126, "reserve": true},
-				{"shape": "circle", "center": [880, 520], "radius": 81},
-				{"shape": "circle", "center": [880, 520], "radius": 126, "reserve": true},
-				{"shape": "circle", "center": [540, 1620], "radius": 85},
-				{"shape": "circle", "center": [540, 1620], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [520, 320], "radius": 85},
-				{"shape": "circle", "center": [520, 320], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [180, 1720], "radius": 85},
-				{"shape": "circle", "center": [180, 1720], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [900, 1700], "radius": 85},
-				{"shape": "circle", "center": [900, 1700], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [180, 200], "radius": 89},
-				{"shape": "circle", "center": [180, 200], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [880, 220], "radius": 89},
-				{"shape": "circle", "center": [880, 220], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [140, 1000], "radius": 89},
-				{"shape": "circle", "center": [140, 1000], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [950, 1050], "radius": 89},
-				{"shape": "circle", "center": [950, 1050], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [330, 760], "radius": 91},
-				{"shape": "circle", "center": [330, 760], "radius": 136, "reserve": true},
-				{"shape": "circle", "center": [760, 1380], "radius": 91},
-				{"shape": "circle", "center": [760, 1380], "radius": 136, "reserve": true},
-				{"shape": "circle", "center": [780, 760], "radius": 91},
-				{"shape": "circle", "center": [780, 760], "radius": 136, "reserve": true},
-				{"shape": "circle", "center": [300, 1360], "radius": 91},
-				{"shape": "circle", "center": [300, 1360], "radius": 136, "reserve": true}
-			]}},
-		{"scatter": {"preset": "sandy", "density": 2.0,
-			"clear": [
-				{"shape": "circle", "center": [560, 620], "radius": 73},
-				{"shape": "circle", "center": [560, 620], "radius": 118, "reserve": true},
-				{"shape": "circle", "center": [260, 1300], "radius": 75},
-				{"shape": "circle", "center": [260, 1300], "radius": 120, "reserve": true},
-				{"shape": "circle", "center": [850, 1340], "radius": 75},
-				{"shape": "circle", "center": [850, 1340], "radius": 120, "reserve": true},
-				{"shape": "circle", "center": [220, 580], "radius": 81},
-				{"shape": "circle", "center": [220, 580], "radius": 126, "reserve": true},
-				{"shape": "circle", "center": [880, 520], "radius": 81},
-				{"shape": "circle", "center": [880, 520], "radius": 126, "reserve": true},
-				{"shape": "circle", "center": [540, 1620], "radius": 85},
-				{"shape": "circle", "center": [540, 1620], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [520, 320], "radius": 85},
-				{"shape": "circle", "center": [520, 320], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [180, 1720], "radius": 85},
-				{"shape": "circle", "center": [180, 1720], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [900, 1700], "radius": 85},
-				{"shape": "circle", "center": [900, 1700], "radius": 130, "reserve": true},
-				{"shape": "circle", "center": [180, 200], "radius": 89},
-				{"shape": "circle", "center": [180, 200], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [880, 220], "radius": 89},
-				{"shape": "circle", "center": [880, 220], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [140, 1000], "radius": 89},
-				{"shape": "circle", "center": [140, 1000], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [950, 1050], "radius": 89},
-				{"shape": "circle", "center": [950, 1050], "radius": 134, "reserve": true},
-				{"shape": "circle", "center": [330, 760], "radius": 91},
-				{"shape": "circle", "center": [330, 760], "radius": 136, "reserve": true},
-				{"shape": "circle", "center": [760, 1380], "radius": 91},
-				{"shape": "circle", "center": [760, 1380], "radius": 136, "reserve": true},
-				{"shape": "circle", "center": [780, 760], "radius": 91},
-				{"shape": "circle", "center": [780, 760], "radius": 136, "reserve": true},
-				{"shape": "circle", "center": [300, 1360], "radius": 91},
-				{"shape": "circle", "center": [300, 1360], "radius": 136, "reserve": true}
-			]}}
+		{
+			"scatter": {
+				"preset": "rocky",
+				"density": 1.2,
+				"clear": [
+					{"shape": "circle", "center": [560, 620], "radius": 73},
+					{"shape": "circle", "center": [560, 620], "radius": 118, "reserve": true},
+					{"shape": "circle", "center": [260, 1300], "radius": 75},
+					{"shape": "circle", "center": [260, 1300], "radius": 120, "reserve": true},
+					{"shape": "circle", "center": [850, 1340], "radius": 75},
+					{"shape": "circle", "center": [850, 1340], "radius": 120, "reserve": true},
+					{"shape": "circle", "center": [220, 580], "radius": 81},
+					{"shape": "circle", "center": [220, 580], "radius": 126, "reserve": true},
+					{"shape": "circle", "center": [880, 520], "radius": 81},
+					{"shape": "circle", "center": [880, 520], "radius": 126, "reserve": true},
+					{"shape": "circle", "center": [540, 1620], "radius": 85},
+					{"shape": "circle", "center": [540, 1620], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [520, 320], "radius": 85},
+					{"shape": "circle", "center": [520, 320], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [180, 1720], "radius": 85},
+					{"shape": "circle", "center": [180, 1720], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [900, 1700], "radius": 85},
+					{"shape": "circle", "center": [900, 1700], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [180, 200], "radius": 89},
+					{"shape": "circle", "center": [180, 200], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [880, 220], "radius": 89},
+					{"shape": "circle", "center": [880, 220], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [140, 1000], "radius": 89},
+					{"shape": "circle", "center": [140, 1000], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [950, 1050], "radius": 89},
+					{"shape": "circle", "center": [950, 1050], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [330, 760], "radius": 91},
+					{"shape": "circle", "center": [330, 760], "radius": 136, "reserve": true},
+					{"shape": "circle", "center": [760, 1380], "radius": 91},
+					{"shape": "circle", "center": [760, 1380], "radius": 136, "reserve": true},
+					{"shape": "circle", "center": [780, 760], "radius": 91},
+					{"shape": "circle", "center": [780, 760], "radius": 136, "reserve": true},
+					{"shape": "circle", "center": [300, 1360], "radius": 91},
+					{"shape": "circle", "center": [300, 1360], "radius": 136, "reserve": true}
+				]
+			}
+		},
+		{
+			"scatter": {
+				"preset": "sandy",
+				"density": 2,
+				"clear": [
+					{"shape": "circle", "center": [560, 620], "radius": 73},
+					{"shape": "circle", "center": [560, 620], "radius": 118, "reserve": true},
+					{"shape": "circle", "center": [260, 1300], "radius": 75},
+					{"shape": "circle", "center": [260, 1300], "radius": 120, "reserve": true},
+					{"shape": "circle", "center": [850, 1340], "radius": 75},
+					{"shape": "circle", "center": [850, 1340], "radius": 120, "reserve": true},
+					{"shape": "circle", "center": [220, 580], "radius": 81},
+					{"shape": "circle", "center": [220, 580], "radius": 126, "reserve": true},
+					{"shape": "circle", "center": [880, 520], "radius": 81},
+					{"shape": "circle", "center": [880, 520], "radius": 126, "reserve": true},
+					{"shape": "circle", "center": [540, 1620], "radius": 85},
+					{"shape": "circle", "center": [540, 1620], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [520, 320], "radius": 85},
+					{"shape": "circle", "center": [520, 320], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [180, 1720], "radius": 85},
+					{"shape": "circle", "center": [180, 1720], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [900, 1700], "radius": 85},
+					{"shape": "circle", "center": [900, 1700], "radius": 130, "reserve": true},
+					{"shape": "circle", "center": [180, 200], "radius": 89},
+					{"shape": "circle", "center": [180, 200], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [880, 220], "radius": 89},
+					{"shape": "circle", "center": [880, 220], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [140, 1000], "radius": 89},
+					{"shape": "circle", "center": [140, 1000], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [950, 1050], "radius": 89},
+					{"shape": "circle", "center": [950, 1050], "radius": 134, "reserve": true},
+					{"shape": "circle", "center": [330, 760], "radius": 91},
+					{"shape": "circle", "center": [330, 760], "radius": 136, "reserve": true},
+					{"shape": "circle", "center": [760, 1380], "radius": 91},
+					{"shape": "circle", "center": [760, 1380], "radius": 136, "reserve": true},
+					{"shape": "circle", "center": [780, 760], "radius": 91},
+					{"shape": "circle", "center": [780, 760], "radius": 136, "reserve": true},
+					{"shape": "circle", "center": [300, 1360], "radius": 91},
+					{"shape": "circle", "center": [300, 1360], "radius": 136, "reserve": true}
+				]
+			}
+		}
 	],
 	"max_agents": {"surface": 900, "nest": 700},
 	"food": [
@@ -153,18 +178,23 @@
 			{"t": 0, "pos": [540, 1060], "zoom": 2.6},
 			{"t": 16, "pos": [540, 1060], "zoom": 2.6},
 			{"t": 32, "pos": [540, 1040], "zoom": 1.4},
-			{"t": 60, "pos": [540, 1000], "zoom": 1.0}
+			{"t": 60, "pos": [540, 1000], "zoom": 1}
 		],
 		"nest": [
 			{"t": 0, "pos": [700, 700], "zoom": 7.5},
-			{"t": 9, "pos": [700, 700], "zoom": 6.0},
+			{"t": 9, "pos": [700, 700], "zoom": 6},
 			{"t": 16, "pos": [700, 700], "zoom": 3.2},
 			{"t": 26, "fit": "excavation", "margin": 70, "max_zoom": 2.6}
 		]
 	},
 	"render": {
 		"pheromone_opacity": 0.35,
-		"layout": {"mode": "split", "colony": 0, "surface": "top", "ratio": 0.42,
-			"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]}
+		"layout": {
+			"mode": "split",
+			"colony": 0,
+			"surface": "top",
+			"ratio": 0.42,
+			"modes": [{"t": 0, "mode": "nest"}, {"t": 13, "mode": "split"}]
+		}
 	}
 }

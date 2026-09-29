@@ -12,26 +12,27 @@
 		]
 	},
 	"colonies": [
-		{
-			"species": "leafcutter",
-			"nest": [540, 1420],
-			"population": {"minim": 90, "media": 300, "major": 40},
-			"release_per_second": 60
-		}
+		{"species": "leafcutter", "nest": [540, 1420], "population": {"minim": 90, "media": 300, "major": 40}, "release_per_second": 60}
 	],
 	"food": [
 		{"type": "leaf", "pos": [600, 560], "rotation": 18, "length": 360, "width": 160, "shape": "elliptic", "teeth": 30, "seed": 7}
 	],
 	"scenery": [
-		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.9,
-			"clear": [{"shape": "polyline", "points": [[540, 1420], [600, 560]], "width": 340}]}}
+		{
+			"scatter": {
+				"preset": "meadow",
+				"blocking": false,
+				"density": 0.9,
+				"clear": [{"shape": "polyline", "points": [[540, 1420], [600, 560]], "width": 340}]
+			}
+		}
 	],
 	"events": [
 		{"t": 143, "type": "rain", "duration": 6, "wash_half_life": 0.6}
 	],
 	"ticks_per_frame": [
-		{"t": 0, "tpf": 1.0},
-		{"t": 5, "tpf": 1.0},
+		{"t": 0, "tpf": 1},
+		{"t": 5, "tpf": 1},
 		{"t": 7.5, "tpf": 2.5},
 		{"t": 20, "tpf": 2.5}
 	],

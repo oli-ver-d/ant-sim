@@ -17,12 +17,33 @@
 				"max_chambers": 30,
 				"max_population": 6000,
 				"entrances": {"at": [900, 2200], "spacing": 150},
-				"brood_rate": 0.006, "digest_rate": 0.03, "garden_reserve": 0,
+				"brood_rate": 0.006,
+				"digest_rate": 0.03,
+				"garden_reserve": 0,
 				"brood_reserve": 8,
 				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 40, "garden_life": 1500},
-				"brood": {"lay_interval": 1.2, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 700,
-					"first_workers": 6, "brood_per_worker": 1.2, "initial": {"egg": 3, "larva": 3, "pupa": 3}},
-				"founding": {"landing": {"from": [300, 700], "land": [520, 1040], "altitude": 260, "flight": 7, "shed": 5, "loop_radius": 10, "dig": 12}}
+				"brood": {
+					"lay_interval": 1.2,
+					"egg": 30,
+					"larva": 60,
+					"pupa": 40,
+					"callow": 5,
+					"max_brood": 700,
+					"first_workers": 6,
+					"brood_per_worker": 1.2,
+					"initial": {"egg": 3, "larva": 3, "pupa": 3}
+				},
+				"founding": {
+					"landing": {
+						"from": [300, 700],
+						"land": [520, 1040],
+						"altitude": 260,
+						"flight": 7,
+						"shed": 5,
+						"loop_radius": 10,
+						"dig": 12
+					}
+				}
 			}
 		}
 	],
@@ -34,10 +55,22 @@
 		]
 	},
 	"scenery": [
-		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.3,
-			"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]}},
-		{"scatter": {"preset": "meadow", "blocking": false, "density": 1.6,
-			"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]}}
+		{
+			"scatter": {
+				"preset": "forest_floor",
+				"blocking": false,
+				"density": 1.3,
+				"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]
+			}
+		},
+		{
+			"scatter": {
+				"preset": "meadow",
+				"blocking": false,
+				"density": 1.6,
+				"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]
+			}
+		}
 	],
 	"max_agents": {"surface": 900, "nest": 700},
 	"food": [
@@ -66,7 +99,7 @@
 	},
 	"render": {
 		"layout": {"mode": "surface", "colony": 0, "stats": false, "highlight": false},
-		"grade": [{"t": 0, "tint": [1.0, 0.93, 0.85], "brightness": 1.08, "saturation": 0.95, "vignette": 0.3}],
+		"grade": [{"t": 0, "tint": [1, 0.93, 0.85], "brightness": 1.08, "saturation": 0.95, "vignette": 0.3}],
 		"fades": [{"t": 0, "to": 1}, {"t": 1.5, "to": 0}, {"t": 23, "to": 0}, {"t": 25, "to": 1}],
 		"captions": [
 			{"t": 2, "until": 6.5, "text": "Her nuptial flight over, a young queen comes down to earth.", "pos": "bottom"},

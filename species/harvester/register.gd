@@ -4,7 +4,10 @@ extends RefCounted
 ## or in a nest that digs its own granaries (granary_nest: a queen, brood,
 ## seeds carried down and stored, chaff carried out to the midden).
 
+const Schema = preload("res://species/harvester/schema.gd")
+
 func register(registry: Registry) -> void:
+	Schema.register(registry)
 	registry.register_species("harvester", preload("res://species/harvester/harvester.tres"))
 	registry.register_behaviour("store_seed", StoreSeedBehaviour.new())
 	registry.register_behaviour("tend_granary", TendGranaryBehaviour.new())

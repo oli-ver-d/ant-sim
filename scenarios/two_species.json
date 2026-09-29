@@ -6,23 +6,36 @@
 	"ground": {
 		"base": "soil",
 		"regions": [
-			{"material": "litter", "shape": "rect", "rect": [0, 0, 520, 1920], "soft": 160, "ragged": 120, "noise": {"scale": 220, "cover": 0.55}},
-			{"material": "moss", "shape": "rect", "rect": [0, 0, 480, 1920], "soft": 140, "ragged": 120, "noise": {"scale": 150, "cover": 0.3}},
+			{
+				"material": "litter",
+				"shape": "rect",
+				"rect": [0, 0, 520, 1920],
+				"soft": 160,
+				"ragged": 120,
+				"noise": {"scale": 220, "cover": 0.55}
+			},
+			{
+				"material": "moss",
+				"shape": "rect",
+				"rect": [0, 0, 480, 1920],
+				"soft": 140,
+				"ragged": 120,
+				"noise": {"scale": 150, "cover": 0.3}
+			},
 			{"material": "sand", "shape": "rect", "rect": [620, 0, 460, 1920], "soft": 180, "ragged": 200},
-			{"material": "dry", "shape": "rect", "rect": [660, 0, 420, 1920], "soft": 120, "noise": {"scale": 260, "cover": 0.25, "soft": 0.6}, "strength": 0.5}
+			{
+				"material": "dry",
+				"shape": "rect",
+				"rect": [660, 0, 420, 1920],
+				"soft": 120,
+				"noise": {"scale": 260, "cover": 0.25, "soft": 0.6},
+				"strength": 0.5
+			}
 		]
 	},
 	"colonies": [
-		{
-			"species": "leafcutter",
-			"nest": [300, 1600],
-			"population": {"minim": 60, "media": 220, "major": 30}
-		},
-		{
-			"species": "harvester",
-			"nest": [800, 1300],
-			"population": {"minor": 240, "major": 60}
-		}
+		{"species": "leafcutter", "nest": [300, 1600], "population": {"minim": 60, "media": 220, "major": 30}},
+		{"species": "harvester", "nest": [800, 1300], "population": {"minor": 240, "major": 60}}
 	],
 	"food": [
 		{"type": "leaf", "pos": [280, 780], "rotation": -60, "length": 300, "width": 140, "shape": "elliptic", "teeth": 28, "seed": 21},
@@ -31,9 +44,23 @@
 	],
 	"obstacles": [],
 	"scenery": [
-		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.3, "rect": [0, 0, 560, 1920],
-			"clear": [{"shape": "polyline", "points": [[300, 1600], [280, 780]], "width": 280}]}},
-		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.8, "rect": [560, 0, 520, 1920],
-			"clear": [{"shape": "polyline", "points": [[640, 820], [800, 1300], [820, 520]], "width": 240}]}}
+		{
+			"scatter": {
+				"preset": "forest_floor",
+				"blocking": false,
+				"density": 1.3,
+				"rect": [0, 0, 560, 1920],
+				"clear": [{"shape": "polyline", "points": [[300, 1600], [280, 780]], "width": 280}]
+			}
+		},
+		{
+			"scatter": {
+				"preset": "meadow",
+				"blocking": false,
+				"density": 0.8,
+				"rect": [560, 0, 520, 1920],
+				"clear": [{"shape": "polyline", "points": [[640, 820], [800, 1300], [820, 520]], "width": 240}]
+			}
+		}
 	]
 }

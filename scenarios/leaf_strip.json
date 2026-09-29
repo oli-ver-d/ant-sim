@@ -11,18 +11,20 @@
 		]
 	},
 	"colonies": [
-		{
-			"species": "leafcutter",
-			"nest": [540, 1700],
-			"population": {"minim": 120, "media": 420, "major": 60}
-		}
+		{"species": "leafcutter", "nest": [540, 1700], "population": {"minim": 120, "media": 420, "major": 60}}
 	],
 	"food": [
 		{"type": "leaf", "pos": [540, 700], "rotation": -75, "length": 760, "width": 330, "shape": "lanceolate", "teeth": 40, "seed": 5}
 	],
 	"obstacles": [],
 	"scenery": [
-		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.2,
-			"clear": [{"shape": "polyline", "points": [[540, 1700], [540, 700]], "width": 320}]}}
+		{
+			"scatter": {
+				"preset": "forest_floor",
+				"blocking": false,
+				"density": 1.2,
+				"clear": [{"shape": "polyline", "points": [[540, 1700], [540, 700]], "width": 320}]
+			}
+		}
 	]
 }

@@ -35,6 +35,10 @@ var species: Dictionary[String, Resource] = {}
 ## "nest:basic_nest", "item:crumb". The simulation never reads these; only
 ## the render layer does.
 var renderers: Dictionary[String, Script] = {}
+## Scenario editor schemas (FieldSpecs) keyed by "<kind>:<id>", e.g.
+## "food:food_pile", "nest:basic_nest" (see ScenarioSchema). Editor metadata only;
+## the simulation never reads these.
+var schemas: Dictionary[String, RefCounted] = {}
 ## Names of species modules loaded by discover_modules(), in load order.
 var loaded_modules: PackedStringArray = []
 
@@ -48,6 +52,9 @@ static func create_default() -> Registry:
 
 func register_renderer(key: String, script: Script) -> bool:
 	return _add(renderers, "renderer", key, script)
+
+func register_schema(id: String, spec: RefCounted) -> bool:
+	return _add(schemas, "schema", id, spec)
 
 func register_behaviour(id: String, behaviour: Behaviour) -> bool:
 	return _add(behaviours, "behaviour", id, behaviour)

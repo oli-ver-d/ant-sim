@@ -1,0 +1,36 @@
+# Keys the code reads from dictionaries that are not scenario data, for
+# tests/test_scenario_schema.gd. One line per entry:
+#     <res:// script path> <key | *> [<key> ...]    # why
+
+# Core
+res://sim/colony.gd usage carry_corpse    # property-list usage flag; behaviour state id looked up by name
+res://sim/core_module.gd corpse brood_corpse crumb    # registry ids of item types and refuse kinds
+res://sim/simulation.gd nests ants pheromones start keep    # profile_usec timers; internal shower dictionary
+res://sim/router.gd *    # route params SimLayer.route callers pass in code
+res://render/rain_renderer.gd start    # reads the Simulation's internal shower dictionary
+res://render/presentation.gd caption outline    # internal STYLES table (style id and outline width)
+res://render/bridge_renderer.gd rot texture at    # internal twig records
+
+# Nests: behaviour and role names, flags and job tags set in code
+res://sim/nests/alates.gd alate    # behaviour name
+res://sim/nests/brood.gd care    # set by ColonyNest, not by the scenario
+res://sim/nests/colony_nest.gd care nest_role carry_spoil nurse tend_queen    # brood care flag set in code, behaviour names
+res://sim/nests/highways.gd widen highway    # job tags set in code
+res://sim/nests/nest_type.gd carry_corpse    # behaviour name
+res://species/harvester/granary_nest.gd tend_granary nurse tend_queen    # role / behaviour names
+res://species/leafcutter/fungus_nest.gd garden nurse tend_queen    # role / behaviour names
+res://species/harvester/tend_granary.gd nurse    # nest role name
+res://species/leafcutter/garden.gd nurse    # nest role name
+
+# Scenery: geometry and look dictionaries built by the code
+res://sim/scenery/log.gd dir point widths    # geometry dictionaries built by the code
+res://sim/scenery/plant.gd phase point angle widths    # blade geometry dictionaries
+res://sim/scenery/prop_type.gd wall parts    # internal prop params / footprint parts
+res://sim/scenery/rock.gd wall    # internal: the obstacle a rock-look wall dresses
+res://sim/scenery/scenery.gd wall    # internal: same
+res://sim/scenery/scatter.gd rosette nests portals seen targets    # values of avoid/kind, reachability results
+res://render/scenery/canopy_renderer.gd start reach widths heights phase teeth follow_ant    # rain shower, blade geometry, camera property
+res://render/scenery/log_look.gd axes widths    # prop.detail geometry
+res://render/scenery/prop_baker.gd image    # baked image dictionary
+res://render/scenery/rock_look.gd half granite warm grain dark light    # prop.detail and stone palette entries
+res://render/scenery/scenery_renderer.gd body body_rect shadow shadow_rect    # baked sprite dictionaries

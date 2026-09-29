@@ -7,9 +7,24 @@
 		"base": "soil",
 		"regions": [
 			{"material": "gravel", "shape": "rect", "rect": [0, 900, 1080, 560], "soft": 140, "ragged": 90},
-			{"material": "sand", "shape": "rect", "rect": [0, 900, 1080, 560], "soft": 140, "ragged": 90, "noise": {"scale": 300, "cover": 0.45, "soft": 0.6}, "strength": 0.6},
+			{
+				"material": "sand",
+				"shape": "rect",
+				"rect": [0, 900, 1080, 560],
+				"soft": 140,
+				"ragged": 90,
+				"noise": {"scale": 300, "cover": 0.45, "soft": 0.6},
+				"strength": 0.6
+			},
 			{"material": "litter", "shape": "rect", "rect": [0, 0, 1080, 900], "soft": 140, "noise": {"scale": 220, "cover": 0.4}},
-			{"material": "moss", "shape": "rect", "rect": [0, 0, 1080, 900], "soft": 140, "noise": {"scale": 160, "cover": 0.25, "soft": 0.5}, "strength": 0.8}
+			{
+				"material": "moss",
+				"shape": "rect",
+				"rect": [0, 0, 1080, 900],
+				"soft": 140,
+				"noise": {"scale": 160, "cover": 0.25, "soft": 0.5},
+				"strength": 0.8
+			}
 		]
 	},
 	"colonies": [
@@ -30,31 +45,36 @@
 		{"shape": "polyline", "points": [[270, 1420], [800, 1420]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[870, 1420], [1100, 1420]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[540, 1420], [540, 1320]], "width": 16, "look": "rock"},
-
 		{"shape": "polyline", "points": [[-20, 1180], [120, 1180]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[190, 1180], [620, 1180]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[690, 1180], [1100, 1180]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[360, 1180], [360, 1290]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[860, 1180], [860, 1080]], "width": 16, "look": "rock"},
-
 		{"shape": "polyline", "points": [[-20, 940], [300, 940]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[370, 940], [960, 940]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[1030, 940], [1100, 940]], "width": 16, "look": "rock"},
 		{"shape": "polyline", "points": [[560, 940], [560, 1060]], "width": 16, "look": "rock"}
 	],
 	"scenery": [
-		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.6, "rect": [0, 0, 1080, 900],
-			"clear": [{"shape": "circle", "center": [560, 800], "radius": 200}]}},
+		{
+			"scatter": {
+				"preset": "meadow",
+				"blocking": false,
+				"density": 0.6,
+				"rect": [0, 0, 1080, 900],
+				"clear": [{"shape": "circle", "center": [560, 800], "radius": 200}]
+			}
+		},
 		{"scatter": {"preset": "rocky", "blocking": false, "density": 1.5, "rect": [0, 1440, 1080, 480]}}
 	],
 	"warmup": 60,
 	"ticks_per_frame": [
-		{"t": 0, "tpf": 2.0},
-		{"t": 2, "tpf": 2.0},
-		{"t": 4, "tpf": 8.0},
-		{"t": 16, "tpf": 8.0},
-		{"t": 18, "tpf": 2.0},
-		{"t": 20, "tpf": 2.0}
+		{"t": 0, "tpf": 2},
+		{"t": 2, "tpf": 2},
+		{"t": 4, "tpf": 8},
+		{"t": 16, "tpf": 8},
+		{"t": 18, "tpf": 2},
+		{"t": 20, "tpf": 2}
 	],
 	"camera": [
 		{"t": 0, "pos": [540, 1060], "zoom": 1.25},

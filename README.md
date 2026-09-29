@@ -406,7 +406,21 @@ JSON files in `scenarios/`. Simulation content:
   the species' own, e.g. `"granary_nest"`), optional `release_per_second`
   (ants emerge gradually instead of all at once), optional `nest_params`
   and per-colony tweaks: `params` (SimConfig keys and species tunables), `state_params`
-  (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`).
+  (merged over the species' state wiring) and `channels` (`{"home": {"half_life": 60}}`;
+  keys `half_life`, `diffusion`, `cap` (10), `reinforce` (0.1), `color`, `render_intensity`
+  (1, overlay brightness)).
+  `state_params` are per state; each state reads only its own keys. Channels (named by the
+  species' channel): `follow_channel`, `lay_channel`, `avoid_channel`, `trail_channel` (the
+  trail debris is carried off to, `clear_debris`). Steering: `home_bias`, `home_cone_deg`,
+  `speed_factor`, `turn_around` (true: turn back on entering `follow_trail`). Timing:
+  `give_up_after`, `timeout`, `duration`, `stint`, `retarget_interval` (0.5 s, `go_to_food`),
+  `dig_time` (2.5), `gather_time` (1.8), `sort_time` (3, `tend_granary`), `cut_time` (1.6),
+  `plant_time` (1), `weed_time` (1.8), `pulp_mass` (0.5 per cut times `carry_capacity`;
+  `garden`). Geometry: `radius` (`linger`), `spoil_spread` (22, `carry_spoil`). Transitions
+  (state ids): `next`, `on_arrive`, `on_timeout`, `on_give_up`, `on_food`, `on_lost`,
+  `on_pickup`, `on_cut`, `on_missed`, `on_done`, `on_none`, `on_idle`, `on_spoil`, `on_waste`,
+  `on_debris`, `on_ride`, `on_dismount`, `hitchhiker`, `stayer`. The editor schema
+  (`editor/schema/behaviour_schema.gd`) says which state reads which.
   `nest_params.entrance` sets how the entrances look (render only): `{"style": "crater",
   "clear_radius": 90, "clears_plants": true}`; styles `hole` (basic nests), `crater`
   (harvesters, who also clear plants and litter from a disc as wide as their `disc_radius`),
@@ -416,7 +430,8 @@ JSON files in `scenarios/`. Simulation content:
   `scatter`); `"dump": [dx, dy]` (an offset from the nest) fixes one site instead. `params.worker_lifespan` (simulated seconds, 0 = never) makes
   workers die of age and be carried to the midden, `params.brood_corpses` leaves starved
   larvae (see Refuse and Corpses above)
-- `food`: type + type-specific params
+- `food`: type + type-specific params; every type also takes `pos`, `rotation` (degrees) and
+  `sense_radius` (default 60: how far beyond its edge an ant senses the source)
 - `obstacles`: polyline walls, rects, circles, polygons; `"kind": "water"` for water;
   `"kind": "bridge"` on a polyline lays a walkable strip over water or walls, drawn as a twig;
   `"look": "rock"` on a wall draws it as a rock prop (optional `"stone"`, `"lichen"`, `"moss"`)
@@ -464,10 +479,24 @@ JSON files in `scenarios/`. Simulation content:
 - `events`: timed (simulated seconds): `spawn_food`, `add_obstacle`, `remove_obstacle`,
   `add_scenery`, `remove_scenery` (by `"name"` or `"at": [x, y]`), `add_colony`, `rain` (`area`
   rect or circle, whole world if omitted; `wash_half_life` makes
-  trails fade over a moment instead of vanishing), `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
-  lands on the strongest spots of a trail, wherever it emerged), `nuptial_flight`
+  trails fade over a moment instead of vanishing), `drop_debris` (with `"scatter": {"count": 5, "near": [x, y], "radius": 150, "min_spacing": 25,
+  "types": ["twig", "pebble"], "on_channel": "c0.food"}` debris lands on the strongest spots of
+  that channel's trail, wherever it emerged; `min_spacing` is the least distance between
+  pieces), `nuptial_flight`
   (`"colony": n`, or every colony; nests raising alates send them up to fly, see "Alates and
   the nuptial flight"); see `sim/scenario_events.gd`
+
+- `output`: `{"size": [w, h], "safe_zones": "tiktok" | "youtube_shorts" | "none"}`, the output
+  frame and the safe-zone guides. Read by the editor schema now; takes effect in M16b (absent
+  = 1080x1920, `tiktok`)
+
+Every option is described by the editor schema: `editor/schema/` for the core format and
+`species/<name>/schema.gd` for species options (registered with `Registry.register_schema`).
+`tests/test_scenario_schema.gd` fails if code reads a scenario key the schema lacks
+(non-scenario keys go in `tests/fixtures/schema_ignored_keys.txt`), so a new option must be
+added to the schema in the same change. Scenarios are saved in the `ScenarioJson` style (tabs,
+whole numbers as ints, entries on one line up to 140 columns, top-level lists one entry per
+line); `tests/test_scenario_doc.gd` checks every shipped file is already in that format.
 
 Playback (video) settings:
 - `duration`: video length in seconds
@@ -754,7 +783,9 @@ in `/sim` or `/render`.
   parasitoid flies that hover round carriers of leaf fragments on the surface and dive at
   their heads. A carrier with a minim hitchhiking on its fragment is guarded: the fly veers
   off before it gets there. An unguarded one is hit, up to `dives` times, before the fly moves
-  on to the nearest other carrier in `reach` (one no other fly is after, if it can; a fly
+  on to the nearest other carrier in `reach` (`clear`, 90: carriers this near the entrance are
+  left alone; `item`, `"leaf_fragment"`: the carried type they go for; `seed`: their drawing
+  seed; one no other fly is after, if it can; a fly
   can't tell a guarded carrier until it dives), or flies off when there is none. Carriers
   within `clear` of the nest entrance are left alone. `PhoridFlies` moves them from sim state each frame with its own random numbers
   (catching up after a fast-forward), so they never change a hash. Params (defaults): `count`

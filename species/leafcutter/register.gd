@@ -6,7 +6,10 @@ extends RefCounted
 ## underground with its queen, brood and gardens), and phorid flies over
 ## the leaf line (drawn only: PhoridFlies).
 
+const Schema = preload("res://species/leafcutter/schema.gd")
+
 func register(registry: Registry) -> void:
+	Schema.register(registry)
 	registry.register_species("leafcutter", preload("res://species/leafcutter/leafcutter.tres"))
 	registry.register_behaviour("cut_leaf", CutLeafBehaviour.new())
 	registry.register_behaviour("assign_role", AssignRoleBehaviour.new())

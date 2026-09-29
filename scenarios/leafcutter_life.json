@@ -18,14 +18,44 @@
 				"max_chambers": 30,
 				"max_population": 6000,
 				"entrances": {"at": [900, 2200], "spacing": 150},
-				"brood_rate": 0.006, "digest_rate": 0.03, "garden_reserve": 0,
+				"brood_rate": 0.006,
+				"digest_rate": 0.03,
+				"garden_reserve": 0,
 				"brood_reserve": 8,
 				"underground": {"size": [1400, 1400], "open": false, "royal_radius": 40, "garden_life": 1500},
-				"brood": {"lay_interval": 1.2, "egg": 30, "larva": 60, "pupa": 40, "callow": 5, "max_brood": 700,
-					"first_workers": 6, "brood_per_worker": 1.2, "initial": {"egg": 3, "larva": 3, "pupa": 3}},
-				"founding": {"landing": {"from": [300, 700], "land": [520, 1040], "altitude": 260, "flight": 7, "shed": 5, "loop_radius": 10, "dig": 12}},
-				"alates": {"from_population": 150, "count": 14, "castes": {"gyne": 1, "male": 2}, "stagger": 0.4, "gather": 20, "every": 1.1, "climb": 6, "escort": 12,
-					"drift": [0.35, -1]}
+				"brood": {
+					"lay_interval": 1.2,
+					"egg": 30,
+					"larva": 60,
+					"pupa": 40,
+					"callow": 5,
+					"max_brood": 700,
+					"first_workers": 6,
+					"brood_per_worker": 1.2,
+					"initial": {"egg": 3, "larva": 3, "pupa": 3}
+				},
+				"founding": {
+					"landing": {
+						"from": [300, 700],
+						"land": [520, 1040],
+						"altitude": 260,
+						"flight": 7,
+						"shed": 5,
+						"loop_radius": 10,
+						"dig": 12
+					}
+				},
+				"alates": {
+					"from_population": 150,
+					"count": 14,
+					"castes": {"gyne": 1, "male": 2},
+					"stagger": 0.4,
+					"gather": 20,
+					"every": 1.1,
+					"climb": 6,
+					"escort": 12,
+					"drift": [0.35, -1]
+				}
 			}
 		}
 	],
@@ -37,19 +67,61 @@
 		]
 	},
 	"scenery": [
-		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.3,
-			"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]}},
-		{"scatter": {"preset": "meadow", "blocking": false, "density": 1.6,
-			"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]}}
+		{
+			"scatter": {
+				"preset": "forest_floor",
+				"blocking": false,
+				"density": 1.3,
+				"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]
+			}
+		},
+		{
+			"scatter": {
+				"preset": "meadow",
+				"blocking": false,
+				"density": 1.6,
+				"clear": [{"shape": "polyline", "points": [[540, 1060], [540, 300]], "width": 150}]
+			}
+		}
 	],
 	"max_agents": {"surface": 900, "nest": 700},
 	"food": [
 		{"type": "leaf", "pos": [610, 880], "rotation": -25, "length": 250, "width": 120, "shape": "elliptic", "teeth": 24, "seed": 3}
 	],
 	"events": [
-		{"t": 700, "type": "spawn_food", "food": {"type": "leaf", "pos": [800, 1300], "rotation": -55, "length": 320, "width": 140, "shape": "lanceolate", "teeth": 24, "seed": 30}},
-		{"t": 900, "type": "spawn_food", "food": {"type": "leaf", "pos": [540, 520], "rotation": 0, "length": 420, "width": 200, "shape": "elliptic", "teeth": 34, "seed": 57}},
-		{"t": 2150, "type": "drop_debris", "scatter": {"count": 9, "near": [545, 790], "radius": 150, "on_channel": "c0.food", "min_spacing": 40}},
+		{
+			"t": 700,
+			"type": "spawn_food",
+			"food": {
+				"type": "leaf",
+				"pos": [800, 1300],
+				"rotation": -55,
+				"length": 320,
+				"width": 140,
+				"shape": "lanceolate",
+				"teeth": 24,
+				"seed": 30
+			}
+		},
+		{
+			"t": 900,
+			"type": "spawn_food",
+			"food": {
+				"type": "leaf",
+				"pos": [540, 520],
+				"rotation": 0,
+				"length": 420,
+				"width": 200,
+				"shape": "elliptic",
+				"teeth": 34,
+				"seed": 57
+			}
+		},
+		{
+			"t": 2150,
+			"type": "drop_debris",
+			"scatter": {"count": 9, "near": [545, 790], "radius": 150, "on_channel": "c0.food", "min_spacing": 40}
+		},
 		{"t": 2172, "type": "nuptial_flight", "colony": 0}
 	],
 	"warmup": 0,
@@ -122,7 +194,7 @@
 			{"t": 66.9, "pos": [521, 875], "zoom": 4.6},
 			{"t": 67.4, "follow": {"near": [519, 872], "state": "cut_leaf", "across": true}, "zoom": 5.5, "smoothing": 0.7},
 			{"t": 70.5, "follow": {"ant": "same", "across": true}, "zoom": 4.8, "smoothing": 0.7},
-			{"t": 75.5, "pos": [540, 1040], "zoom": 3.0},
+			{"t": 75.5, "pos": [540, 1040], "zoom": 3},
 			{"t": 137.9, "pos": [540, 880], "zoom": 2.7},
 			{"t": 138, "pos": [540, 880], "zoom": 2.7},
 			{"t": 141.5, "pos": [500, 740], "zoom": 2.9},
@@ -132,10 +204,10 @@
 			{"t": 148.5, "pos": [475, 780], "zoom": 3.4},
 			{"t": 150, "follow": {"near": [462, 770], "state": "hitchhike"}, "zoom": 4.5, "smoothing": 0.8},
 			{"t": 154.3, "follow": {"ant": "same"}, "zoom": 4.5, "smoothing": 0.8},
-			{"t": 155, "pos": [470, 1100], "zoom": 3.0},
-			{"t": 155.3, "pos": [470, 1100], "zoom": 3.0},
-			{"t": 156, "follow": {"near": [480, 1110], "state": "carry_corpse"}, "zoom": 3.5, "smoothing": 1.0},
-			{"t": 163.2, "follow": {"ant": "same"}, "zoom": 3.5, "smoothing": 1.0},
+			{"t": 155, "pos": [470, 1100], "zoom": 3},
+			{"t": 155.3, "pos": [470, 1100], "zoom": 3},
+			{"t": 156, "follow": {"near": [480, 1110], "state": "carry_corpse"}, "zoom": 3.5, "smoothing": 1},
+			{"t": 163.2, "follow": {"ant": "same"}, "zoom": 3.5, "smoothing": 1},
 			{"t": 163.9, "pos": [540, 1060], "zoom": 5.5},
 			{"t": 164, "pos": [540, 1060], "zoom": 5.5},
 			{"t": 172, "pos": [540, 1060], "zoom": 5.5},
@@ -173,18 +245,32 @@
 			{"t": 133, "follow": {"ant": "same"}, "zoom": 10, "smoothing": 0.8},
 			{"t": 137.8, "follow": {"ant": "same"}, "zoom": 10, "smoothing": 0.8},
 			{"t": 155, "pos": [700, 700], "zoom": 3},
-			{"t": 156, "follow": {"near": [690, 705], "state": "carry_spent"}, "zoom": 5, "smoothing": 1.0},
+			{"t": 156, "follow": {"near": [690, 705], "state": "carry_spent"}, "zoom": 5, "smoothing": 1},
 			{"t": 163.9, "pos": [720, 640], "zoom": 5},
 			{"t": 164, "pos": [720, 640], "zoom": 5},
-			{"t": 165.5, "follow": {"near": [720, 640], "state": "alate"}, "zoom": 5.5, "smoothing": 1.0},
-			{"t": 172, "follow": {"ant": "same"}, "zoom": 5.5, "smoothing": 1.0}
+			{"t": 165.5, "follow": {"near": [720, 640], "state": "alate"}, "zoom": 5.5, "smoothing": 1},
+			{"t": 172, "follow": {"ant": "same"}, "zoom": 5.5, "smoothing": 1}
 		]
 	},
 	"render": {
 		"pheromone_opacity": 0.3,
-		"layout": {"mode": "split", "colony": 0, "surface": "top", "ratio": 0.42, "stats": false, "highlight": false,
-			"modes": [{"t": 0, "mode": "surface"}, {"t": 21.1, "mode": "nest"}, {"t": 48.5, "mode": "split"}, {"t": 75, "mode": "nest"},
-				{"t": 138, "mode": "surface"}, {"t": 155, "mode": "split"}, {"t": 172, "mode": "surface"}]},
+		"layout": {
+			"mode": "split",
+			"colony": 0,
+			"surface": "top",
+			"ratio": 0.42,
+			"stats": false,
+			"highlight": false,
+			"modes": [
+				{"t": 0, "mode": "surface"},
+				{"t": 21.1, "mode": "nest"},
+				{"t": 48.5, "mode": "split"},
+				{"t": 75, "mode": "nest"},
+				{"t": 138, "mode": "surface"},
+				{"t": 155, "mode": "split"},
+				{"t": 172, "mode": "surface"}
+			]
+		},
 		"story_marker": [
 			{"t": 34, "until": 38.3},
 			{"t": 39.5, "until": 45.5},
@@ -233,32 +319,53 @@
 			{"t": 191, "until": 195.5, "text": "And the cycle starts again."}
 		],
 		"fades": [
-			{"t": 0, "to": 1}, {"t": 1.5, "to": 0},
-			{"t": 20.3, "to": 0}, {"t": 21, "to": 1}, {"t": 21.2, "to": 1}, {"t": 22, "to": 0},
-			{"t": 37.8, "to": 0}, {"t": 38.5, "to": 1}, {"t": 39.3, "to": 0},
-			{"t": 47.9, "to": 0}, {"t": 48.5, "to": 0.85}, {"t": 49.1, "to": 0},
-			{"t": 74.4, "to": 0}, {"t": 75, "to": 0.85}, {"t": 75.6, "to": 0},
-			{"t": 93.3, "to": 0}, {"t": 94, "to": 1}, {"t": 94.8, "to": 0},
-			{"t": 137.3, "to": 0}, {"t": 138, "to": 1}, {"t": 139, "to": 0},
-			{"t": 154.4, "to": 0}, {"t": 155, "to": 1}, {"t": 155.7, "to": 0},
-			{"t": 163.3, "to": 0}, {"t": 164, "to": 1}, {"t": 164.8, "to": 0},
-			{"t": 171.4, "to": 0}, {"t": 172, "to": 0.85}, {"t": 172.6, "to": 0},
-			{"t": 195.5, "to": 0}, {"t": 198, "to": 1}
+			{"t": 0, "to": 1},
+			{"t": 1.5, "to": 0},
+			{"t": 20.3, "to": 0},
+			{"t": 21, "to": 1},
+			{"t": 21.2, "to": 1},
+			{"t": 22, "to": 0},
+			{"t": 37.8, "to": 0},
+			{"t": 38.5, "to": 1},
+			{"t": 39.3, "to": 0},
+			{"t": 47.9, "to": 0},
+			{"t": 48.5, "to": 0.85},
+			{"t": 49.1, "to": 0},
+			{"t": 74.4, "to": 0},
+			{"t": 75, "to": 0.85},
+			{"t": 75.6, "to": 0},
+			{"t": 93.3, "to": 0},
+			{"t": 94, "to": 1},
+			{"t": 94.8, "to": 0},
+			{"t": 137.3, "to": 0},
+			{"t": 138, "to": 1},
+			{"t": 139, "to": 0},
+			{"t": 154.4, "to": 0},
+			{"t": 155, "to": 1},
+			{"t": 155.7, "to": 0},
+			{"t": 163.3, "to": 0},
+			{"t": 164, "to": 1},
+			{"t": 164.8, "to": 0},
+			{"t": 171.4, "to": 0},
+			{"t": 172, "to": 0.85},
+			{"t": 172.6, "to": 0},
+			{"t": 195.5, "to": 0},
+			{"t": 198, "to": 1}
 		],
 		"grade": [
-			{"t": 0, "tint": [1.0, 0.93, 0.85], "brightness": 1.08, "saturation": 0.95, "vignette": 0.3},
-			{"t": 20.9, "tint": [1.0, 0.93, 0.85], "brightness": 1.08, "saturation": 0.95, "vignette": 0.3},
-			{"t": 21.1, "tint": [0.97, 0.95, 1.0], "brightness": 1.02, "saturation": 0.92, "vignette": 0.36},
-			{"t": 47.9, "tint": [0.97, 0.95, 1.0], "brightness": 1.02, "saturation": 0.92, "vignette": 0.36},
+			{"t": 0, "tint": [1, 0.93, 0.85], "brightness": 1.08, "saturation": 0.95, "vignette": 0.3},
+			{"t": 20.9, "tint": [1, 0.93, 0.85], "brightness": 1.08, "saturation": 0.95, "vignette": 0.3},
+			{"t": 21.1, "tint": [0.97, 0.95, 1], "brightness": 1.02, "saturation": 0.92, "vignette": 0.36},
+			{"t": 47.9, "tint": [0.97, 0.95, 1], "brightness": 1.02, "saturation": 0.92, "vignette": 0.36},
 			{"t": 48.9, "tint": [1.05, 0.98, 0.9], "brightness": 1.08, "saturation": 0.98, "vignette": 0.3},
 			{"t": 74.5, "tint": [1.05, 0.98, 0.9], "brightness": 1.08, "saturation": 0.98, "vignette": 0.3},
-			{"t": 75.5, "tint": [1.0, 0.97, 0.94], "brightness": 1.0, "saturation": 0.95, "vignette": 0.36},
-			{"t": 137.5, "tint": [1.0, 0.97, 0.94], "brightness": 1.0, "saturation": 0.95, "vignette": 0.36},
-			{"t": 138.5, "tint": [1.02, 1.0, 0.96], "brightness": 1.04, "saturation": 1.05, "vignette": 0.25},
-			{"t": 154.5, "tint": [1.02, 1.0, 0.96], "brightness": 1.04, "saturation": 1.05, "vignette": 0.25},
-			{"t": 155.2, "tint": [1.05, 0.98, 0.9], "brightness": 1.0, "saturation": 1.0, "vignette": 0.3},
-			{"t": 163.5, "tint": [1.05, 0.98, 0.9], "brightness": 1.0, "saturation": 1.0, "vignette": 0.3},
-			{"t": 164.2, "tint": [1.0, 0.88, 0.75], "brightness": 1.06, "saturation": 0.95, "vignette": 0.32},
+			{"t": 75.5, "tint": [1, 0.97, 0.94], "brightness": 1, "saturation": 0.95, "vignette": 0.36},
+			{"t": 137.5, "tint": [1, 0.97, 0.94], "brightness": 1, "saturation": 0.95, "vignette": 0.36},
+			{"t": 138.5, "tint": [1.02, 1, 0.96], "brightness": 1.04, "saturation": 1.05, "vignette": 0.25},
+			{"t": 154.5, "tint": [1.02, 1, 0.96], "brightness": 1.04, "saturation": 1.05, "vignette": 0.25},
+			{"t": 155.2, "tint": [1.05, 0.98, 0.9], "brightness": 1, "saturation": 1, "vignette": 0.3},
+			{"t": 163.5, "tint": [1.05, 0.98, 0.9], "brightness": 1, "saturation": 1, "vignette": 0.3},
+			{"t": 164.2, "tint": [1, 0.88, 0.75], "brightness": 1.06, "saturation": 0.95, "vignette": 0.32},
 			{"t": 198, "tint": [0.96, 0.8, 0.72], "brightness": 0.92, "saturation": 0.9, "vignette": 0.4}
 		]
 	}

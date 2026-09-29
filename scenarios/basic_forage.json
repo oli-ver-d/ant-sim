@@ -13,11 +13,7 @@
 		]
 	},
 	"colonies": [
-		{
-			"species": "leafcutter",
-			"nest": [540, 1500],
-			"population": {"minim": 50, "media": 250, "major": 20}
-		}
+		{"species": "leafcutter", "nest": [540, 1500], "population": {"minim": 50, "media": 250, "major": 20}}
 	],
 	"food": [
 		{"type": "food_pile", "pos": [300, 520], "radius": 28, "amount": 400},
@@ -28,10 +24,16 @@
 		{"shape": "circle", "center": [220, 1250], "radius": 60, "kind": "water"}
 	],
 	"scenery": [
-		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.8,
-			"clear": [
-				{"shape": "polyline", "points": [[540, 1500], [330, 1050], [300, 520]], "width": 260},
-				{"shape": "polyline", "points": [[540, 1500], [760, 1050], [820, 800]], "width": 260}
-			]}}
+		{
+			"scatter": {
+				"preset": "meadow",
+				"blocking": false,
+				"density": 0.8,
+				"clear": [
+					{"shape": "polyline", "points": [[540, 1500], [330, 1050], [300, 520]], "width": 260},
+					{"shape": "polyline", "points": [[540, 1500], [760, 1050], [820, 800]], "width": 260}
+				]
+			}
+		}
 	]
 }

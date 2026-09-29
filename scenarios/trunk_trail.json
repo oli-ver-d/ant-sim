@@ -29,17 +29,27 @@
 		{"type": "pebble", "pos": [760, 1250]}
 	],
 	"scenery": [
-		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.2,
-			"clear": [{"shape": "polyline", "points": [[540, 1420], [575, 1030], [600, 560]], "width": 300}]}}
+		{
+			"scatter": {
+				"preset": "forest_floor",
+				"blocking": false,
+				"density": 1.2,
+				"clear": [{"shape": "polyline", "points": [[540, 1420], [575, 1030], [600, 560]], "width": 300}]
+			}
+		}
 	],
 	"events": [
-		{"t": 104, "type": "drop_debris", "scatter": {"count": 9, "near": [575, 1030], "radius": 200, "on_channel": "c0.food", "min_spacing": 40}}
+		{
+			"t": 104,
+			"type": "drop_debris",
+			"scatter": {"count": 9, "near": [575, 1030], "radius": 200, "on_channel": "c0.food", "min_spacing": 40}
+		}
 	],
 	"ticks_per_frame": [
 		{"t": 0, "tpf": 0.5},
 		{"t": 2, "tpf": 0.5},
-		{"t": 3.5, "tpf": 1.0},
-		{"t": 20, "tpf": 1.0}
+		{"t": 3.5, "tpf": 1},
+		{"t": 20, "tpf": 1}
 	],
 	"camera": [
 		{"t": 0, "pos": [570, 1060], "zoom": 2.2},

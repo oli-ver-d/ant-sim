@@ -12,32 +12,72 @@
 		]
 	},
 	"colonies": [
-		{
-			"species": "leafcutter",
-			"nest": [540, 1250],
-			"population": {"minim": 30, "media": 110, "major": 10},
-			"release_per_second": 30
-		}
+		{"species": "leafcutter", "nest": [540, 1250], "population": {"minim": 30, "media": 110, "major": 10}, "release_per_second": 30}
 	],
 	"food": [
 		{"type": "leaf", "pos": [330, 820], "rotation": -30, "length": 300, "width": 140, "shape": "elliptic", "teeth": 26, "seed": 3},
 		{"type": "leaf", "pos": [800, 900], "rotation": 40, "length": 280, "width": 120, "shape": "lanceolate", "teeth": 22, "seed": 8}
 	],
 	"scenery": [
-		{"scatter": {"preset": "forest_floor", "blocking": false, "density": 1.5,
-			"clear": [
-				{"shape": "circle", "center": [600, 720], "radius": 200},
-				{"shape": "circle", "center": [260, 1560], "radius": 190},
-				{"shape": "circle", "center": [840, 1500], "radius": 190},
-				{"shape": "polyline", "points": [[330, 820], [540, 1250], [800, 900]], "width": 220},
-				{"shape": "polyline", "points": [[600, 720], [540, 1250]], "width": 220},
-				{"shape": "polyline", "points": [[260, 1560], [540, 1250], [840, 1500]], "width": 220}
-			]}}
+		{
+			"scatter": {
+				"preset": "forest_floor",
+				"blocking": false,
+				"density": 1.5,
+				"clear": [
+					{"shape": "circle", "center": [600, 720], "radius": 200},
+					{"shape": "circle", "center": [260, 1560], "radius": 190},
+					{"shape": "circle", "center": [840, 1500], "radius": 190},
+					{"shape": "polyline", "points": [[330, 820], [540, 1250], [800, 900]], "width": 220},
+					{"shape": "polyline", "points": [[600, 720], [540, 1250]], "width": 220},
+					{"shape": "polyline", "points": [[260, 1560], [540, 1250], [840, 1500]], "width": 220}
+				]
+			}
+		}
 	],
 	"events": [
-		{"t": 300, "type": "spawn_food", "food": {"type": "leaf", "pos": [600, 720], "rotation": 10, "length": 360, "width": 170, "shape": "elliptic", "teeth": 30, "seed": 12}},
-		{"t": 600, "type": "spawn_food", "food": {"type": "leaf", "pos": [260, 1560], "rotation": 70, "length": 320, "width": 150, "shape": "elliptic", "teeth": 28, "seed": 21}},
-		{"t": 800, "type": "spawn_food", "food": {"type": "leaf", "pos": [840, 1500], "rotation": -55, "length": 320, "width": 140, "shape": "lanceolate", "teeth": 24, "seed": 30}}
+		{
+			"t": 300,
+			"type": "spawn_food",
+			"food": {
+				"type": "leaf",
+				"pos": [600, 720],
+				"rotation": 10,
+				"length": 360,
+				"width": 170,
+				"shape": "elliptic",
+				"teeth": 30,
+				"seed": 12
+			}
+		},
+		{
+			"t": 600,
+			"type": "spawn_food",
+			"food": {
+				"type": "leaf",
+				"pos": [260, 1560],
+				"rotation": 70,
+				"length": 320,
+				"width": 150,
+				"shape": "elliptic",
+				"teeth": 28,
+				"seed": 21
+			}
+		},
+		{
+			"t": 800,
+			"type": "spawn_food",
+			"food": {
+				"type": "leaf",
+				"pos": [840, 1500],
+				"rotation": -55,
+				"length": 320,
+				"width": 140,
+				"shape": "lanceolate",
+				"teeth": 24,
+				"seed": 30
+			}
+		}
 	],
 	"warmup": 20,
 	"ticks_per_frame": [
@@ -47,6 +87,6 @@
 		{"t": 20, "tpf": 30}
 	],
 	"camera": [
-		{"t": 0, "pos": [540, 1060], "zoom": 1.0}
+		{"t": 0, "pos": [540, 1060], "zoom": 1}
 	]
 }

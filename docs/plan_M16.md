@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: not started; next M16a. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16a done; next M16b. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -171,6 +171,73 @@ finals, is still open and independent of M16; finish it first or in between phas
   - commands: set/insert/remove/move, then undo and redo, restore the exact data.
 - Hands on: the doc and schema APIs, the ignore list, and the keys found only by the
   code-coverage test (undocumented options; add them to the README format section).
+
+**Done (M16a).** What exists now:
+
+- `editor/schema/field_spec.gd` (`FieldSpec`): types `int float bool string enum vec2
+  size rect points color dict map list variant any_of raw`; constructors
+  `integer number boolean text choice vec2 size rect points color dict map list variant
+  any_of raw resolved`, chained `req() limits(lo, hi) describe() from_registry(src)
+  with_registry_variants(prefix)`; `matches(value)` picks `any_of` alternatives by JSON
+  shape (dicts by their required keys, variants by their tag). Schema files use
+  `const F = preload(".../field_spec.gd")` (a `const F := FieldSpec` is not constant).
+- `editor/schema/scenario_schema.gd` (`ScenarioSchema.new(registry)`): `root`,
+  `spec_at(data, path)` (resolved for the value there), `resolve`, `child_spec`,
+  `variant_spec`/`variant_names`, `schema_for(id)`, `ids_with_prefix`,
+  `choices_for(source, context)` (sources: `species food_types nest_types
+  scenery_types item_types refuse_kinds states castes channels params`; castes and
+  channels from `context["species"]`), `unknown_paths(data)`, `all_key_names()`,
+  `params_spec(colony)` (SimConfig exports + species tunables, introspected) and
+  `nest_params_spec(colony)` (`"nest:<nest_type or species' nest type>"`).
+- Schema content: `CoreSchema` (root, colony, food variant + `food_common`/`food_type`,
+  `food:food_pile`, ticks_per_frame incl. `jump`, camera keyframes or
+  `{surface, nest}` tracks, all `render` keys, `output`, the 9 event types),
+  `ScenerySchema` (obstacles, ground, scenery props `scenery:rock|log|plant|grass`,
+  scatter, debris), `NestSchema` (`nest:basic_nest`, `colony_nest()`,
+  `colony_underground()`, `extend(base, extra)`), `BehaviourSchema` (`state_params`:
+  one union dict of every state key for all states; `channels`). Species:
+  `species/<name>/schema.gd` (no class_name, preloaded by `register.gd`) register
+  `nest:fungus_nest` (incl. `phorids`), `food:leaf`, `nest:seed_nest`,
+  `nest:granary_nest`, `food:seed_pile` via the new `Registry.register_schema`
+  (`Registry.schemas`, typed `RefCounted` so `sim/` doesn't depend on `editor/`).
+- `editor/scenario_json.gd` (`ScenarioJson`): `parse`/`load_file` (key order kept),
+  `stringify`/`save_file`, `inline`, `number`. Style: tabs, whole numbers as ints,
+  shortest round-tripping decimals, a container on one line if it fits in 140 columns
+  (tab = 4), top level one key per line, top-level lists of entries one per line.
+- `editor/scenario_doc.gd` (`ScenarioDoc`): `data`, `file_path`, `schema`,
+  `load_file`, `save`, `is_dirty`, `has_at`, `get_at`, commands `set_at` (creates
+  missing dicts), `remove_at` (dict key or list item; this is also the inspector's
+  "reset to default"), `insert_at`, `move_item`, `undo`/`redo` (`UndoRedo`),
+  `changed(path)` signal.
+- Tests: `tests/test_scenario_schema.gd` (code coverage per area, data coverage of
+  every shipped scenario and every species' defaults, a schema for every registered
+  nest/food/scenery type, ignore list still current, `spec_at` resolution) and
+  `tests/test_scenario_doc.gd` (round trip per scenario: same data, same text, same
+  state hash after 20 ticks; writer style; every command undone and redone exactly).
+  Ignore list: `tests/fixtures/schema_ignored_keys.txt` (`<path> <keys|*>  # why`).
+
+Changed from the plan:
+
+- Open question 1: the writer can't reproduce the hand wrapping, so **all shipped
+  scenarios were reformatted once** with `ScenarioJson` (data unchanged, checked by the
+  round-trip tests and the unchanged `test_layers`/`test_native` hashes). Re-saving an
+  unedited file now gives the same bytes.
+- Key order: the writer keeps the document's own key order instead of sorting by the
+  schema (sorting would have reordered every file); `ScenarioDoc` puts a *new* key
+  after the keys the schema lists before it.
+- Open question 2: schemas live in `editor/schema/` and `species/<name>/schema.gd`,
+  not in `static func schema()` on the type scripts, so `sim/` stays free of editor
+  classes.
+- The code coverage test checks key *names* against every name in the schema (not
+  paths), so a key under the wrong section would pass it; the data coverage test is
+  structural. `sim/router.gd` is ignored as a whole (route params come from code).
+- JSON numbers load as floats: compare saved/loaded docs as text, not with `==`
+  (Dictionary `==` tells 7 from 7.0).
+
+Next (M16b) needs: `CoreSchema.output()` already describes `output.size` /
+`output.safe_zones` (`tiktok`, `youtube_shorts`, `none`); when M16b adds landscape
+split options (`render.layout.surface` = `left`/`right`) or other presets, add them to
+`CoreSchema.render()`/`output()` in the same phase or `test_scenario_schema` fails.
 
 ### M16b: configurable output frame size (engine side, no editor)
 
@@ -392,4 +459,6 @@ finals, is still open and independent of M16; finish it first or in between phas
 
 ## Progress log
 
-(none yet)
+- M16a: schema (every option read by code; 3 schema areas filled by subagents against
+  the coverage tests), `ScenarioJson`, `ScenarioDoc`, shipped scenarios reformatted
+  once; README documents the options found only in code and the `output` section.
