@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16f done; next M16g. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16g done; next M16h. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -649,6 +649,67 @@ partial rebuilds, so play must build its own sim through `ScenarioPlayer.setup_d
   play `basic_forage` and `leafcutter_life` (split, captions) in the editor and
   screenshot.
 
+**Done (M16g).** What exists now:
+
+- `editor/timeline/timeline_model.gd` (`TimelineModel`, pure, written by a subagent):
+  `time_map(data, config)` → `TimeMap` (`points`, `jumps`, `warmup`, `tick_rate`, `duration`,
+  `config`; `tpf_at` = `ScenarioPlayer.ticks_per_frame_at`, `sim_time_at(video_t)` (warmup +
+  exact integral of the tpf ramps + jumps), `video_time_at(sim_t)` (exact inverse; a sim time
+  inside a jump maps to the jump; INF if never reached)); `tracks(data, map)` → always
+  `camera` (or `camera_surface` + `camera_nest`), `speed`, `layout`, `captions`, `fades`,
+  `grade`, `story_marker`, `events` (`{id, label, kind: points|spans|curve, clock, list,
+  items: [{path, t (video s), until, has_until, label, sim_t}]}`); `hit(track, t, tol)` (until
+  edge, then nearest t, then shortest span body); edits returning the whole new item:
+  `moved` (events get the sim time of the video time; spans keep their length), `resized`,
+  `new_item(track_id, data, t, map, extra)` → `{path, value, insert}` (insert=false sets a
+  whole new list, e.g. a number `ticks_per_frame` becomes `[{t: 0, tpf: old}, new]`),
+  `camera_key_here(center, view_world, frame, t)`, `tick_step`, `snap_time`.
+- `editor/timeline/timeline_panel.gd` (`TimelinePanel`, VBoxContainer): transport bar (Play /
+  Pause, Stop, speed 0.25–8x, time "video / duration (sim s)", seek progress bar, Key here,
+  Fit) and a drawn canvas (gutter labels, ruler, a row per track, tpf curve and jump marks,
+  spans with labels, point labels clipped to the next item, playhead). Testable input:
+  `press(at, double, shift)`, `motion`, `release` (ruler = playhead; item = select + drag;
+  span edge = resize; double click on empty row = `add_at(track_id, t)`), `delete_selected`,
+  `set_playhead(t, seek)`, `toggle_play`, `stop`. A drag is one `doc.set_at` on release. It
+  refreshes itself on `doc.changed`. Signals `select_requested(path)`, `play_view(on)`;
+  `key_here` Callable (set by the editor from the preview camera).
+- `editor/play_preview.gd` (`EditorPlay`, Control): a `ScenarioPlayer` (`setup_data` on a deep
+  copy) in a SubViewport of the output frame size, shown with a keep-aspect TextureRect.
+  `load_data`, `play`, `pause`, `speed`, `seek(t)` (forward from here, or rebuild when going
+  back; `SEEK_BUDGET_MS` of whole 1/60 s frames per editor frame), `seeking`,
+  `seek_progress`, `stop`, `step_until`; signals `time_changed`, `seek_done`, `stopped`.
+  Always whole video frames, so it matches a recording (tested: same state hash as a
+  frame-by-frame player).
+- `ScenarioEditor`: a VSplit with the timeline under everything; the static preview and play
+  view share the centre (`_show_play`); any doc change stops play; timeline selection goes
+  through `_on_canvas_select`; `--play=<s>` opens the play view paused there (screenshots
+  wait for the seek).
+- `EditorOutline`: a "Speed" section (when `ticks_per_frame` is a list) with its points, and
+  under Render rows for Captions, Fades, Grade, Story marker and Layout modes with their
+  items, so timeline items have outline rows (selection stays on the item).
+- Tests: `tests/test_timeline_model.gd` (subagent, 32: mapping incl. against a real player
+  with warmup, ramp and jump, tracks, hit, edits), `tests/test_timeline.gd` (panel ruler,
+  drag = one undo step, resize, event drag in video time, add incl. new lists and key here,
+  delete; play matches a frame-by-frame run and seeks back; editor: play view, edit stops
+  play, timeline selection), `test_editor_outline.gd` (timed rows).
+- Screenshots (windowed): basic_forage static with the timeline; basic_forage playing at 30 s
+  (trails); leafcutter_life playing at 20 s and 24 s (nest view, caption, dense tracks).
+
+Changed from the plan / found on the way:
+
+- Scrubbing while playing seeks on mouse release (dragging only moves the playhead line), so
+  a drag backwards rebuilds once, not on every mouse move.
+- Camera `follow`/`fit` variants and `ease` are edited in the inspector (the variant
+  selector from M16d); the timeline adds `pos` keys (Key here). No new schema keys.
+- Point labels overlap on dense tracks (leafcutter_life's cameras): each label is clipped to
+  the gap before the next item and dropped when under 24 px; zoom the ruler to read them.
+- Float equality of x positions hid labels (a point's own x recomputed differs by ~1e-5):
+  compare times, not pixels.
+
+Next (M16h) needs: the timeline's `playhead` is the "from playhead" start time for Run
+(`--at=`); `EditorPlay` is independent of the run/record processes. The run bar and Record
+dialog can sit in the timeline's transport bar or the menu bar.
+
 ### M16h: run and record from the editor
 
 - **Temp copy of the document.** Run and Record work on the current document even if
@@ -768,3 +829,7 @@ partial rebuilds, so play must build its own sim through `ScenarioPlayer.setup_d
   colony_founding 1651 / 915 / 370 / 36, harvester_founding 1261 / 558 / 272 / 36,
   leafcutter_life 1389 / 557 / 285 / 38, nuptial_flight 1412 / 503 / 258 / 34. (Before:
   every edit was a full build, WorldView setup ~33 ms of it.)
+- M16g: timeline panel (every timed list on one video-time ruler, events via the speed
+  schedule; select, drag, resize, add, delete, Key here) and play preview (a real
+  ScenarioPlayer in the output frame, seek with progress); `TimelineModel` (time mapping,
+  tracks, hit tests, edits) by a subagent.

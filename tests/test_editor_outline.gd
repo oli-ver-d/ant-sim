@@ -83,6 +83,21 @@ func test_camera_list_and_labels() -> void:
 	check_eq(labels.slice(labels.find("Camera"), labels.size()),
 			["Camera", "Camera 0: 0s pos 540,960", "Camera 1: 4s follow", "Camera 2: 8.5s fit", "Camera 3: 9s", "Camera 4: ?s"])
 
+## M16g: the speed schedule and the timed render lists have rows (the timeline
+## selects their items).
+func test_timed_rows() -> void:
+	var data := {"ticks_per_frame": [{"t": 0, "tpf": 0.5}, {"t": 40, "jump": 120}],
+			"render": {"captions": [{"t": 2, "text": "A queen lands\nat dusk"}], "fades": [{"t": 1}], "pheromones": false,
+			"layout": {"mode": "split", "modes": [{"t": 3, "mode": "nest"}]}}}
+	var rows := EditorOutline.build(data)
+	var labels := _labels(rows)
+	check_eq(labels.slice(0, 4), ["Scenario", "Speed", "Point 0: 0s tpf 0.5", "Point 1: 40s jump 120"])
+	check_eq(labels.slice(labels.find("Render"), labels.size()), ["Render", "Captions", "Caption 0: 2s A queen lands",
+			"Fades", "Fade 0: 1s", "Layout modes", "Mode 0: 3s nest"])
+	check_eq(rows[EditorOutline.row_for(rows, ["render", "captions", 0, "text"])]["path"], ["render", "captions", 0])
+	check_eq(rows[EditorOutline.row_for(rows, ["render", "layout", "modes", 0])]["depth"], 2)
+	check(not _labels(EditorOutline.build({"ticks_per_frame": 0.5})).has("Speed"), "no Speed row for a number")
+
 func test_item_labels() -> void:
 	var data := {
 		"debris": [{"type": "twig", "pos": [10.0, 20.5]}],

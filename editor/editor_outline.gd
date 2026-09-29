@@ -13,6 +13,9 @@ const SECTIONS: Array[Array] = [
 	["events", "Events", false], ["camera", "Camera", false], ["render", "Render", false],
 	["output", "Output", false],
 ]
+## Timed lists under "render" shown as outline rows: key, row label, item label.
+const RENDER_TIMED: Array[Array] = [["captions", "Captions", "Caption"], ["fades", "Fades", "Fade"],
+		["grade", "Grade", "Grade"], ["story_marker", "Story marker", "Marker"], ["layout", "Layout modes", "Mode"]]
 const NEST_HALF := 60.0
 const FOOD_RADIUS := 30.0
 const PROP_RADIUS := 20.0
@@ -22,6 +25,10 @@ const PROP_RADIUS := 20.0
 static func build(data: Dictionary) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	_row(rows, "Scenario", [], 0)
+	if data.get("ticks_per_frame") is Array:
+		# The speed schedule's points (its items are selected on the timeline).
+		_row(rows, "Speed", ["ticks_per_frame"], 0)
+		_list_rows(rows, data["ticks_per_frame"], ["ticks_per_frame"], _speed_label)
 	for spec: Array in SECTIONS:
 		var key: String = spec[0]
 		if not data.has(key) and not spec[2]:
@@ -52,6 +59,16 @@ static func build(data: Dictionary) -> Array[Dictionary]:
 						if v.has(track):
 							_row(rows, track.capitalize() + " camera", [key, track], 1)
 							_list_rows(rows, v[track], [key, track], _camera_label, 2)
+			"render":
+				if v is Dictionary:
+					for timed: Array in RENDER_TIMED:
+						var list: Variant = v.get(timed[0])
+						if timed[0] == "layout":
+							list = v["layout"].get("modes") if v.get("layout") is Dictionary else null
+						if list is Array:
+							var p: Array = ["render", "layout", "modes"] if timed[0] == "layout" else ["render", timed[0]]
+							_row(rows, timed[1], p, 1)
+							_list_rows(rows, list, p, _timed_label.bind(timed[2]), 2)
 	for key: Variant in data.keys():
 		if not _is_known(key):
 			_row(rows, str(key), [key], 0)
@@ -138,6 +155,27 @@ static func _event_label(i: int, e: Variant) -> String:
 	if not e is Dictionary:
 		return "Event %d: ?" % i
 	return "Event %d: %s @ %ss" % [i, _str(e, "type"), _num(e.get("t"))]
+
+static func _speed_label(i: int, p: Variant) -> String:
+	if not p is Dictionary:
+		return "Point %d: ?" % i
+	var s := "Point %d: %ss" % [i, _num(p.get("t"))]
+	if p.has("tpf"):
+		s += " tpf " + _num(p["tpf"])
+	if p.has("jump"):
+		s += " jump " + _num(p["jump"])
+	return s
+
+## "Caption 2: 12s A queen lands" (the text or mode when there is one).
+static func _timed_label(i: int, p: Variant, noun: String) -> String:
+	if not p is Dictionary:
+		return "%s %d: ?" % [noun, i]
+	var s := "%s %d: %ss" % [noun, i, _num(p.get("t"))]
+	for key: String in ["text", "mode"]:
+		if p.get(key) is String:
+			var text: String = (p[key] as String).split("\n")[0]
+			s += " " + (text.left(30) + "…" if text.length() > 30 else text)
+	return s
 
 static func _camera_label(i: int, k: Variant) -> String:
 	if not k is Dictionary:

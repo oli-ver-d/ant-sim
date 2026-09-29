@@ -113,6 +113,24 @@ edit keeps the sim (~35 ms), a ground or scatter edit redoes the ground and the 
 from the first changed one on the kept sim (same result as a full build, tested), and
 anything else (including a hand-placed prop, which colonies may react to) rebuilds it all.
 
+Timeline (bottom panel): one video-time ruler with a row each for the camera keyframes (or
+the surface and nest tracks), the `ticks_per_frame` schedule (drawn as a curve, time jumps
+marked `+Ns`), `render.layout.modes`, captions, fades, grade, story-marker windows and the
+events, whose sim times are converted with the speed schedule (warmup, ramps and jumps) so
+everything lines up. Click an item to select it (outline and inspector follow; the speed
+points and the timed render lists have outline rows), drag it to change its `t` (an event
+gets the sim time of where it is dropped), drag a span's right edge to change `until`,
+double click an empty spot on a row to add an item there, **Delete** removes the selected
+one. Times snap to 0.1 s (**Shift**: to video frames). **Key here** adds a camera keyframe
+at the playhead framing the static preview's view (a double click on a camera row does the
+same). Click or drag on the ruler to move the playhead; wheel zooms the ruler, middle drag
+pans it, **Fit** fits the duration. **Play** runs the document through `ScenarioPlayer`
+(exactly as `main.tscn` and recordings play it, 60 fps video frames) in the output frame,
+scaled, from the playhead; the speed menu sets the playback rate, moving the playhead seeks
+(forward from where it is, or back by rebuilding; a progress bar shows long fast-forwards),
+**Stop** or any edit returns to the static preview. `--play=<s>` opens the play view paused
+at that video time (for screenshots).
+
 ## Tools
 
 ```bash
@@ -182,7 +200,7 @@ species/<name>/       one folder per species; register.gd is discovered automati
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
 scenes/               main.tscn (interactive), record.tscn (Movie Maker), editor.tscn (scenario editor)
-editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview, inspector, gizmos/
+editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview, inspector, gizmos/, timeline/, play preview
 tools/ tests/
 ```
 

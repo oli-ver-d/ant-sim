@@ -8,7 +8,7 @@ extends Control
 ## row's section (all sections on the Scenario row) at the view centre.
 ##
 ##   godot --path . res://scenes/editor.tscn [-- --scenario=<name or path>] [--screenshot=<path>]
-##       [--select=scenery/1] [--materials]
+##       [--select=scenery/1] [--materials] [--play=<video s>]
 ##   tools/editor.sh [--scenario=...]
 ##
 ## File menu: New (a minimal template), Open, Open Recent (kept in
@@ -22,6 +22,10 @@ extends Control
 ## materials overlay. Wheel zooms, middle or right drag pans. Outline rows of
 ## list items can be dragged to reorder them (OutlineDrag; e.g. ground
 ## regions' paint order).
+## Timeline (TimelinePanel, bottom): camera keys, speed, layout modes,
+## captions, fades, grade, story marker and events on one video-time ruler;
+## Play runs the document in EditorPlay (a real ScenarioPlayer) in place of
+## the static preview until Stop or the next edit.
 
 const WINDOW_SIZE := Vector2i(1600, 900)
 const SCENARIO_DIR := "res://scenarios"
@@ -56,6 +60,10 @@ var outline_drag: OutlineDrag
 ## "Add ..." actions for the selected outline row (EditorDefaults.add_actions).
 var add_menu: MenuButton
 var inspector: ScenarioInspector
+## The play preview (shown instead of the static one while a run exists) and
+## the timeline under everything (M16g).
+var play: EditorPlay
+var timeline: TimelinePanel
 var details_title: Label
 var status: Label
 ## Outline rows (EditorOutline.build) of the current document.
@@ -104,6 +112,11 @@ func _ready() -> void:
 			_select_path(_parse_path(select))
 	if args.has("materials"):
 		materials_toggle.button_pressed = true
+	if args.has("play"):
+		# Play preview paused at a video time (for screenshots).
+		timeline.set_playhead(float(args["play"]), false)
+		timeline.toggle_play()
+		timeline.toggle_play()
 
 func _setup_window() -> void:
 	var window := get_window()
@@ -170,9 +183,12 @@ func _build_ui() -> void:
 		b.pressed.connect(preview_fit.bind(label == "Fit world"))
 		bar.add_child(b)
 
+	var vsplit := VSplitContainer.new()
+	vsplit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(vsplit)
 	var split := HSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(split)
+	vsplit.add_child(split)
 	var left := VBoxContainer.new()
 	left.custom_minimum_size = Vector2(300, 0)
 	split.add_child(left)
@@ -195,12 +211,20 @@ func _build_ui() -> void:
 	centre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.add_child(centre)
 	centre.add_child(_build_tool_bar())
+	# The static preview and the play view share the space (one is shown).
+	var stage := MarginContainer.new()
+	stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	centre.add_child(stage)
 	preview = EditorPreview.new()
 	preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	preview.status_changed.connect(func(_t: String) -> void: _update_status())
 	preview.gui_input.connect(_on_preview_input)
-	centre.add_child(preview)
+	stage.add_child(preview)
+	play = EditorPlay.new()
+	play.visible = false
+	stage.add_child(play)
 	gizmos = GizmoLayer.new()
 	gizmos.preview = preview
 	gizmos.canvas = canvas
@@ -216,6 +240,14 @@ func _build_ui() -> void:
 	inspector = ScenarioInspector.new()
 	inspector.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	side.add_child(inspector)
+
+	timeline = TimelinePanel.new()
+	timeline.select_requested.connect(_on_canvas_select)
+	timeline.play_view.connect(_show_play)
+	timeline.key_here = func(t: float) -> Dictionary:
+		return TimelineModel.camera_key_here(preview.camera.position, preview.size / preview.camera.zoom.x,
+				preview.frame.size_f(), t)
+	vsplit.add_child(timeline)
 
 	status = Label.new()
 	status.clip_text = true
@@ -303,7 +335,7 @@ func preview_fit(world: bool) -> void:
 		preview.fit_frame()
 
 func _process(_delta: float) -> void:
-	if _screenshot_frames < 0 or preview.rebuild_pending():
+	if _screenshot_frames < 0 or preview.rebuild_pending() or play.seeking():
 		return
 	_screenshot_frames -= 1
 	if _screenshot_frames < 0:
@@ -350,6 +382,8 @@ func _set_doc(d: ScenarioDoc) -> void:
 	canvas.set_selection(null)
 	_sync_tool_buttons()
 	inspector.setup(doc, schema)
+	play.stop()
+	timeline.setup(doc, play)
 	_rebuild_outline()
 	_show_selection()
 	preview.show_data(doc.data, true)
@@ -388,6 +422,9 @@ func _on_doc_changed(path: Array) -> void:
 		_update_selection_bounds()
 		inspector.on_doc_changed(path)
 	canvas.set_selection(selected)
+	# Editing stops play: back to the static preview.
+	play.stop()
+	timeline.selected = selected
 	preview.show_data(doc.data)
 	# changed() comes before UndoRedo counts the action (is_dirty() is still
 	# the old answer), so the title waits for the end of the frame.
@@ -510,6 +547,13 @@ func _show_selection() -> void:
 	_update_selection_bounds()
 	inspector.show_path(selected)
 	canvas.set_selection(selected)
+	timeline.selected = selected
+	timeline.canvas.queue_redraw()
+
+## Shows the play view (true) or the static preview.
+func _show_play(on: bool) -> void:
+	play.visible = on
+	preview.visible = not on
 
 ## The inspector's title and the preview's selection outline.
 func _update_selection_bounds() -> void:
