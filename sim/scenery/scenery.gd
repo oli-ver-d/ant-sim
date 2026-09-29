@@ -61,6 +61,18 @@ func remove(prop: Prop) -> void:
 		prop.cells = PackedInt32Array()
 	version += 1
 
+## Where the prop list is now, for truncate().
+func mark() -> Vector2i:
+	return Vector2i(props.size(), _next_id)
+
+## Removes every prop added since mark() `at` (newest first, freeing their
+## cells) and hands out the same ids again, so props added next are built as
+## they were after the mark. The editor uses it to redo a scenario's scatters.
+func truncate(at: Vector2i) -> void:
+	for i in range(props.size() - 1, at.x - 1, -1):
+		remove(props[i])
+	_next_id = at.y
+
 ## Props with this scenario name.
 func named(prop_name: String) -> Array[Prop]:
 	var out: Array[Prop] = []

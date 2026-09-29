@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16e done; next M16f. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16f done; next M16g. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -567,6 +567,68 @@ placed props / dropped-prop warnings go (it already draws a selected scatter's z
 - Verify: tests for the partial rebuild matching a full one (same hash, same prop
   list); timing numbers in the progress log.
 
+**Done (M16f).** What exists now:
+
+- `ScenarioLoader.build` is `build_base` (obstacles, ground, hand-placed props, food,
+  debris, colonies) + `add_scatters(sim, data, from = 0, marks = {})` (returns each
+  scatter's `Scatter.Result` by its `scenery` index; `marks[k]` = `Scenery.mark()` just
+  before scatter k) + `finish` (agent caps, events), and `set_ground(sim, data)`. Runs are
+  unchanged (same calls in the same order). `Scenery.mark()` / `truncate(mark)` (removes the
+  props added since, newest first, freeing their cells, and hands out the same ids again).
+  `Scatter.Result.dropped_bounds` (bounds of each blocking prop dropped for connectivity).
+- `EditorPreview`: `rebuild_kind(old, new)` over `SIM_KEYS` (the top-level keys the loader
+  reads): `view` (no sim key changed: same sim, new WorldView), `scatter` (only `ground`
+  and/or scatter entries changed, the hand-placed props list is the same) or `full`.
+  `scatter_from(old, new)` (0 if the ground changed, else the first differing `scenery`
+  index): a `scatter` rebuild truncates to that scatter's mark, remakes the ground if it
+  changed and runs the scatters from there. State: `last_kind`, `rescattered_from`,
+  `partial` (false forces full), `scatter_results`, `scatter_marks`, `scatter_mark`,
+  `hand_prop(index)` (the Prop built from a hand-placed entry, matched by params), `same(a,
+  b)` (typed deep equality). Status line says Built / Rebuilt ground and scenery / Redrawn,
+  the prop count and "N blocking props dropped by scatters".
+- `GizmoLayer`: a selected scatter's placed props tinted (outline or canopy), their blocking
+  cells, and each dropped prop's bounds crossed out in red ("dropped: cut a colony off");
+  a selected hand-placed prop's blocking cells; `show_materials` draws
+  `GroundSwatches.image(sim.ground)` (cached per GroundMap) under the gizmos.
+- `editor/ground_swatches.gd` (`GroundSwatches`, subagent): `COLORS`, `color`, `icon`,
+  `image(ground)` (weight-blended flat colours, ~20 ms), `is_material_choice`. Inspector
+  material dropdowns (and material-keyed map key choosers, e.g. scatter `prefer`) show the
+  swatches; `ground_region.noise.scale` limits 20–2000 (slider).
+- Outline drag-to-reorder (subagent): `EditorOutline.drop_move(from, onto, section)` and
+  `editor/outline_drag.gd` (`OutlineDrag`, Tree drag forwarding) → `doc.move_item(...,
+  "Reorder")`, then selects the moved item. Any list items of the same list.
+- Inspector: **Reseed** in a scatter item's header (`reseed_scatter(path)`, editor's own RNG).
+  Editor: **Materials** toggle on the tool bar, `--materials` arg (bare `--flag` args parse).
+- Tests: `tests/test_editor_rebuild.gd` (`rebuild_kind`, `scatter_from`, truncate restores
+  cells/mask, partial == full for basic_forage, meadow_forage, colony_founding,
+  two_species, maze over four edits each (ground + all scatters, last scatter reseeded,
+  first scatter removed, scatter appended: cells, prop mask, props incl. ids/seeds/cells,
+  ground weights, results per scatter, then state hash after 20 ticks), view-only keeps the
+  sim, hand props and results mapping), `test_ground_swatches.gd`,
+  `test_editor_outline.gd` (drop_move), `test_editor.gd` (reorder drop + undo; the
+  debounce test now edits the seed, since an unchanged document keeps its sim),
+  `test_inspector.gd` (swatches, reseed), `test_scatter.gd` (dropped bounds).
+- Screenshots (windowed): meadow_forage with a selected scatter (tinted props, zones,
+  Reseed) and a selected log (blocking cells); colony_founding with Materials on.
+
+Changed from the plan / found on the way:
+
+- Hand-placed prop edits rebuild everything: colonies read `prop_near`/`is_blocked` when
+  siting entrances and middens, so a partial rebuild could differ from a full one. Scatters
+  come after the colonies, so redoing them (and the ground, which only scatters read) on the
+  kept sim is exact.
+- The ~150 ms target isn't reached for scatter edits: the scatter itself is the cost
+  (meadow ~0.5 s). Partial rebuilds skip the colonies (~0.75 s for founding nests) and
+  earlier scatters; see the progress log for numbers.
+- Obstacle `look`s add props before the hand-placed ones, so `hand_prop` matches by params
+  rather than by position in the list.
+- Dropping an outline row onto a section row isn't supported (only between items).
+
+Next (M16g) needs: the preview's sim is never stepped and may be patched in place by
+partial rebuilds, so play must build its own sim through `ScenarioPlayer.setup_data`
+(don't step `preview.sim`). A camera / render / presentation edit is a `view` rebuild
+(~35 ms), so timeline edits of those keys are cheap; `events` edits are `full`.
+
 ### M16g: time: events, camera, speed, presentation and play preview
 
 - Timeline panel (bottom): video time ruler with camera keyframes, the
@@ -698,3 +760,11 @@ placed props / dropped-prop warnings go (it already draws a selected scatter's z
 - M16e: canvas gizmos (select, move, handles, Alt insert, Delete, Ctrl+D, snap), place tools
   tool bar, scatter keep-clear zones and camera-key frame overlays; `GizmoGeometry` (shapes,
   handles, hit tests, edits) by a subagent.
+- M16f: staged `ScenarioLoader` build and partial preview rebuilds (view / ground+scatters
+  from the first changed one / full), scatter props, blocking cells and dropped-prop warnings,
+  Reseed, materials overlay; swatches and outline drag-to-reorder by subagents. Rebuild
+  times in ms (full / ground edit / last scatter reseeded / render-only edit): basic_forage
+  ~300 / 276 / 199 / 34, meadow_forage 953 / 969 / 415 / 36, two_species 592 / 599 / 246 / 37,
+  colony_founding 1651 / 915 / 370 / 36, harvester_founding 1261 / 558 / 272 / 36,
+  leafcutter_life 1389 / 557 / 285 / 38, nuptial_flight 1412 / 503 / 258 / 34. (Before:
+  every edit was a full build, WorldView setup ~33 ms of it.)

@@ -41,6 +41,8 @@ var _own_edit := false
 ## Groups the user opened or closed, by path string.
 var _open: Dictionary = {}
 var _json_mode := false
+## New scatter seeds ("Reseed").
+var _seeds := RandomNumberGenerator.new()
 
 func _init() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -122,10 +124,24 @@ func _build_header(p: Array) -> void:
 		_json_mode = not _json_mode
 		rebuild())
 	bar.add_child(json)
+	var item: Variant = doc.get_at(p)
+	if p.size() == 2 and p[0] == "scenery" and item is Dictionary and item.get("scatter") is Dictionary:
+		var reseed := _button("Reseed", "Scatter again with a new seed (sets the scatter's \"seed\")")
+		reseed.pressed.connect(func() -> void: reseed_scatter(p))
+		bar.add_child(reseed)
 	if p[-1] is int:
 		var del := _button("Delete", "Remove this item")
 		del.pressed.connect(func() -> void: _remove(p))
 		bar.add_child(del)
+
+## Sets the scatter at `p` (a "scenery" entry) to a new random seed. The
+## editor's own RNG, never a simulation's.
+func reseed_scatter(p: Array) -> void:
+	var old: Variant = doc.get_at(p + ["scatter", "seed"])
+	var s := _seeds.randi_range(1, 999999)
+	while (old is int or old is float) and int(old) == s:
+		s = _seeds.randi_range(1, 999999)
+	doc.set_at(p + ["scatter", "seed"], s, "Reseed scatter")
 
 func _build_json(p: Array) -> void:
 	var edit := TextEdit.new()
@@ -377,8 +393,13 @@ func _build_map(box: Container, fpath: Array, spec: FieldSpec, value: Variant, p
 	var key_input: Control
 	if not choices.is_empty():
 		var opt := OptionButton.new()
+		var all_materials := true
+		for c: String in choices:
+			all_materials = all_materials and GroundMap.MATERIALS.has(c)
 		for c: String in choices:
 			opt.add_item(c)
+			if all_materials:
+				opt.set_item_icon(opt.item_count - 1, GroundSwatches.icon(c))
 		key_input = opt
 	else:
 		var le := LineEdit.new()
@@ -631,8 +652,11 @@ func _enum_widget(fpath: Array, spec: FieldSpec, value: Variant, present: bool) 
 static func _fill_options(opt: OptionButton, choices: PackedStringArray, current: String, unset: bool) -> void:
 	if unset:
 		opt.add_item("(unset)")
+	var swatches := GroundSwatches.is_material_choice(choices)
 	for c: String in choices:
 		opt.add_item(c)
+		if swatches:
+			opt.set_item_icon(opt.item_count - 1, GroundSwatches.icon(c))
 	if current != "" and not choices.has(current):
 		opt.add_item(current)
 	for i: int in opt.item_count:

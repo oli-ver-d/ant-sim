@@ -45,11 +45,15 @@ func test_preview_builds_and_debounces() -> void:
 	check(preview.status.begins_with("Built in"), "status: " + preview.status)
 	check_eq(preview.sim.tick_count, 0, "not stepped")
 	var first := preview.sim
-	preview.show_data(data)
+	var first_view := preview.view
+	var edited := data.duplicate(true)
+	edited["seed"] = 99
+	preview.show_data(edited)
 	check(preview.rebuild_pending(), "rebuild waits")
-	check(preview.sim == first, "not rebuilt yet")
+	check(preview.sim == first and preview.view == first_view, "not rebuilt yet")
 	preview._process(EditorPreview.REBUILD_DELAY + 0.01)
 	check(not preview.rebuild_pending() and preview.sim != first, "rebuilt after the delay")
+	check_eq(preview.last_kind, "full", "a new seed builds everything")
 	preview.fit_world()
 	check(absf(preview.camera.zoom.x - EditorPreview.fit_zoom(Rect2(Vector2.ZERO, _world), preview.size, 24.0)) < 1e-4,
 			"fit world zoom")
@@ -256,4 +260,23 @@ func test_editor_canvas_drag_place_and_keys() -> void:
 	(ed.tool_buttons["wall_line"] as Button).pressed.emit()
 	_key(ed, KEY_ESCAPE)
 	check_eq(ed.canvas.tool, "select", "Esc leaves the tool")
+	_cleanup(ed)
+
+func test_editor_outline_reorder_drop() -> void:
+	var ed := _editor("")
+	ed.doc.set_at(["ground"], {"base": "sand", "regions": [
+		{"material": "moss", "shape": "circle", "center": [100, 100], "radius": 50},
+		{"material": "litter", "shape": "circle", "center": [300, 100], "radius": 50},
+		{"material": "mud", "shape": "circle", "center": [500, 100], "radius": 50}]})
+	var mats := func() -> Array:
+		return (ed.doc.data["ground"]["regions"] as Array).map(func(r: Dictionary) -> String: return r["material"])
+	check_eq(mats.call(), ["moss", "litter", "mud"], "start order")
+	var move := EditorOutline.drop_move(["ground", "regions", 0], ["ground", "regions", 2], 1)
+	check(not move.is_empty(), "drop allowed")
+	ed.outline_drag.apply(move)
+	check_eq(mats.call(), ["litter", "mud", "moss"], "moved to the end")
+	check_eq(ed.selected, ["ground", "regions", 2], "moved item selected")
+	ed.doc.undo()
+	check_eq(mats.call(), ["moss", "litter", "mud"], "undo restores")
+	check(ed.outline_drag._can_drop(Vector2(-5, -5), {"outline_path": ["food", 0]}) == false, "no drop outside rows")
 	_cleanup(ed)

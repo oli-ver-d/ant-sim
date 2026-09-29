@@ -215,3 +215,33 @@ func test_recent_save_load_keeps_other_sections() -> void:
 	check_eq(empty.files.size(), 0)
 	check_eq(r.save_to(path), OK)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+func test_drop_move_down_and_up() -> void:
+	var r := ["ground", "regions", 0]
+	# Below/on item 2 of 0: lands at 2 (after removal); above item 2: at 1.
+	check_eq(EditorOutline.drop_move(r, ["ground", "regions", 2], 1), {"path": r, "to": 2})
+	check_eq(EditorOutline.drop_move(r, ["ground", "regions", 2], 0), {"path": r, "to": 2})
+	check_eq(EditorOutline.drop_move(r, ["ground", "regions", 2], -1), {"path": r, "to": 1})
+	# Moving up: above item 0 from 2 -> 0; below item 0 -> 1.
+	var s := ["ground", "regions", 2]
+	check_eq(EditorOutline.drop_move(s, ["ground", "regions", 0], -1), {"path": s, "to": 0})
+	check_eq(EditorOutline.drop_move(s, ["ground", "regions", 0], 1), {"path": s, "to": 1})
+	check_eq(EditorOutline.drop_move(["food", 0], ["food", 3], 1), {"path": ["food", 0], "to": 3})
+
+func test_drop_move_same_place_is_nothing() -> void:
+	var r := ["food", 1]
+	check_eq(EditorOutline.drop_move(r, ["food", 1], 0), {})
+	check_eq(EditorOutline.drop_move(r, ["food", 1], -1), {})
+	check_eq(EditorOutline.drop_move(r, ["food", 1], 1), {})
+	check_eq(EditorOutline.drop_move(r, ["food", 0], 1), {})
+	check_eq(EditorOutline.drop_move(r, ["food", 2], -1), {})
+
+func test_drop_move_rejects_other_lists_and_sections() -> void:
+	check_eq(EditorOutline.drop_move(["food", 0], ["obstacles", 1], 0), {})
+	check_eq(EditorOutline.drop_move(["food", 0], ["food"], 0), {})
+	check_eq(EditorOutline.drop_move(["ground", "regions", 0], ["ground"], 0), {})
+	check_eq(EditorOutline.drop_move(["ground", "regions", 0], ["scenery", 1], 0), {})
+	check_eq(EditorOutline.drop_move(["camera", "surface", 0], ["camera", "nest", 1], 0), {})
+	check_eq(EditorOutline.drop_move(["camera", "surface", 0], ["camera", "surface", 1], 0), {"path": ["camera", "surface", 0], "to": 1})
+	check_eq(EditorOutline.drop_move(["food"], ["food", 1], 0), {})
+	check_eq(EditorOutline.drop_move([], [], 0), {})

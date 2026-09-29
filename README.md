@@ -98,8 +98,20 @@ clear round nests, food and portals (hard: red, reserve: orange), a selected cam
 the output frame it shows. **File**: New, Open, Open Recent (kept in `user://editor_settings.cfg`), Save, Save
 As, Revert, Quit, with a save/discard prompt for unsaved changes; **Ctrl+Z / Ctrl+Y**
 undo and redo. Files are written with `ScenarioJson`, so opening and saving an unedited
-scenario leaves it byte-identical. `--screenshot=<png>` (with `--select=colonies/0`) saves
-the window once the preview is built and quits.
+scenario leaves it byte-identical. `--screenshot=<png>` (with `--select=colonies/0` and
+`--materials`) saves the window once the preview is built and quits.
+
+Ground and scenery: outline rows of list items (ground regions, whose order is the paint
+order, props, food, events, camera keys...) can be dragged to reorder them. Material
+dropdowns show a colour swatch, and the tool bar's **Materials** toggle draws the ground as
+flat colours per material. A selected scatter tints the props it placed, shows their
+blocking cells (the surface cells they made walls) and marks in red any blocking prop it
+dropped because it cut a colony off from its food or the world edge (the status line counts
+them); its **Reseed** button sets a new `seed`. A selected hand-placed prop shows its
+blocking cells. The preview only rebuilds what an edit needs: a render, output or camera
+edit keeps the sim (~35 ms), a ground or scatter edit redoes the ground and the scatters
+from the first changed one on the kept sim (same result as a full build, tested), and
+anything else (including a hand-placed prop, which colonies may react to) rebuilds it all.
 
 ## Tools
 

@@ -40,14 +40,21 @@ static func load_data(scenario_name: String) -> Dictionary:
 
 ## seed_override < 0 uses the scenario's own seed.
 static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
+	var sim := build_base(data, registry, config, seed_override)
+	add_scatters(sim, data)
+	finish(sim, data)
+	return sim
+
+## build() in stages, so the editor can redo the ground and the scatters of a
+## built sim without the rest: build_base (everything up to the scatters),
+## add_scatters, finish.
+static func build_base(data: Dictionary, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
 	var seed_value: int = seed_override if seed_override >= 0 else int(data.get("seed", 1))
 	var sim := Simulation.new(config, registry, seed_value)
 	for ob: Dictionary in data.get("obstacles", []):
 		ScenarioEvents.place_obstacle(sim, ob)
-	if data.has("ground"):
-		sim.ground = GroundMap.from_data(data["ground"], Vector2(config.world_size), seed_value)
-	var scenery: Array = data.get("scenery", [])
-	for prop: Dictionary in scenery:
+	set_ground(sim, data)
+	for prop: Dictionary in data.get("scenery", []):
 		if not prop.has("scatter"):
 			ScenarioEvents.add_scenery(sim, prop)
 	for food: Dictionary in data.get("food", []):
@@ -56,10 +63,29 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 		Debris.create(sim, d)
 	for col: Dictionary in data.get("colonies", []):
 		ScenarioEvents.add_colony(sim, col)
-	# Scatters keep clear of the nests and food, so they come last.
-	for k in scenery.size():
+	return sim
+
+## The surface GroundMap from data["ground"] (none without it).
+static func set_ground(sim: Simulation, data: Dictionary) -> void:
+	sim.ground = null
+	if data.has("ground"):
+		sim.ground = GroundMap.from_data(data["ground"], Vector2(sim.config.world_size), sim.scenery.seed_value)
+
+## Scatters keep clear of the nests and food, so they come last. Returns each
+## scatter's Scatter.Result by its index in data["scenery"]. The editor redoes
+## only the scatters from index `from` on, and gets each one's
+## Scenery.mark() from just before it in `marks`.
+static func add_scatters(sim: Simulation, data: Dictionary, from: int = 0, marks: Dictionary = {}) -> Dictionary:
+	var results := {}
+	var scenery: Array = data.get("scenery", [])
+	for k in range(from, scenery.size()):
 		if scenery[k].has("scatter"):
-			ScenarioEvents.add_scenery(sim, scenery[k], k)
+			marks[k] = sim.scenery.mark()
+			results[k] = Scatter.apply(sim, scenery[k]["scatter"], k)
+	return results
+
+## Agent caps and scheduled events, after everything is placed.
+static func finish(sim: Simulation, data: Dictionary) -> void:
 	# Agent caps per layer: "surface", or "nest" for every nest's underground.
 	var caps: Dictionary = data.get("max_agents", {})
 	for l in sim.layers:
@@ -70,7 +96,6 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 	for ev: Dictionary in data.get("events", []):
 		events.append(ev)
 	sim.schedule_events(events)
-	return sim
 
 static func load_simulation(scenario_name: String, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
 	return build(load_data(scenario_name), registry, config, seed_override)

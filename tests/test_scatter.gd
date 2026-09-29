@@ -144,6 +144,8 @@ func _plugged(type: String) -> Array:
 	result.placed.append(p.prop)
 	var dropped := Scatter._keep_connected(sim, [p], baseline, result)
 	check_eq(dropped, 1, "%s dropped" % type)
+	check(result.dropped_bounds.size() == 1 and result.dropped_bounds[0].has_point(Vector2(1030, 800)),
+			"the dropped prop's bounds are reported")
 	var after := Scatter._reachability(sim, [])
 	check_eq((after[0]["targets"] as PackedByteArray)[0], 1, "food reachable again")
 	check(not sim.world.is_blocked(Vector2(1030, 800)), "gap free again")

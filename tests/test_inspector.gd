@@ -350,6 +350,46 @@ func test_every_key_shown_2() -> void:
 func test_every_key_shown_3() -> void:
 	_shown_keys(3)
 
+func test_ground_material_dropdown_has_swatches() -> void:
+	var data := _basic()
+	data["ground"] = {"base": "soil", "regions": [{"material": "moss", "shape": "circle", "center": [500, 500], "radius": 100}]}
+	var ins := _inspector(data, ["ground", "regions", 0])
+	var opt := _widget(ins, ["ground", "regions", 0, "material"]) as OptionButton
+	check(opt != null, "material is an OptionButton")
+	if opt != null:
+		check(opt.item_count >= GroundMap.MATERIALS.size(), "all materials listed")
+		for i: int in opt.item_count:
+			check(opt.get_item_icon(i) != null, "icon on item %d" % i)
+		check_eq(opt.get_item_text(opt.selected), "moss")
+	ins.free()
+
+func test_reseed_scatter() -> void:
+	var data := _basic()
+	data["scenery"] = [{"type": "rock", "center": [100, 100], "radius": 10}, {"scatter": {"preset": "meadow"}}]
+	var ins := _inspector(data, ["scenery", 0])
+	var names: Array[String] = []
+	for b: Node in ins.find_children("*", "Button", true, false):
+		names.append((b as Button).text)
+	check(not names.has("Reseed"), "no Reseed for a hand-placed prop")
+	ins.show_path(["scenery", 1])
+	var reseed: Button = null
+	for b: Node in ins.find_children("*", "Button", true, false):
+		if (b as Button).text == "Reseed":
+			reseed = b
+	check(reseed != null, "Reseed on a scatter")
+	if reseed == null:
+		ins.free()
+		return
+	reseed.pressed.emit()
+	var first: Variant = ins.doc.get_at(["scenery", 1, "scatter", "seed"])
+	check(first is int, "seed set")
+	ins.reseed_scatter(["scenery", 1])
+	check(ins.doc.get_at(["scenery", 1, "scatter", "seed"]) != first, "a different seed each time")
+	ins.doc.undo()
+	ins.doc.undo()
+	check(not ins.doc.has_at(["scenery", 1, "scatter", "seed"]), "undone")
+	ins.free()
+
 ## Across the examples, every key name the schema knows is shown somewhere.
 func test_every_schema_key_reachable() -> void:
 	var names := {}

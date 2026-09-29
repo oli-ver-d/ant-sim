@@ -177,6 +177,8 @@ class Result:
 	var placed: Array[Prop] = []
 	## Blocking props dropped (or plants cut to canopy) to keep food reachable.
 	var dropped: int = 0
+	## Bounds of each of those props (for the editor's warnings).
+	var dropped_bounds: Array[Rect2] = []
 	var zones: Array[Zone] = []
 
 ## Scatters props from a scenario entry's "scatter" dictionary. `index` (the
@@ -480,6 +482,7 @@ static func _keep_connected(sim: Simulation, placed: Array[Placed], baseline: Ar
 		if culprit == null:
 			return dropped
 		dropped += 1
+		result.dropped_bounds.append(culprit.prop.bounds)
 		sim.scenery.remove(culprit.prop)
 		result.placed.erase(culprit.prop)
 		culprit.block = 0.0

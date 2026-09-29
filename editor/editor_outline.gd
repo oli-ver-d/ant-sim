@@ -317,6 +317,28 @@ static func _event_bounds(e: Dictionary) -> Rect2:
 		return _box(e.get("at"), 20.0)
 	return Rect2()
 
+# --- reordering ------------------------------------------------------------------
+
+## What dropping the item at `from_path` on the row `onto_path` does, for
+## ScenarioDoc.move_item: {} if not allowed (or nothing changes), else
+## {"path": from_path, "to": final index}. Both must be items of the same list.
+## `section` is Tree's drop section: -1 above the target, 0 on it, 1 below it
+## (on and below both put the item after the target).
+static func drop_move(from_path: Array, onto_path: Array, section: int) -> Dictionary:
+	if from_path.is_empty() or onto_path.size() != from_path.size():
+		return {}
+	if not (from_path[-1] is int and onto_path[-1] is int):
+		return {}
+	if from_path.slice(0, -1) != onto_path.slice(0, -1):
+		return {}
+	var from: int = from_path[-1]
+	var target: int = onto_path[-1]
+	var insert_at := target if section < 0 else target + 1
+	var to := insert_at - 1 if insert_at > from else insert_at
+	if to == from or to < 0:
+		return {}
+	return {"path": from_path, "to": to}
+
 # --- paths -----------------------------------------------------------------------
 
 ## The section row's path for any path.

@@ -89,7 +89,7 @@ static func ground_region() -> FieldSpec:
 		"ragged": F.number(null, "How far noise pushes the edge in and out (default soft * 0.8)").limits(0),
 		"strength": F.number(1.0, "How much it covers what was there, 0..1").limits(0, 1),
 		"noise": F.dict({
-			"scale": F.number(300.0, "Patch size (world units)").limits(1),
+			"scale": F.number(300.0, "Patch size (world units)").limits(20, 2000),
 			"cover": F.number(0.5, "Fraction of the region covered by patches").limits(0, 1),
 			"soft": F.number(0.15, "Patch edge width in noise terms").limits(0, 1),
 		}, "Paint only noisy patches of the region"),

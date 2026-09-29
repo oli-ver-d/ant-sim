@@ -11,6 +11,14 @@ extends SubViewportContainer
 ##
 ## Rebuilds are debounced (REBUILD_DELAY after the last request) so a burst
 ## of edits builds once. The status line gets the build time or the error.
+##
+## Partial rebuilds (M16f): the sim is built in ScenarioLoader's stages, and
+## rebuild_kind() compares the document with the one last built. When only
+## the ground and scatters changed, the kept sim's scatter props are taken
+## away (Scenery.truncate), the ground is remade and the scatters run again,
+## which gives the same sim as a full build (tests/test_editor_rebuild.gd)
+## without rebuilding the colonies (~0.75 s for a founding nest). When no
+## simulated key changed (render, output, camera...), only the view is new.
 
 signal status_changed(text: String)
 
@@ -36,6 +44,23 @@ var selection := Rect2():
 ## Milliseconds the last build took.
 var build_ms: float = 0.0
 var status: String = ""
+## What the last rebuild did: "full", "scatter" (ground and scatters redone on
+## the kept sim) or "view" (same sim, new view).
+var last_kind: String = ""
+## False forces full rebuilds (tests compare the two).
+var partial := true
+## Each scatter's Scatter.Result by its index in the document's "scenery".
+var scatter_results: Dictionary = {}
+## Where the last built sim's scenery was before its scatters.
+var scatter_mark := Vector2i.ZERO
+## Scenery.mark() before each scatter, by its index in "scenery".
+var scatter_marks: Dictionary = {}
+## The first "scenery" index the last rebuild scattered again (-1: none).
+var rescattered_from: int = -1
+
+## The top-level keys ScenarioLoader.build reads: the sim depends on nothing else.
+const SIM_KEYS: Array[String] = ["seed", "colonies", "food", "obstacles", "ground", "scenery", "debris",
+		"events", "max_agents"]
 
 var _viewport: SubViewport
 var _world_root: Node2D
@@ -46,6 +71,8 @@ var _panning := false
 ## until the user pans or zooms (then Rect2()).
 var _fit_rect := Rect2()
 var _moved := false
+## A deep copy of the document the current sim was built from.
+var _built: Dictionary = {}
 
 func _init() -> void:
 	stretch = true
@@ -108,10 +135,40 @@ func rebuild() -> void:
 	if not data.get("colonies", []) is Array or not data.get("food", []) is Array:
 		_set_status("Not built: colonies and food must be lists")
 		return
-	var new_sim := ScenarioLoader.build(data, registry, config)
-	if new_sim == null:
-		_set_status("Build failed (see the log)")
-		return
+	var kind := rebuild_kind(_built, data) if partial and sim != null else "full"
+	var new_sim := sim
+	match kind:
+		"full":
+			new_sim = ScenarioLoader.build_base(data, registry, config)
+			if new_sim == null:
+				_set_status("Build failed (see the log)")
+				return
+			scatter_mark = new_sim.scenery.mark()
+			scatter_marks = {}
+			scatter_results = ScenarioLoader.add_scatters(new_sim, data, 0, scatter_marks)
+			rescattered_from = 0
+			ScenarioLoader.finish(new_sim, data)
+		"scatter":
+			# Scatters before the first changed entry are as they were.
+			var from := scatter_from(_built, data)
+			var cut := Vector2i(-1, -1)
+			for k: int in scatter_marks.keys():
+				if k >= from:
+					var at: Vector2i = scatter_marks[k]
+					if cut.x < 0 or at.x < cut.x:
+						cut = at
+					scatter_marks.erase(k)
+					scatter_results.erase(k)
+			if cut.x >= 0:
+				new_sim.scenery.truncate(cut)
+			if not same(_built.get("ground"), data.get("ground")):
+				ScenarioLoader.set_ground(new_sim, data)
+			scatter_results.merge(ScenarioLoader.add_scatters(new_sim, data, from, scatter_marks))
+			rescattered_from = from
+		"view":
+			rescattered_from = -1
+	last_kind = kind
+	_built = data.duplicate(true)
 	var new_view := WorldView.new()
 	new_view.setup(new_sim, registry, float(new_sim.rng.seed % 100))
 	var render: Dictionary = data.get("render", {}) if data.get("render", {}) is Dictionary else {}
@@ -124,10 +181,81 @@ func rebuild() -> void:
 	frame = OutputFrame.from_scenario(data)
 	build_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	_redraw_layers()
-	_set_status("Built in %d ms: %d colonies, %d food, %d ants" % [roundi(build_ms), sim.colonies.size(),
-			sim.food_sources.size(), sim.ant_count])
+	var what: String = {"full": "Built", "scatter": "Rebuilt ground and scenery", "view": "Redrawn"}[kind]
+	_set_status("%s in %d ms: %d colonies, %d food, %d ants, %d props%s" % [what, roundi(build_ms),
+			sim.colonies.size(), sim.food_sources.size(), sim.ant_count, sim.scenery.props.size(), _dropped_note()])
 	if not _moved and not _fit_rect.has_area():
 		fit_world()
+
+## The prop built from the hand-placed entry `index` of the built document's
+## "scenery" (null for a scatter, an unknown type or a stale index).
+func hand_prop(index: int) -> Prop:
+	var scenery: Variant = _built.get("scenery", [])
+	if sim == null or not scenery is Array or index < 0 or index >= (scenery as Array).size():
+		return null
+	var entry: Variant = scenery[index]
+	if not entry is Dictionary or (entry as Dictionary).has("scatter"):
+		return null
+	# Props built before the scatters (obstacle looks may add some too) with the
+	# entry's params; the nth of them for the nth equal entry.
+	var nth := 0
+	for e: Variant in (scenery as Array).slice(0, index):
+		if same(e, entry):
+			nth += 1
+	var props := sim.scenery.props
+	for i in mini(scatter_mark.x, props.size()):
+		if props[i].params == entry:
+			if nth == 0:
+				return props[i]
+			nth -= 1
+	return null
+
+## ", N blocking props dropped by scatters" (they would have cut a colony off).
+func _dropped_note() -> String:
+	var n := 0
+	for r: Scatter.Result in scatter_results.values():
+		n += r.dropped
+	return ", %d blocking props dropped by scatters" % n if n > 0 else ""
+
+## How to get from the sim built from `old` to one for `new`: "full",
+## "scatter" (only the ground and scatter entries differ; the hand-placed
+## props, which colonies and food may react to, are the same), or "view"
+## (nothing the sim reads differs).
+static func rebuild_kind(old: Dictionary, new: Dictionary) -> String:
+	if old.is_empty():
+		return "full"
+	var kind := "view"
+	for key: String in SIM_KEYS:
+		if same(old.get(key), new.get(key)):
+			continue
+		if key == "ground":
+			kind = "scatter"
+		elif key == "scenery" and old.get(key) is Array and new.get(key) is Array \
+				and same(hand_props(old[key]), hand_props(new[key])):
+			kind = "scatter"
+		else:
+			return "full"
+	return kind
+
+## For a "scatter" rebuild: the first "scenery" index whose scatter must run
+## again (0 when the ground changed, since scatters follow the materials).
+static func scatter_from(old: Dictionary, new: Dictionary) -> int:
+	if not same(old.get("ground"), new.get("ground")):
+		return 0
+	var a: Array = old.get("scenery", []) if old.get("scenery") is Array else []
+	var b: Array = new.get("scenery", []) if new.get("scenery") is Array else []
+	for i in mini(a.size(), b.size()):
+		if not same(a[i], b[i]):
+			return i
+	return mini(a.size(), b.size())
+
+## The "scenery" entries that aren't scatters, in order.
+static func hand_props(scenery: Array) -> Array:
+	return scenery.filter(func(e: Variant) -> bool: return not (e is Dictionary and (e as Dictionary).has("scatter")))
+
+## Deep equality that tells types apart (and never errors on mixed types).
+static func same(a: Variant, b: Variant) -> bool:
+	return typeof(a) == typeof(b) and a == b
 
 func _set_status(text: String) -> void:
 	status = text

@@ -8,6 +8,7 @@ extends Control
 ## row's section (all sections on the Scenario row) at the view centre.
 ##
 ##   godot --path . res://scenes/editor.tscn [-- --scenario=<name or path>] [--screenshot=<path>]
+##       [--select=scenery/1] [--materials]
 ##   tools/editor.sh [--scenario=...]
 ##
 ## File menu: New (a minimal template), Open, Open Recent (kept in
@@ -17,8 +18,10 @@ extends Control
 ## Canvas editing (CanvasEditor, drawn by GizmoLayer): click selects the
 ## smallest item there, drag moves it or the selected item's handles, Alt-click
 ## inserts a point, Delete / Ctrl+D (preview focused) delete / duplicate; the
-## tool bar over the preview has the place tools and grid snap. Wheel zooms,
-## middle or right drag pans.
+## tool bar over the preview has the place tools, grid snap and the ground
+## materials overlay. Wheel zooms, middle or right drag pans. Outline rows of
+## list items can be dragged to reorder them (OutlineDrag; e.g. ground
+## regions' paint order).
 
 const WINDOW_SIZE := Vector2i(1600, 900)
 const SCENARIO_DIR := "res://scenarios"
@@ -46,7 +49,10 @@ var gizmos: GizmoLayer
 ## Place tool buttons by tool id, and the grid snap toggle.
 var tool_buttons: Dictionary = {}
 var snap_toggle: CheckBox
+## Shows the ground materials overlay (GizmoLayer.show_materials).
+var materials_toggle: CheckBox
 var outline: Tree
+var outline_drag: OutlineDrag
 ## "Add ..." actions for the selected outline row (EditorDefaults.add_actions).
 var add_menu: MenuButton
 var inspector: ScenarioInspector
@@ -96,6 +102,8 @@ func _ready() -> void:
 		var select := str(args.get("select", ""))
 		if select != "":
 			_select_path(_parse_path(select))
+	if args.has("materials"):
+		materials_toggle.button_pressed = true
 
 func _setup_window() -> void:
 	var window := get_window()
@@ -179,6 +187,7 @@ func _build_ui() -> void:
 	outline.hide_root = true
 	outline.item_selected.connect(_on_outline_selected)
 	left.add_child(outline)
+	outline_drag = OutlineDrag.new(self)
 
 	var right := HSplitContainer.new()
 	split.add_child(right)
@@ -256,6 +265,12 @@ func _build_tool_bar() -> Control:
 	snap_toggle.focus_mode = Control.FOCUS_NONE
 	snap_toggle.toggled.connect(func(on: bool) -> void: canvas.snap = on)
 	bar.add_child(snap_toggle)
+	materials_toggle = CheckBox.new()
+	materials_toggle.text = "Materials"
+	materials_toggle.tooltip_text = "Show the ground's materials as flat colours"
+	materials_toggle.focus_mode = Control.FOCUS_NONE
+	materials_toggle.toggled.connect(func(on: bool) -> void: gizmos.show_materials = on)
+	bar.add_child(materials_toggle)
 	return bar
 
 static func _tool_help(how: String) -> String:
@@ -598,6 +613,8 @@ func _parse_args() -> Dictionary:
 		if a.begins_with("--") and a.contains("="):
 			var kv := a.substr(2).split("=", true, 1)
 			out[kv[0]] = kv[1]
+		elif a.begins_with("--"):
+			out[a.substr(2)] = ""
 	return out
 
 ## "colonies/0" -> ["colonies", 0] (--select= for screenshots).
