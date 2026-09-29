@@ -835,4 +835,8 @@ Draft video (M17h): `renders/leafcutter_life_seed3_20260929_151324.mp4` (AVI cap
 with the safe zones drawn over them: captions and targets inside, pupa floor sandy, the
 new caption over the mound.
 
-Final video: rendered after this commit (PNG capture), recorded in the next commit.
+Final video: `renders/leafcutter_life_seed3_20260929_155144.mp4` (PNG capture, 1080x1920,
+60 fps, 198.0 s, 11880 frames, 154 MB; ~2 h 50 min to capture). `tools/record.sh` was edited
+(M16b) while it ran, so bash failed on it after the capture and the frames were encoded by
+hand with `tools/encode.sh` (same settings). Don't edit a tool script while it's running.
+Frames at V20, V128, V146, V173 and V190 spot-checked.
