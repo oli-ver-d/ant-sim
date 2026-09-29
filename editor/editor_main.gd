@@ -8,7 +8,7 @@ extends Control
 ## row's section (all sections on the Scenario row) at the view centre.
 ##
 ##   godot --path . res://scenes/editor.tscn [-- --scenario=<name or path>] [--screenshot=<path>]
-##       [--select=scenery/1] [--materials] [--play=<video s>]
+##       [--select=scenery/1] [--materials] [--play=<video s>] [--dialog=run|record|record_now]
 ##   tools/editor.sh [--scenario=...]
 ##
 ## File menu: New (a minimal template), Open, Open Recent (kept in
@@ -26,6 +26,12 @@ extends Control
 ## captions, fades, grade, story marker and events on one video-time ruler;
 ## Play runs the document in EditorPlay (a real ScenarioPlayer) in place of
 ## the static preview until Stop or the next edit.
+## Run menu (M16h): Run (F5) starts the interactive player (main.tscn) as a
+## separate process on a temporary copy of the document (so unsaved edits run),
+## with the options of Run options...; Stop run kills it. Record... (Ctrl+R)
+## records the document with RecordJob (the same GDScript pipeline as
+## tools/record.gd) in the background, with progress, Cancel, Open folder and
+## Play. The last settings are remembered per scenario (LaunchSettings).
 
 const WINDOW_SIZE := Vector2i(1600, 900)
 const SCENARIO_DIR := "res://scenarios"
@@ -35,6 +41,7 @@ const HANDLE_TOLERANCE := 8.0
 enum FileItem { NEW, OPEN, SAVE, SAVE_AS, REVERT, QUIT }
 enum EditItem { UNDO, REDO }
 enum ViewItem { FIT_WORLD, FIT_FRAME }
+enum RunItem { RUN, STOP, OPTIONS, RECORD }
 
 ## Editor settings (recent files); tests point it elsewhere before _ready.
 var settings_path := "user://editor_settings.cfg"
@@ -86,6 +93,24 @@ var _screenshot_frames := -1
 var _building_outline := false
 var _add_actions: Array[Dictionary] = []
 
+## Run and record (M16h). Temporary copies of the document go under runs_dir
+## (run/ and record/, so a new run never rewrites the file a recording is
+## starting from). project_dir and godot_path are what launched processes get
+## (tests point them elsewhere); launch_process starts a process and returns
+## its pid (tests replace it).
+var runs_dir := "user://editor_runs"
+var project_dir := ProjectSettings.globalize_path("res://").trim_suffix("/")
+var godot_path := ""
+var launch_process: Callable = func(exe: String, run_args: PackedStringArray) -> int:
+	return OS.create_process(exe, run_args)
+var run_dialog: RunDialog
+var record_dialog: RecordDialog
+## The interactive run's process id (-1: none) and the recording (null: none yet).
+var run_pid := -1
+var record_job: RecordJob
+var _run_menu: PopupMenu
+var _quit_confirm: ConfirmationDialog
+
 func _ready() -> void:
 	if args.is_empty():
 		args = _parse_args()
@@ -117,6 +142,16 @@ func _ready() -> void:
 		timeline.set_playhead(float(args["play"]), false)
 		timeline.toggle_play()
 		timeline.toggle_play()
+	match str(args.get("dialog", "")):
+		# For screenshots: the Run options, the Record settings, or a 3 s AVI
+		# draft recording (the screenshot waits for its first second).
+		"run":
+			_on_run_menu(RunItem.OPTIONS)
+		"record":
+			open_record()
+		"record_now":
+			start_recording({"format": "avi", "end": 3.0})
+			record_dialog.popup_centered()
 
 func _setup_window() -> void:
 	var window := get_window()
@@ -175,12 +210,30 @@ func _build_ui() -> void:
 		else:
 			preview.fit_frame())
 	menus.add_child(view_menu)
+	_run_menu = PopupMenu.new()
+	_run_menu.name = "Run"
+	_run_menu.add_item("Run", RunItem.RUN, KEY_F5)
+	_run_menu.add_item("Stop run", RunItem.STOP, KEY_MASK_SHIFT | KEY_F5)
+	_run_menu.add_item("Run options...", RunItem.OPTIONS)
+	_run_menu.add_separator()
+	_run_menu.add_item("Record...", RunItem.RECORD, KEY_MASK_CTRL | KEY_R)
+	_run_menu.id_pressed.connect(_on_run_menu)
+	menus.add_child(_run_menu)
 	for label: String in ["Fit world", "Fit frame"]:
 		var b := Button.new()
 		b.text = label
 		b.flat = true
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(preview_fit.bind(label == "Fit world"))
+		bar.add_child(b)
+	bar.add_child(VSeparator.new())
+	for item: Array in [["Run", RunItem.RUN], ["Stop", RunItem.STOP], ["Run options", RunItem.OPTIONS],
+			["Record...", RunItem.RECORD]]:
+		var b := Button.new()
+		b.text = item[0]
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_on_run_menu.bind(item[1]))
 		bar.add_child(b)
 
 	var vsplit := VSplitContainer.new()
@@ -273,6 +326,21 @@ func _build_ui() -> void:
 	add_child(_confirm)
 	_message = AcceptDialog.new()
 	add_child(_message)
+	run_dialog = RunDialog.new()
+	run_dialog.run_requested.connect(func(s: Dictionary) -> void:
+		LaunchSettings.save_for(settings_path, "run", doc.file_path, s)
+		run())
+	add_child(run_dialog)
+	record_dialog = RecordDialog.new()
+	record_dialog.record_requested.connect(start_recording)
+	add_child(record_dialog)
+	_quit_confirm = ConfirmationDialog.new()
+	_quit_confirm.title = "Recording"
+	_quit_confirm.dialog_text = "A recording is running. Cancel it and quit?"
+	_quit_confirm.confirmed.connect(func() -> void:
+		record_job.cancel()
+		_quit())
+	add_child(_quit_confirm)
 	_refresh_recent()
 
 ## Select plus a toggle button per place tool (CanvasEditor.TOOLS), and grid snap.
@@ -335,18 +403,36 @@ func preview_fit(world: bool) -> void:
 		preview.fit_frame()
 
 func _process(_delta: float) -> void:
+	if record_job != null and record_job.is_running():
+		record_job.poll()
+		_update_status()
+	if run_pid > 0 and not OS.is_process_running(run_pid):
+		run_pid = -1
+		_update_status()
 	if _screenshot_frames < 0 or preview.rebuild_pending() or play.seeking():
+		return
+	if record_job != null and record_job.stage == RecordJob.Stage.RECORDING and record_job.frames_done < 60:
 		return
 	_screenshot_frames -= 1
 	if _screenshot_frames < 0:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(_screenshot_path)
 		print("Saved screenshot %s (%dx%d)" % [_screenshot_path, img.get_width(), img.get_height()])
+		if record_job != null:
+			record_job.cancel()
 		get_tree().quit()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		_confirm_then(func() -> void: get_tree().quit())
+		_confirm_then(_quit)
+
+## Quits, asking first whether to cancel a running recording (the interactive
+## run is a separate program and keeps running).
+func _quit() -> void:
+	if record_job != null and record_job.is_running():
+		_quit_confirm.popup_centered()
+		return
+	get_tree().quit()
 
 # --- documents ------------------------------------------------------------------
 
@@ -485,7 +571,7 @@ func _on_file_menu(id: int) -> void:
 			if doc.file_path != "":
 				_confirm_then(_open.bind(doc.file_path))
 		FileItem.QUIT:
-			_confirm_then(func() -> void: get_tree().quit())
+			_confirm_then(_quit)
 
 func _on_edit_menu(id: int) -> void:
 	if id == EditItem.UNDO:
@@ -628,6 +714,98 @@ func _on_preview_input(event: InputEvent) -> void:
 	if handled:
 		preview.accept_event()
 
+# --- run and record ---------------------------------------------------------------
+
+func _on_run_menu(id: int) -> void:
+	match id:
+		RunItem.RUN:
+			run()
+		RunItem.STOP:
+			stop_run()
+		RunItem.OPTIONS:
+			run_dialog.open(LaunchSettings.load_for(settings_path, "run", doc.file_path, LaunchCommands.RUN_DEFAULTS),
+					OutputFrame.from_scenario(doc.data).size, timeline.playhead)
+		RunItem.RECORD:
+			open_record()
+
+## The name of the document's temporary copies, and so of its recordings: the
+## file's name, else the scenario's "name", else "untitled".
+func run_name() -> String:
+	if doc.file_path != "":
+		return LaunchCommands.scenario_name(doc.file_path)
+	var n := str(doc.data.get("name", "")).validate_filename().replace(" ", "_")
+	return n if n != "" else "untitled"
+
+## Writes the document as it is now to runs_dir/<kind>/<name>.json and returns
+## that file's absolute path ("" if it can't be written). The saved file is not
+## touched.
+func write_run_copy(kind: String) -> String:
+	var dir := ProjectSettings.globalize_path(runs_dir.path_join(kind))
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path := dir.path_join(run_name() + ".json")
+	var err := ScenarioJson.save_file(path, doc.data)
+	if err != OK:
+		_show_message("Can't write %s: %s" % [path, error_string(err)])
+		return ""
+	return path
+
+## Starts the interactive player (main.tscn) on the document with the Run
+## options, stopping the previous run.
+func run() -> void:
+	var path := write_run_copy("run")
+	if path == "":
+		return
+	stop_run()
+	var s := LaunchSettings.load_for(settings_path, "run", doc.file_path, LaunchCommands.RUN_DEFAULTS)
+	var exe := godot_path if godot_path != "" else OS.get_executable_path()
+	var pid: int = launch_process.call(exe, LaunchCommands.run_args(s, path, project_dir, timeline.playhead,
+			randi() % 1000000))
+	if pid <= 0:
+		_show_message("Can't start %s" % exe)
+		return
+	run_pid = pid
+	_update_status()
+
+func stop_run() -> void:
+	if run_pid > 0 and OS.is_process_running(run_pid):
+		OS.kill(run_pid)
+	run_pid = -1
+	_update_status()
+
+## Shows the recording in progress, or the Record settings.
+func open_record() -> void:
+	if record_job != null and record_job.is_running():
+		record_dialog.show_job(record_job)
+		record_dialog.popup_centered()
+		return
+	record_dialog.open(LaunchSettings.load_for(settings_path, "record", doc.file_path, LaunchCommands.RECORD_DEFAULTS),
+			write_run_copy("record"), doc.data, project_dir)
+
+## Records the document with `settings` (RecordDialog). `set_output` first makes
+## the chosen frame size the scenario's output size (an undoable edit).
+## Returns the job (it may have failed to start; see its stage and message), or
+## null if the document couldn't be written.
+func start_recording(settings: Dictionary, set_output: bool = false) -> RecordJob:
+	if record_job != null and record_job.is_running():
+		_show_message("A recording is already running")
+		return record_job
+	LaunchSettings.save_for(settings_path, "record", doc.file_path, settings)
+	var s := settings.duplicate()
+	if set_output and str(s.get("size", "")) != "":
+		var size := OutputFrame.parse_size(str(s["size"]))
+		doc.set_at(["output", "size"], [size.x, size.y])
+		s["size"] = ""
+	var path := write_run_copy("record")
+	if path == "":
+		return null
+	var job := RecordJob.new()
+	record_job = job
+	job.start(LaunchCommands.record_plan(s, path, doc.data, project_dir,
+			LaunchCommands.stamp(Time.get_datetime_dict_from_system())), project_dir, godot_path)
+	record_dialog.show_job(job)
+	_update_status()
+	return job
+
 # --- status ---------------------------------------------------------------------
 
 func _doc_name() -> String:
@@ -643,6 +821,13 @@ func _update_status() -> void:
 		return
 	status.text = "  %s%s   |   %s" % [doc.file_path if doc.file_path != "" else "not saved",
 			" (modified)" if doc.is_dirty() else "", preview.status]
+	if run_pid > 0:
+		status.text += "   |   Running (pid %d)" % run_pid
+	if record_job != null and record_job.stage != RecordJob.Stage.IDLE:
+		var text := record_job.status_text()
+		if record_job.is_running() and record_job.frames_total > 0:
+			text += " (%d%%)" % roundi(record_job.fraction() * 100.0)
+		status.text += "   |   " + text
 
 func _show_message(text: String) -> void:
 	push_warning(text)

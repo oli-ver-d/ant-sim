@@ -131,6 +131,25 @@ scaled, from the playhead; the speed menu sets the playback rate, moving the pla
 **Stop** or any edit returns to the static preview. `--play=<s>` opens the play view paused
 at that video time (for screenshots).
 
+Run and record (the **Run** menu and the buttons next to Fit): **Run** (**F5**) starts the
+interactive player (`main.tscn`, with its HUD, wall drawing, food placing and tuning panel)
+as a separate program on the document as it is on screen, saved or not: the editor writes a
+copy to `user://editor_runs/run/<name>.json` and passes its path as `--scenario=` (the
+saved file is not touched). **Run options...** sets the seed (the scenario's, a fixed one or
+a random one), where to start (a video time or the timeline's playhead, `--at=`), the
+layout, the frame size, and captions, safe zones, pheromones, debug overlay and tuning
+panel; **Stop run** (**Shift+F5**) closes it. **Record...** (**Ctrl+R**) asks for the
+format (PNG for finals, AVI/MJPEG for drafts, with its quality), the frame size (optionally
+also made the scenario's `output.size`, as an undoable edit), seed, start and end video
+times, captions, output folder and file name and whether to keep the captured frames; the
+summary line shows the frame count and output path, or what's wrong. The recording then runs
+in the background (the same pipeline as `tools/record.sh`, one at a time) with a progress
+bar, the log and **Cancel** (which removes the partial output); when it's done, **Open
+folder** and **Play**. The editor stays usable meanwhile, and the status line shows the run
+and the recording's progress. Run and record settings are remembered per scenario in
+`user://editor_settings.cfg`. `--dialog=run|record` opens a dialog and `--dialog=record_now`
+starts a 3 s AVI draft (for `--screenshot=`; the draft is cancelled after the screenshot).
+
 ## Tools
 
 ```bash
@@ -153,6 +172,7 @@ godot --headless --path . -s res://tests/timeline_probe.gd -- leafcutter_life 21
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
 tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
+tools/test.sh --long test_launch::test_record_             # 2 s AVI drafts via tools/record.gd and the editor's Record, checked with ffprobe
 godot --headless --path . -s res://tests/fingerprint_probe.gd -- colony_founding 9000   # a run's fingerprint by state names (refactors)
 ```
 
@@ -647,10 +667,22 @@ Playback (video) settings:
 ```bash
 tools/record.sh chaos_to_highway            # scenario seed and duration
 tools/record.sh chaos_to_highway 7 15       # seed 7, 15 seconds
+tools/record.sh path/to/my_scenario.json    # a scenario file anywhere
 CAPTIONS=0 tools/record.sh <scenario>       # without the scenario's captions
 FORMAT=avi tools/record.sh chaos_to_highway # fast draft (MJPEG capture)
 SIZE=1920x1080 tools/record.sh <scenario>   # another frame size than the scenario's output.size
+START=30 tools/record.sh <scenario> -1 10   # video 30 s to 40 s
+OUT=draft.mp4 OUT_DIR=renders/drafts tools/record.sh <scenario>
+# The same without bash (any OS):
+godot --headless --path . -s res://tools/record.gd -- <scenario | path.json> [seed] [seconds] \
+    [--format=png|avi] [--quality=1.0] [--size=WxH] [--captions=0] [--start=s] [--out_dir=dir] \
+    [--out=file.mp4] [--keep_frames=1] [--ffmpeg=path]
 ```
+
+The pipeline is GDScript (`tools/record.gd` running `RecordJob`, with the command lines from
+`LaunchCommands`); `tools/record.sh` only maps its environment variables onto it, and the
+scenario editor's Record dialog runs the same job, so all three give the same files (checked
+byte for byte against the older bash pipeline).
 
 | `FORMAT` | Capture | 20 s video takes | Notes |
 |---|---|---|---|
@@ -659,18 +691,21 @@ SIZE=1920x1080 tools/record.sh <scenario>   # another frame size than the scenar
 
 Writes `renders/<scenario>_seed<N>_<timestamp>.mp4` (the output frame, 1080×1920 unless
 `SIZE=` or the scenario's `output.size` say otherwise, then `_<W>x<H>` is added to the name;
-60 fps, H.264 yuv420p, CRF 18, no audio). `tools/stills.sh` takes `SIZE=` too. How it works:
+`_nocaptions` and `_from<s>` likewise; 60 fps, H.264 yuv420p, CRF 18, no audio).
+`tools/stills.sh` takes `SIZE=` too. How it works:
 1. `scenes/record.tscn` runs under Godot's Movie Maker (`--write-movie`, `--fixed-fps 60`),
    so every frame advances exactly 1/60 s of video however slow the simulation is.
    The output is perfectly smooth and the same seed gives the same video.
-2. Movie Maker records at the window size chosen at startup, so `record.sh` writes a
-   temporary `override.cfg` (a window of the frame size, from `tools/frame_size.sh`) and
-   deletes it afterwards; `record.tscn` gets `--size=` and lays its content out in frame
-   pixels. Godot renders the full frame even when the screen is smaller.
-3. The capture (PNG frames or `capture.avi`) goes to `renders/capture_<name>/`;
-   `tools/encode.sh` turns it into the MP4 and deletes it (`KEEP_FRAMES=1` keeps it).
-   MJPEG is full-range colour, so `encode.sh` converts it to standard TV range; without
-   that the MP4 is tagged `yuvj420p` and some players shift the colours.
+2. Movie Maker records at the window size chosen at startup, so the pipeline writes a
+   temporary `override.cfg` (a window of the frame size, and the MJPEG quality) and deletes
+   it as soon as the recorder has started; `record.tscn` gets `--size=` and lays its content
+   out in frame pixels. Godot renders the full frame even when the screen is smaller. An
+   existing `override.cfg` stops a recording (only one at a time).
+3. The capture (PNG frames or `capture.avi`) goes to `renders/capture_<name>/`; ffmpeg
+   turns it into the MP4 (the arguments of `tools/encode.sh`, which still encodes a capture
+   by hand) and the capture is deleted (`KEEP_FRAMES=1` keeps it). MJPEG is full-range
+   colour, so it is converted to standard TV range; without that the MP4 is tagged
+   `yuvj420p` and some players shift the colours.
 
 With PNG most of the time goes into Godot writing the 1080×1920 PNGs (~0.7 s each).
 

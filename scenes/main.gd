@@ -4,7 +4,8 @@ extends Node2D
 ## overlays and controls.
 ##
 ## Command-line (after "--"):
-##   --scenario=<name>      scenario in res://scenarios (default basic_forage)
+##   --scenario=<name>      scenario in res://scenarios (default basic_forage), or a
+##                          path to a .json file (the editor's Run passes a copy)
 ##   --size=<W>x<H>         output frame size (overrides the scenario's
 ##                          output.size; the window keeps its aspect)
 ##   --seed=<n>             override the scenario seed

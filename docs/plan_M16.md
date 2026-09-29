@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16g done; next M16h. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16h done; next M16i. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -757,6 +757,72 @@ dialog can sit in the timeline's transport bar or the menu bar.
   `FORMAT=avi` draft of `basic_forage` at 1080×1920 and at 1920×1080 and check both
   with ffprobe; screenshot the Record dialog and the progress view.
 
+**Done (M16h).** What exists now:
+
+- The record pipeline is **GDScript** (open question answered by the user: for
+  portability, no bash): `editor/launch_commands.gd` (`LaunchCommands`, pure, written by a
+  subagent) builds `run_args(settings, scenario_path, project_dir, playhead, random_seed)`
+  for `main.tscn` and `record_plan(settings, scenario_path, data, project_dir, stamp)` →
+  `{ok, error, frame_size, format, seed, name, out_dir, out_path, capture_dir, capture,
+  override_cfg, record_args, encode_args, keep_frames, expected_frames}` (the old
+  `record.sh`/`encode.sh` names, `override.cfg` text and ffmpeg arguments, plus
+  `-progress pipe:1 -nostats`); `RUN_DEFAULTS`, `RECORD_DEFAULTS`, `with_defaults`, `num`,
+  `stamp`, `scenario_name`, `size_label`. `editor/record_job.gd` (`RecordJob`) runs a plan
+  without blocking: writes `override.cfg` (refuses if one exists: one recording at a time;
+  removed as soon as the recorder prints its "Recording ...: N frames" line, and always at
+  the end), runs the recorder with `OS.execute_with_pipe`, reads `frame n / total`, then
+  ffmpeg reading `frame=n`, removes the capture; `poll()`, `wait(timeout)`, `cancel()`
+  (kills, removes capture and partial mp4), `fraction()`, `status_text()`, `log_lines`,
+  signals `output(line)`, `finished(ok, message)`, `remove_tree(dir)`.
+  `tools/record.gd` (SceneTree CLI: `<scenario|path> [seed] [seconds] --format= --quality=
+  --size= --captions=0 --start= --out_dir= --out= --keep_frames=1 --ffmpeg=`);
+  `tools/record.sh` now only maps `FORMAT MJPEG_QUALITY SIZE CAPTIONS START OUT OUT_DIR
+  KEEP_FRAMES FFMPEG` onto it. A/B: the old bash pipeline and the new one give
+  byte-identical MP4s (same md5, basic_forage seed 5, 1920×1080 AVI). `tools/encode.sh` and
+  `tools/frame_size.sh` stay (encode by hand; `stills.sh`).
+- `scenes/record.gd`: `--progress=<frames>` (progress line interval, default 300; the
+  pipeline passes 10). `--scenario=` of both scenes takes an absolute `.json` path (already
+  worked via `path_for`; tested, also `user://`).
+- `editor/launch_settings.gd` (`LaunchSettings.load_for/save_for(cfg, "run"|"record",
+  doc.file_path, ...)`): last settings per scenario in `user://editor_settings.cfg`
+  (section `run`/`record`, key `by_scenario`: {file path: settings}).
+- `editor/run_dialog.gd` (`RunDialog`) and `editor/record_dialog.gd` (`RecordDialog`,
+  settings page with a live summary from `record_plan`, progress page with log, Cancel,
+  Open folder, Play, New recording), both written by a subagent.
+- `ScenarioEditor`: **Run** menu (Run F5, Stop run Shift+F5, Run options..., Record...
+  Ctrl+R) and the same as buttons in the top bar; `run()` writes
+  `user://editor_runs/run/<name>.json` (`write_run_copy(kind)`, `run_name()`) and launches
+  `main.tscn` (`launch_process` Callable, `run_pid`, `stop_run()`); `open_record()`,
+  `start_recording(settings, set_output)` (copy under `record/`, optional undoable
+  `output.size` edit, a `RecordJob` polled in `_process`); status line shows the run and
+  the recording; quitting with a recording running asks to cancel it. `project_dir`,
+  `godot_path`, `runs_dir` are overridable (tests).
+- Tests: `tests/test_launch_commands.gd` (subagent), `tests/test_launch_dialogs.gd`
+  (subagent), `tests/test_launch.gd` (path = name hash for loader and player, settings
+  store, job failure paths and progress parsing, editor Run with a fake launcher, editor
+  Record plan + output size + settings, and two long tests, `test_record_pipeline_draft`
+  (`tools/record.gd` on a path, 1920×1080 AVI) and `test_record_from_the_editor`
+  (`start_recording` with an unsaved edit, 1080×1920 AVI), both checked with ffprobe for
+  size, 60 fps and 120 frames; both pass).
+- `--dialog=run|record|record_now` (editor) opens the dialogs / starts a 3 s AVI draft for
+  screenshots (the screenshot waits for 60 recorded frames, then cancels). Screenshots of
+  the Run options, Record settings and the progress page look right.
+- Found on the way: after `OS.kill` on Windows the capture file stays locked for a moment,
+  so `cancel()` waits for the process to exit and retries removing the capture (up to 3 s).
+  The recorder's "Window is (1080, 1325) but the output frame is ..." warning on a small
+  screen is old (the bash pipeline printed it too); the video is still full size.
+
+Changed from the plan:
+
+- No Git Bash from the editor: the editor, `tools/record.gd` and `tools/record.sh` all run
+  `RecordJob`. `override.cfg` is still how the recorder gets its window size (it is removed
+  once the recorder has started, so a Run started during a recording is unaffected except
+  in that first second).
+- Run options are a dialog (Run menu / top bar), not a bar in the timeline.
+
+Next (M16i) needs: validation warnings before Run/Record can hook into `run()` and
+`start_recording()`; the shortcuts F5, Shift+F5 and Ctrl+R exist already.
+
 ### M16i: validation, polish and docs
 
 - `editor/scenario_validator.gd`: schema checks (types, ranges, required keys,
@@ -803,7 +869,7 @@ dialog can sit in the timeline's transport bar or the menu bar.
   `colony_founding` turns out unusable.
 - M16h: record through `tools/record.sh` via Git Bash, or reimplement the pipeline in
   GDScript? Recommendation: Git Bash first (one pipeline); fall back only if it's
-  unreliable.
+  unreliable. Answered in M16h: GDScript (portability), and `record.sh` wraps it.
 
 ## Progress log
 
@@ -833,3 +899,7 @@ dialog can sit in the timeline's transport bar or the menu bar.
   schedule; select, drag, resize, add, delete, Key here) and play preview (a real
   ScenarioPlayer in the output frame, seek with progress); `TimelineModel` (time mapping,
   tracks, hit tests, edits) by a subagent.
+- M16h: the record pipeline reimplemented in GDScript (`RecordJob`, `tools/record.gd`;
+  `record.sh` a wrapper; byte-identical output to the bash version), Run (main.tscn on a
+  temporary copy) and Record (background job, progress, cancel) from the editor, settings
+  per scenario; command lines and the two dialogs by subagents.

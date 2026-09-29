@@ -3,7 +3,11 @@ extends Node
 ##
 ##   godot --path . --write-movie out/frame.png --fixed-fps 60 res://scenes/record.tscn \
 ##         -- --scenario=<name> [--seed=<n>] [--duration=<s>] [--layout=split|normal|nest] [--at=<s>]
-##         [--captions=0] [--size=<W>x<H>]
+##         [--captions=0] [--size=<W>x<H>] [--progress=<frames>]
+##
+## --scenario takes a name in res://scenarios or a path to a .json file (e.g.
+## the editor's temporary copy of an unsaved document). --progress prints a
+## "frame n / total" line every that many frames (default 300).
 ##
 ## --size overrides the scenario's output.size (OutputFrame); the window must
 ## have that size from startup (see below).
@@ -18,9 +22,10 @@ extends Node
 ## (--close_zoom, default 5). Movie Maker writes one PNG per frame, in that
 ## order (the mapping is printed).
 ##
-## tools/record.sh does this and encodes the result. Movie Maker records at the
-## window size fixed at startup, so record.sh also sets the window to the
-## output frame's size (Godot renders the full frame even if the screen is
+## The record pipeline (RecordJob: tools/record.gd, tools/record.sh and the
+## editor's Record dialog) does this and encodes the result. Movie Maker records
+## at the window size fixed at startup, so the pipeline also sets the window to
+## the output frame's size (Godot renders the full frame even if the screen is
 ## smaller); this scene lays its content out in frame pixels.
 ##
 ## No UI is shown. Each rendered frame advances exactly one video frame, so a
@@ -32,6 +37,8 @@ var _frame := 0
 var _stills: PackedFloat32Array = []
 var _close_zoom := 5.0
 var _layout_arg := ""
+## Frames between progress lines (--progress=; the record pipeline reads them).
+var _progress_every := 300
 
 func _ready() -> void:
 	var args := {}
@@ -44,11 +51,12 @@ func _ready() -> void:
 	player = ScenarioPlayer.new()
 	add_child(player)
 	_layout_arg = str(args.get("layout", ""))
+	_progress_every = maxi(1, int(args.get("progress", 300)))
 	player.size_override = str(args.get("size", ""))
 	player.setup(scenario, int(args.get("seed", -1)), 0, null, _layout_arg)
 	player.frame.apply_to_window(get_window(), false)
 	if DisplayServer.get_name() != "headless" and get_window().size != player.frame.size:
-		push_warning("Window is %s but the output frame is %s: start Godot with --resolution %dx%d (tools/record.sh does)"
+		push_warning("Window is %s but the output frame is %s: start Godot with --resolution %dx%d (tools/record.gd does)"
 				% [get_window().size, player.frame.size, player.frame.size.x, player.frame.size.y])
 	if player.presentation != null and args.get("captions", "1") == "0":
 		player.presentation.captions_visible = false
@@ -73,7 +81,7 @@ func _process(_delta: float) -> void:
 		return
 	player.advance(1.0 / ScenarioPlayer.VIDEO_FPS)
 	_frame += 1
-	if _frame % 300 == 0:
+	if _frame % _progress_every == 0:
 		print("  frame %d / %d  (sim %.0f s, %d ants)" % [_frame, _frames_total, player.sim.time(), player.sim.ant_count])
 	if _frame >= _frames_total:
 		get_tree().quit()

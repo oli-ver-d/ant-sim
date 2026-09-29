@@ -33,7 +33,8 @@ godot --headless --path . -s res://tests/bench.gd -- <scenario> <ticks> [ants_pe
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding <seconds> <every> [cell_size]   # nest growth
 tools/screenshot.sh <scenario> <ticks> out.png [seed] [--zoom= --center= --layout= --at=]
 tools/editor.sh [--scenario=<name|path>] [--screenshot=out.png --select=colonies/0]   # scenario editor (M16)
-FORMAT=avi tools/record.sh <scenario> [seed] [seconds]   # fast draft; default PNG is for finals
+FORMAT=avi tools/record.sh <scenario|path.json> [seed] [seconds]   # fast draft; default PNG is for finals
+                                       # (wraps tools/record.gd, the GDScript pipeline the editor's Record uses)
                                        # SIZE=1920x1080 (record/stills/screenshot) or --size= overrides output.size
 ```
 
