@@ -25,7 +25,9 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
 scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish), M17d done (the
 queen's landing), M17e done (alates and the nuptial flight), M17f done (phorid flies),
-M17g done (final assembly and render). M17 is complete. Next: M16 (scenario editor).
+M17g done (final assembly and render). Next: M17h (polish: carried-item layering and
+shadows, pupa floor, denser trunk trail, telling gynes from males, re-render). After M17h
+M17 is complete; then M16 (scenario editor).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -722,4 +724,81 @@ centred, the nest's waste shot, alates taking off.
 
 Left for later (not blocking): the pupa nursery's blocky pale-sand floor (M17c3 note), the
 colony is ~250 ants at the trunk trail (a denser trail needs more sim time), and gynes vs
-males are told apart only by size and colour.
+males are told apart only by size and colour. All three go to M17h.
+
+### M17h: polish (carried-item layering and shadows, open points) and re-render
+
+Goal: fix what still reads badly in the M17g final, then render it again. Four parts, done
+in this order (render-only first, so a sim change comes last and is retimed once). If the
+session runs short, commit parts 1–3 as M17h and move part 4 and the re-render to M17h2.
+
+**1. Carried items: layering and shadows** (render only, `render/item_renderer.gd`,
+`render/world_view.gd`). Reported from the M17g final: where an ant carrying waste passes
+one carrying a leaf fragment, the waste is drawn over the fragment; it should be under it
+(a fragment is held up high over the head, a refuse pellet low in the jaws). The shadows of
+carried items also sit too high.
+- Cause: the carried `ItemRenderer` pass draws `sim.items` in dictionary (id) order, each
+  item's shadow and then the item, all in one node above the ants (`WorldView`: ground
+  items → ants → carried items → riders → wings). So a later item (the waste picked up after
+  the fragment was cut) is drawn over an earlier one, and each carried item's shadow is
+  drawn over the ants and over items drawn before it. `CARRIED_SHADOW_OFFSET` (2.0, 3.5) is
+  also about twice an ant's own drop shadow (`ant.gdshader` `shadow_offset` 0.09, 0.14 body
+  lengths ≈ 1.1, 1.7 for a media), which reads as held very high.
+- Fix: a carry height per item kind, e.g. `Item.carry_height()` (render data only, never
+  read by the sim): leaf fragments (items with a `shape`) high, refuse/spent garden/food
+  pellets and corpses low, brood as `CarriedBroodRenderer` has it. Draw carried items
+  sorted by that height, then by id for a stable order (no flicker as ids change). Move
+  carried-item shadows into their own pass (a third `ItemRenderer` mode, like
+  `WingRenderer.Pass.SHADOW`) drawn **under the ants**, all shadows before any item, with
+  the offset scaled by the carry height and the high one's close to the ant shadow's
+  (about (1.2, 2.0)); ground items' contact shadow unchanged. Check the corpse's own shadow
+  path (`_draw_corpse`) and riders (still over their fragment) and the nest's
+  `underground_top` brood carried over ants.
+- Tests (a new `tests/test_item_layers.gd`, headless, no drawing; no test covers
+  `ItemRenderer` yet): the
+  sort puts a leaf fragment after refuse whatever their ids; the shadow pass runs below the
+  ant renderer in `WorldView`'s children. No hash moves (render only).
+- Verify: stills (`tools/stills.sh leafcutter_life 140,146,151` and `trunk_trail`) cropped
+  where waste and fragment carriers cross; compare with M17g's frames.
+
+**2. Pupa nursery floor** (render only, `render/soil.gdshader` line ~261). The lining is
+shaded by `hash(floor(w / 1.4))`: flat squares 1.4 world units wide (~10 px at zoom 7–9),
+the "blocky" look. Replace with round sand grains (e.g. a cellular/Voronoi pattern with soft
+dots of varied brightness, or smooth value noise at that scale plus a few specks) so it
+reads as dry pale sand close up. Keep the tone (`pupa_floor`) and the egg/larva linings.
+No `sin()` hashes, no shader variables named after built-ins (CLAUDE.md).
+Verify: stills of the pupa nursery at zoom 9 (`leafcutter_life` ~V125–130) and zoom 3.
+
+**3. Telling gynes from males** (render, plus a caption). Now: gyne size 20, male 15 and
+darker; wings scale with body size (`WingRenderer`: length `size * 1.15`). Real males have
+a small head, big eyes, a slim abdomen and proportionally larger wings; gynes a huge
+thorax and heavy abdomen. Options, cheapest first: per-caste wing scale and tint
+(`CasteDef` render fields or a `winged_ants` hint: males' wings relatively longer and
+smokier, gynes' clearer), male body shading in `ant.gdshader` via the caste's existing
+look params, and a caption on the mound close-up ("The big ones are young queens; the
+small dark ones, males."). Changing `size` in `leafcutter.tres` is out (it would move sim
+behaviour); colours and render-only params are fine, but check `state_hash()` of
+`nuptial_flight` is unchanged.
+Verify: stills of `nuptial_flight` at V10 and V17 (mound, take-off).
+
+**4. Denser trunk trail** (sim data, `scenarios/leafcutter_life.json`). At the trail
+chapter (sim 2145–2162) the colony is ~250 ants with ~130 on the surface, and the traffic
+is split with the (800, 1300) leaf's trail; by 2400 only ~44 are on the surface (leaves
+running out?). Constraint: everything before the trail chapter is timed to sim beats
+(egg 258 ecloses at 1935.2), so change only what happens **after ~1940 sim s**, then only
+the trail, waste and finale need retiming. First run `tests/story_probe.gd` to 2250 s with
+`every` 25 and look at surface counts and which leaves are being cut from 1900 on. Then,
+e.g.: spawn a big fresh leaf up the main trail at ~1945 (event), and/or end the (800,
+1300) leaf's supply, so the traffic concentrates on one trail by 2145; move the trail
+chapter later with a longer jump only if the extra sim time is worth the recording time.
+Re-run the probe for the debris, hitchhiker, corpse and flight beats and retime V138 on with
+`tests/timeline_probe.gd`; the follow rules in the README (resolve at the previous
+keyframe, `"same"` holds) apply.
+Verify: `test_scenario::test_leafcutter_life_loads_and_runs`; stills of V140–197.
+
+**Render and finish:** full suite; `FORMAT=avi tools/record.sh leafcutter_life` draft
+checked (1080x1920, 60 fps, 198 s ± the trail change) with frames at the changed places and
+the safe zones drawn over them; then the PNG final in the background (~2 h). README: the
+carried-item layers and shadow pass (render section), the pupa floor, any new caste look
+params, the scenario description if the trail changed. Plan: this section's Done notes and
+the Status line (M17 complete, next M16). Commit as `M17h: ...`.
