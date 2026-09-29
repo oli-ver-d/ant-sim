@@ -385,7 +385,7 @@ and fungus grows over it, months later one egg is followed through the egg, larv
 nurseries to a worker, majors clear debris off the trunk trail while minims ride the
 fragments and phorid flies dive at the carriers (`phorids`), waste and the dead are carried
 out, and at dusk the colony's 14 gynes and males (`alates`) come up and take off on their
-nuptial flight; real-time close-ups, cued time-lapses and time skips under fades, a story
+nuptial flight (a caption tells the big young queens from the small dark males); real-time close-ups, cued time-lapses and time skips under fades, a story
 marker ring on whatever the camera follows; `tests/story_probe.gd` prints when and where
 its story beats happen, including the landing, the nurseries, one egg laid after them and
 the flight), `queen_landing` (~25 s, the prologue of `leafcutter_life` on its own (M17d):
@@ -706,7 +706,10 @@ in `/sim` or `/render`.
 `species/leafcutter/`:
 - `leafcutter.tres`: castes (minim, media, major, queen, and the alates gyne and male, raised
   only with nest param `alates`), channels, state wiring and tunables
-  (`bite_radius`, `cut_time` per caste).
+  (`bite_radius`, `cut_time` per caste). The gyne and male differ in `wing_length`/`wing_tint`
+  and body proportions (render only; sizes unchanged so the sim is unchanged): the gyne has
+  short clear amber wings (1.05) and a heavy thorax and abdomen; the male long smoky wings
+  (1.5), a small head and a slim abdomen, so they can be told apart on the mound.
 - `leaf_source.gd`: procedural leaf (elliptic/lanceolate outline, serrations, veins) stored
   as a 3 px cell mask. Each bite removes a semicircle at the edge nearest the cutter,
   sized by the caste's `carry_capacity`, and the removed cells become the carried
@@ -825,7 +828,7 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
   nursery whose digging failed is planned again. `"carve": true` gives an established nest
   (`initial_chambers`) its nurseries dug at the start. The soil renderer lines each nursery's
   floor with its own tone: eggs on damp, smoothed dark clay, larvae on warm tamped red clay,
-  pupae on dry pale sand (`egg_floor`, `larva_floor`, `pupa_floor` in `soil.gdshader`).
+  pupae on dry pale sand in round grains (`sand_grains`, a cellular pattern) (`egg_floor`, `larva_floor`, `pupa_floor` in `soil.gdshader`).
 - **Founding** (`"open": false`): the queen starts sealed in with a pellet of fungus, manures her
   garden from her reserves (`queen_reserve`) until the first leaf arrives, and tends her first
   brood herself (all minims: `first_caste`, `first_workers`). Once there are `open_entrance_at`
@@ -1006,9 +1009,19 @@ All drawing lives in `render/` (plus each species' own renderers):
   ants; offset down-right along the light by its altitude, fainter and blurrier the higher it
   is) and its wings (over the ants; a blurred beating fan in flight, held out while gliding
   in, folded back over the abdomen on the ground). `AntRenderer` draws an ant in the air
-  larger (`LIFT_SCALE` per unit of altitude). `wing_look.gd` draws a wing (translucent
-  membrane, darker leading edge, mid vein, stigma spot); `ItemRenderer` draws shed wings
-  with it.
+  larger (`LIFT_SCALE` per unit of altitude). Wings are drawn `CasteDef.wing_length` body
+  lengths long (default 1.15) in `CasteDef.wing_tint` (alpha 0: the body colour lightened;
+  `CasteDef.wing_color()`), render-only caste fields also used for a founding queen's shed
+  wings. `wing_look.gd` draws a wing (translucent membrane, darker leading edge, mid vein,
+  stigma spot); `ItemRenderer` draws shed wings with it.
+- `item_renderer.gd`: draws items in three passes: `GROUND` (items lying on the ground with a
+  contact shadow, under the ants), `CARRIED_SHADOW` (shadows of carried items, under the ants
+  with the ants' own shadows) and `CARRIED` (over the ants). Carried items are drawn in order
+  of `Item.carry_height` (render data the sim never reads: 0.5 default, low in the jaws —
+  pellets, seeds, corpses, debris; a species sets 1 for items held high, the leafcutter's cut
+  fragments) then by id, so a fragment is drawn over a waste pellet when carriers cross; a
+  carried item's shadow offset lerps from the ground one (0.8, 1.3) to (1.2, 2.0) at height 1,
+  close to a worker's own drop shadow.
 - Leafcutter: `garden.gdshader` (a raised spongy mass: cellular bumps and pores, strands,
   self-shadowing, a lumpy cottony edge with a floor shadow, green pulp flecks, browning with
   age and mould, gongylidia bead clusters; fine detail fades with zoom), `brood.gdshader`

@@ -34,6 +34,7 @@ func test_bite_removes_cells_and_makes_matching_fragment() -> void:
 	check(removed >= 3, "bite removed %d cells" % removed)
 	check(absf(item.mass - removed * leaf.mass_per_cell) < 1e-5, "fragment mass matches removed cells")
 	check(item.shape != null and item.shape.get_width() > 0, "fragment has a shape image")
+	check_eq(item.carry_height, 1.0, "fragment is held high (drawn over low items)")
 	check(leaf.version > 0, "leaf version bumped for the renderer")
 
 func test_no_bite_away_from_edge() -> void:

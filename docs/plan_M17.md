@@ -25,9 +25,8 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
 scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish), M17d done (the
 queen's landing), M17e done (alates and the nuptial flight), M17f done (phorid flies),
-M17g done (final assembly and render). Next: M17h (polish: carried-item layering and
-shadows, pupa floor, denser trunk trail, telling gynes from males, re-render). After M17h
-M17 is complete; then M16 (scenario editor).
+M17g done (final assembly and render), M17h done (polish and re-render). M17 is complete.
+Next: M16 (scenario editor).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -802,3 +801,38 @@ the safe zones drawn over them; then the PNG final in the background (~2 h). REA
 carried-item layers and shadow pass (render section), the pupa floor, any new caste look
 params, the scenario description if the trail changed. Plan: this section's Done notes and
 the Status line (M17 complete, next M16). Commit as `M17h: ...`.
+
+**Done.** No hash moved (full suite, 283 tests); the sim is unchanged.
+
+1. Carried items: `Item.carry_height` is a field (default 0.5, low), not a method: a shape
+   doesn't say how high an item is held (seeds and debris have shapes too), so the species
+   sets it; `LeafSource` sets 1.0 on cut fragments. `ItemRenderer` has `pass_kind`
+   (`GROUND`, `CARRIED`, `CARRIED_SHADOW`, replacing `ground_layer`); `WorldView` adds a
+   `carried_shadows` pass after the ground items, under the ants. Carried items are sorted by
+   (carry_height, id) (`ItemRenderer.carried_order`); the shadow offset lerps from the ground
+   one (0.8, 1.3) to (1.2, 2.0) at height 1 (`carried_shadow_offset`); ground corpses keep
+   their 0.6 factor. New `tests/test_item_layers.gd` (order, offsets, the pass under the
+   ants) and a check in `test_leaf`. Stills at V140–160: fragments over their carriers,
+   shadows close under them.
+2. Pupa floor: `sand_grains()` in `soil.gdshader` (nearest jittered point per 1.4-unit cell,
+   soft round grains of varied tone, darker gaps, rare specks, mean ~1) replaces the flat
+   squares. Done by a subagent; stills at V126/129 read as fine pale sand.
+3. Gynes vs males: new render-only `CasteDef.wing_length` (default 1.15) and `wing_tint`
+   (alpha 0 = body colour lightened, `wing_color()`), used by `WingRenderer` and a founding
+   queen's shed wings. Gyne: wings 1.05 clear amber, thorax 1.45, abdomen 1.5. Male: wings
+   1.5 smoky, head 0.6, abdomen 0.75. Sizes unchanged. Caption V172–175.6 "The big ones are
+   young queens; the small dark ones, males." Stills of `nuptial_flight` V10/V17.
+4. Denser trail: **not changed.** `story_probe` to 2420 s: the (800, 1300) leaf is 1% left
+   at 2000 and gone by 2025, so from then all traffic is on the (540, 520) trail already.
+   A throwaway corridor probe (ants in x 440–640, y 560–1040, 25 s means) from 1920: 15 ants,
+   rising to ~80 at 2120–2170. A/B with a fresh leaf spawned at 1945 at (660, 800) or at
+   (430, 700): 70–82 and 57–68 at 2145–2170, no denser (it splits the same foragers). The
+   limit is the forager count (~250 ants), which only an earlier, larger colony would fix,
+   and that would retime the whole video. No retiming needed.
+
+Draft video (M17h): `renders/leafcutter_life_seed3_20260929_151324.mp4` (AVI capture,
+1080x1920, 60 fps, 198.0 s, 11880 frames). Frames at V128, V146, V160, V173 and V180 checked
+with the safe zones drawn over them: captions and targets inside, pupa floor sandy, the
+new caption over the mound.
+
+Final video: rendered after this commit (PNG capture), recorded in the next commit.

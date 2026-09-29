@@ -40,3 +40,10 @@ var pixel_size: float = 1.0
 ## sits in the item's frame (x along the carrier's heading), in world units.
 var riders: PackedInt32Array = []
 var rider_offsets: PackedVector2Array = []
+
+## How high a carrier holds this item, from 0 (as low as on the ground) to 1
+## (held up over its head, e.g. a big cut fragment); pellets, seeds, corpses
+## and clutter stay at the default, low in the jaws. Render data only (the sim
+## never reads it): higher carried items are drawn over lower ones and cast
+## their shadow further.
+var carry_height: float = 0.5

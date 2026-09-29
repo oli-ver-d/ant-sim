@@ -172,8 +172,8 @@ func _step_legs(sim: Simulation, i: int, pace: float, dt: float) -> void:
 func _drop_wing(sim: Simulation, nest: ColonyNest, i: int, side: float) -> void:
 	var def := sim.caste_of(i)
 	var w := sim.create_item("wing", 0.02) as Wing
-	w.length = def.size * 1.15
-	w.tint = def.color.lightened(0.55)
+	w.length = def.size * def.wing_length
+	w.tint = def.wing_color()
 	w.side = side
 	w.shed_at = sim.time()
 	w.gone_at = sim.time() + wing_life

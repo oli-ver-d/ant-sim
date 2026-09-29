@@ -79,8 +79,8 @@ func _draw_wings(i: int, w: Vector3) -> void:
 	var h := _heading(i)
 	var at := _at(i)
 	var fwd := Vector2.from_angle(h)
-	var tint := def.color.lightened(0.55)
-	var length := size * 1.15
+	var tint := def.wing_color()
+	var length := size * def.wing_length
 	var pairs := int(w.x)
 	# Right side (1) first shed, so a queen with one pair left has the left.
 	for s: float in [-1.0, 1.0]:

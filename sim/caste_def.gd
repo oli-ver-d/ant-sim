@@ -39,3 +39,11 @@ extends Resource
 ## all the others, so adding them to a species leaves its runs' hashes as
 ## they were.
 @export var alate: bool = false
+## Winged castes' look (render only): fore wing length in body lengths, and
+## the membrane's tint (alpha 0: the body colour, lightened).
+@export var wing_length: float = 1.15
+@export var wing_tint: Color = Color(0, 0, 0, 0)
+
+## The wings' membrane colour (see wing_tint).
+func wing_color() -> Color:
+	return wing_tint if wing_tint.a > 0.0 else color.lightened(0.55)

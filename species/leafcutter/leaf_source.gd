@@ -201,6 +201,8 @@ func take(sim: Simulation, ant: int) -> Item:
 	item.shape = _fragment_image(removed)
 	item.pixel_size = 1.0 / FRAGMENT_RES
 	item.color = BASE
+	# Held up high over the head, over anything carried low.
+	item.carry_height = 1.0
 
 	for cell in removed:
 		mask[cell] = 0

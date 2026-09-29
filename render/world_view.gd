@@ -7,7 +7,8 @@ extends Node2D
 ## traffic, WornGroundRenderer), scenery bases, bridges, nests (spoil heaps,
 ## the nest's own renderer, its middens: MiddenRenderer,
 ## then its entrances: EntranceRenderer), pheromone glow, food, ground
-## items (debris), shadows of ants in the air, ants, carried items, ants
+## items (debris), shadows of carried items, shadows of ants in the air, ants,
+## carried items (low ones under high ones: ItemRenderer), ants
 ## riding on carried items, wings (WingRenderer), the nest's
 ## "surface_top:<nest type>" renderer (things over the ants), scenery
 ## canopy (plant blades and their shadow: CanopyRenderer), falling rain, debug.
@@ -17,7 +18,7 @@ extends Node2D
 ## An underground layer: soil and dug space (SoilRenderer), the nest's own
 ## underground renderer ("underground:<nest type>", bind(sim, nest), e.g.
 ## gardens and brood), portal openings, pheromone glow (hidden by default),
-## ground items, ants, carried items, riders, the nest's "underground_top:<type>"
+## ground items, carried items' shadows, ants, carried items, riders, the nest's "underground_top:<type>"
 ## renderer (things carried over the ants), debug. On the surface, nests
 ## that dig get a spoil heap (SpoilHeapRenderer) under their own renderer.
 
@@ -29,6 +30,8 @@ var pheromone_renderer: PheromoneRenderer
 var ant_renderer: AntRenderer
 var item_renderer: ItemRenderer
 var ground_item_renderer: ItemRenderer
+## Shadows of carried items (under the ants, like the ants' own drop shadows).
+var carried_shadows: ItemRenderer
 var rider_renderer: AntRenderer
 ## Winged ants: shadows of those in the air (under the ants), wings (over them).
 var wing_shadows: WingRenderer
@@ -43,6 +46,7 @@ var alpha: float = 1.0:
 			ant_renderer.alpha = v
 			item_renderer.alpha = v
 			ground_item_renderer.alpha = v
+			carried_shadows.alpha = v
 			rider_renderer.alpha = v
 			wing_shadows.alpha = v
 			wing_renderer.alpha = v
@@ -130,10 +134,17 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 
 	# Items on the ground sit under the ants walking over them.
 	ground_item_renderer = ItemRenderer.new()
-	ground_item_renderer.ground_layer = true
+	ground_item_renderer.pass_kind = ItemRenderer.Pass.GROUND
 	ground_item_renderer.layer = layer
 	ground_item_renderer.bind(sim)
 	add_child(ground_item_renderer)
+
+	# Carried items' shadows fall on the ground, under every ant.
+	carried_shadows = ItemRenderer.new()
+	carried_shadows.pass_kind = ItemRenderer.Pass.CARRIED_SHADOW
+	carried_shadows.layer = layer
+	carried_shadows.bind(sim)
+	add_child(carried_shadows)
 
 	wing_shadows = WingRenderer.new()
 	wing_shadows.pass_kind = WingRenderer.Pass.SHADOW

@@ -62,6 +62,31 @@ float noise(vec2 p) {
 	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
 }
 
+// Round sand grains: nearest jittered feature point per cell (one cell = one
+// grain). Soft round dots of varied brightness, darker gaps between them and
+// rare bright specks. Averages to about 1.0.
+float sand_grains(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	float d1 = 8.0;
+	vec2 id = i;
+	for (int y = -1; y <= 1; y++) {
+		for (int x = -1; x <= 1; x++) {
+			vec2 g = vec2(float(x), float(y));
+			vec2 o = 0.2 + 0.6 * hash2(i + g + 91.0);
+			float d = length(g + o - f);
+			if (d < d1) {
+				d1 = d;
+				id = i + g;
+			}
+		}
+	}
+	float body = 1.0 - smoothstep(0.2, 0.56, d1);
+	float tone = 0.92 + 0.2 * hash(id + 5.0);
+	float speck = step(0.97, hash(id + 17.0)) * 0.12;
+	return mix(0.86, tone + speck, body) * 1.04;
+}
+
 float fbm(vec2 p) {
 	float v = 0.0;
 	float a = 0.5;
@@ -258,8 +283,7 @@ void fragment() {
 		vec3 egg = egg_floor.rgb * (0.93 + 0.12 * fbm(w / 14.0 + 61.0));
 		egg += vec3(0.05) * smoothstep(0.62, 0.85, noise(w / 4.0 + 71.0));
 		vec3 lar = larva_floor.rgb * (0.84 + 0.26 * fbm(w / 6.0 + 83.0));
-		vec2 gc2 = floor(w / 1.4);
-		vec3 pup = pupa_floor.rgb * (0.9 + 0.12 * fbm(w / 18.0 + 97.0)) * (0.88 + 0.22 * hash(gc2 + 91.0));
+		vec3 pup = pupa_floor.rgb * (0.9 + 0.12 * fbm(w / 18.0 + 97.0)) * sand_grains(w / 1.4);
 		vec3 lining = (egg * nurs.r + lar * nurs.g + pup * nurs.b) / max(nurs_sum, 1e-4);
 		fl = mix(fl, lining, lined * 0.92);
 	}
