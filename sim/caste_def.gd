@@ -33,3 +33,9 @@ extends Resource
 @export var state_params: Dictionary = {}
 ## Max mass this caste can take from a food source in one go (used by food sources).
 @export var carry_capacity: float = 1.0
+## A winged reproductive (gyne or male): raised only by a nest's alates
+## (ColonyNest nest_params "alates", see Alates), never by spawn_ratio (keep
+## it 0), and never part of the abstract population. Alate castes come after
+## all the others, so adding them to a species leaves its runs' hashes as
+## they were.
+@export var alate: bool = false

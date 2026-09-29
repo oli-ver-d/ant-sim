@@ -760,8 +760,13 @@ func spawn_initial(sim: Simulation, caste: int) -> int:
 
 ## States a caste may take in this nest besides its own lists (see
 ## Colony.build_allowed_states), e.g. "found_nest" for a queen who lands.
-func extra_states(_caste: StringName) -> PackedStringArray:
+func extra_states(_caste: CasteDef) -> PackedStringArray:
 	return PackedStringArray()
+
+## Calls a nuptial flight (scenario event "nuptial_flight"): a nest raising
+## alates sends them up to fly (see Alates). Returns false if it has none.
+func start_nuptial_flight(_sim: Simulation) -> bool:
+	return false
 
 ## Winged ants, for views: ant index -> Vector3(pairs of wings on, altitude
 ## above the ground, beating 0-1). None by default.

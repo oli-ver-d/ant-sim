@@ -861,7 +861,9 @@ func state_hash() -> String:
 		for p in portals:
 			ctx.update(PackedByteArray([1 if p.open else 0]))
 		for colony in colonies:
-			ctx.update(colony.abstract_by_caste.to_byte_array())
+			# Alate castes (last, never abstract) are left out, so a species
+			# that gains them hashes as before.
+			ctx.update(colony.abstract_by_caste.slice(0, colony.species.hashed_castes()).to_byte_array())
 	return ctx.finish().hex_encode()
 
 static func _vec2(v: Variant) -> Vector2:

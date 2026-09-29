@@ -23,6 +23,9 @@ static func register(registry: Registry) -> void:
 	registry.register_behaviour("carry_corpse", CarryCorpseBehaviour.new())
 	# Only for a founding queen that lands first (ColonyNest.founding).
 	registry.register_behaviour("found_nest", FoundNestBehaviour.new())
+	# Only for colonies raising alates (ColonyNest.alates).
+	registry.register_behaviour("alate", AlateBehaviour.new())
+	registry.register_behaviour("escort", EscortBehaviour.new())
 
 	registry.register_food_source_type("food_pile", FoodPile)
 	registry.register_item_type("crumb", Item)

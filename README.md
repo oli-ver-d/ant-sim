@@ -165,7 +165,29 @@ tools/ tests/
   the entrance toward `from`), `altitude` 220, `flight` 9 s, `shed` 6 s, `loop_radius` 14,
   `dig` 20 s, `spoil_pellets` 6, `wing_life` 900 s; about 50 s in all with the defaults.
   Without `landing` nothing changes (existing runs hash the same). The queen's allowed states
-  include `NestType.extra_states(caste_id)` (`found_nest` here).
+  include `NestType.extra_states(caste)` (`found_nest` here).
+- **Alates and the nuptial flight** (opt-in, nest param `"alates": {...}`, any `ColonyNest`
+  with an underground; `Alates`, core states `alate` and `escort`): once the colony has
+  `from_population` ants (400), the queen's next `count` eggs (12) become alates, ants of the
+  species' alate castes (`CasteDef.alate`, e.g. the leafcutter's `gyne` and `male`), shared out
+  by `castes` weights (`{"gyne": 1, "male": 2}`; default every alate caste, weight 1) in a fixed
+  order (no random numbers). Scenario `population` may include alates too. Alates do no work,
+  don't age and never join the abstract population; they wait in the nest, wandering slowly
+  round the dug chamber nearest the main shaft, until a `nuptial_flight` event. Then they set
+  off up one every `stagger` s (0.8), gather on the mound round the entrance (within
+  `gather_radius`, 45, keeping off the hole), milling and now and then spreading their wings,
+  while up to `escort` surface workers (10; the biggest first, then the nearest within
+  `escort_reach`, 160) mill round them. From `gather` s (12) after the call they take off one
+  every ~`every` s (1.2, not quite regular), first out first: each beats its wings on the
+  ground for `warm_up` s (0.8), then climbs to `altitude` (420) over `climb` s (7) while
+  drifting `distance` units (260) toward `drift` (default up and right, fanned over `spread`
+  radians), and leaves the world. Alates that emerge after a flight wait for the next one;
+  escorts go back to their caste's first state when the last alate is gone. Views draw
+  alates' wings (`NestType.winged_ants`): folded in the nest, spread now and then on the
+  mound, beating as they take off, with the body larger and the shadow further off as they
+  climb. Alate castes come last in a species and are left out of `state_hash()`'s per-caste
+  counts (`SpeciesDef.hashed_castes()`), so adding them changed no existing hash; without
+  `alates` nothing runs.
 - **Refuse**: a nest's refuse goes to middens (`Midden`, `NestType` "Refuse"). The first is
   sited when the first load is ready, another next to it when it is full (nest param
   `"midden"`: `style` pile / ring / scatter, `distance`, `sites`, `capacity`,
@@ -364,7 +386,10 @@ nurseries and one egg laid after them), `queen_landing` (~25 s, the prologue of
 `leafcutter_life` (M17d; to be merged into it in M17g): the same colony, ground and scenery
 with `founding.landing` on; a winged queen glides down onto the forest floor, sheds her
 wings, walks the site, digs down and seals herself in; surface layout, the camera follows
-the queen with `"follow": {"state": "found_nest"}`).
+the queen with `"follow": {"state": "found_nest"}`), `nuptial_flight` (~32 s, the finale
+of `leafcutter_life` (M17e; to be merged in M17g): the same ground with an established nest
+of ~140 workers and 14 alates; at dusk a `nuptial_flight` event sends the gynes and males up
+onto the mound, majors and workers mill round them, and they take off one by one).
 Every scenario has ground
 materials and scenery; only `meadow_forage` and the two founding runs have blocking props
 (scattered clear of the later food sites).
@@ -434,7 +459,9 @@ JSON files in `scenarios/`. Simulation content:
   `add_scenery`, `remove_scenery` (by `"name"` or `"at": [x, y]`), `add_colony`, `rain` (`area`
   rect or circle, whole world if omitted; `wash_half_life` makes
   trails fade over a moment instead of vanishing), `drop_debris` (with `"scatter": {"on_channel": "c0.food", ...}` debris
-  lands on the strongest spots of a trail, wherever it emerged); see `sim/scenario_events.gd`
+  lands on the strongest spots of a trail, wherever it emerged), `nuptial_flight`
+  (`"colony": n`, or every colony; nests raising alates send them up to fly, see "Alates and
+  the nuptial flight"); see `sim/scenario_events.gd`
 
 Playback (video) settings:
 - `duration`: video length in seconds
@@ -663,7 +690,8 @@ in `/sim` or `/render`.
 ## Species: leafcutter ants
 
 `species/leafcutter/`:
-- `leafcutter.tres`: castes (minim, media, major), channels, state wiring and tunables
+- `leafcutter.tres`: castes (minim, media, major, queen, and the alates gyne and male, raised
+  only with nest param `alates`), channels, state wiring and tunables
   (`bite_radius`, `cut_time` per caste).
 - `leaf_source.gd`: procedural leaf (elliptic/lanceolate outline, serrations, veins) stored
   as a 3 px cell mask. Each bite removes a semicircle at the edge nearest the cutter,

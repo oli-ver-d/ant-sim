@@ -218,10 +218,15 @@ func _remove(i: int) -> void:
 
 ## Caste of new brood: nest.pick_caste(), or with care on, `first_caste`
 ## until the nest has raised `first_workers` (a founding colony's first
-## workers are all small).
+## workers are all small). A nest raising alates makes some of them alates
+## (Alates.next_caste).
 func _brood_caste(sim: Simulation, nest: ColonyNest, species: SpeciesDef) -> int:
 	if care and first_caste >= 0 and nest.ants_raised + count() < first_workers:
 		return first_caste
+	if care and nest.alates != null and species == null:
+		var a := nest.alates.next_caste(sim, nest)
+		if a >= 0:
+			return a
 	return nest.pick_caste(sim, species)
 
 # --- Care (nests with an underground) ------------------------------------------------
@@ -434,8 +439,9 @@ func _update_care(sim: Simulation, nest: ColonyNest, dt: float) -> void:
 func free_callow(sim: Simulation, nest: ColonyNest, k: int, state_id: String) -> int:
 	var colony := sim.colonies[nest.colony_id]
 	var ant := -1
-	# Into a full nest the new worker joins the abstract population.
-	if sim.layer_full(nest.underground_layer):
+	# Into a full nest the new worker joins the abstract population (not an
+	# alate).
+	if sim.layer_full(nest.underground_layer) and not colony.species.castes[caste[k]].alate:
 		sim.add_abstract(colony, caste[k])
 	else:
 		ant = sim.spawn_ant(colony, caste[k], pos[k], sim.rng.randf_range(-PI, PI), nest.underground_layer)

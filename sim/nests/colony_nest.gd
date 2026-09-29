@@ -22,7 +22,10 @@ extends NestType
 ##         open_entrance_at workers they dig the entrance shaft open;
 ##       - more entrances as the colony grows (nest_params "entrances");
 ##       - nurseries: once the colony is big enough, eggs, larvae and pupae
-##         each get a chamber of their own (see _plan_nurseries()).
+##         each get a chamber of their own (see _plan_nurseries());
+##       - optionally, a queen who lands first (nest_params "founding", see
+##         Founding) and alates raised for a nuptial flight (nest_params
+##         "alates", see Alates).
 ##
 ## Species nests provide the food interface below (food_stock(), eat_stock(),
 ## food_point(), take_food_at(), return_food(), make_brood_food()) and
@@ -97,6 +100,9 @@ var _rescue_timer: float = 60.0
 ## A queen who lands first (nest_params "founding": {"landing": {...}}, see
 ## Founding), or null: she starts in her chamber.
 var founding: Founding
+## Winged reproductives and their nuptial flight (nest_params "alates", see
+## Alates), or null.
+var alates: Alates
 ## Cached places in chambers (see _spot).
 var _spots: Dictionary[Vector3, Vector2] = {}
 ## Default roughness of dug outlines (nest_params underground "overdig").
@@ -122,6 +128,9 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	if landing is Dictionary and chambers_layout != null:
 		founding = Founding.new()
 		founding.setup(sim, self, landing)
+	if params.get("alates") is Dictionary and chambers_layout != null:
+		alates = Alates.new()
+		alates.setup(owner_colony.species, params["alates"])
 
 # --- What the colony lives on (species nests override) ---------------------------------
 
@@ -268,6 +277,8 @@ func _update_colony(sim: Simulation, dt: float) -> void:
 		if not founding.is_home():
 			return
 	brood.update(sim, self, dt)
+	if alates != null:
+		alates.update(sim, self, dt)
 	_role_timer -= dt
 	if _role_timer <= 0.0:
 		_role_timer = 1.0
@@ -296,6 +307,8 @@ func hash_underground(ctx: HashingContext) -> void:
 			ctx.update(nursery_planned.to_byte_array())
 	if founding != null:
 		founding.hash_into(ctx)
+	if alates != null:
+		alates.hash_into(ctx)
 
 ## Called when chambers have finished digging (chambers_layout.list[k].dug).
 func _chambers_dug(_sim: Simulation) -> void:
@@ -305,17 +318,28 @@ func _chambers_dug(_sim: Simulation) -> void:
 func queen_home() -> bool:
 	return founding == null or founding.is_home()
 
-func extra_states(caste: StringName) -> PackedStringArray:
-	if founding != null and caste == &"queen":
-		return PackedStringArray(["found_nest"])
-	return PackedStringArray()
+func extra_states(caste: CasteDef) -> PackedStringArray:
+	var out := PackedStringArray()
+	if founding != null and caste.id == &"queen":
+		out.append("found_nest")
+	if alates != null:
+		out.append_array(alates.extra_states(caste))
+	return out
 
-## The landing queen while she still has wings (see NestType.winged_ants).
+## The landing queen while she still has wings, and the alates (see
+## NestType.winged_ants).
 func winged_ants(sim: Simulation) -> Dictionary[int, Vector3]:
-	if founding == null or founding.wings_on <= 0 or queen_ant < 0 or sim.alive[queen_ant] == 0:
-		return {}
-	var flying := founding.phase == Founding.Phase.FLYING
-	return {queen_ant: Vector3(founding.wings_on, founding.queen_altitude(sim), 1.0 if flying else 0.0)}
+	var out: Dictionary[int, Vector3] = {}
+	if founding != null and founding.wings_on > 0 and queen_ant >= 0 and sim.alive[queen_ant] != 0:
+		var flying := founding.phase == Founding.Phase.FLYING
+		out[queen_ant] = Vector3(founding.wings_on, founding.queen_altitude(sim), 1.0 if flying else 0.0)
+	if alates != null:
+		for i in alates.ants:
+			out[i] = alates.wings_of(sim, i)
+	return out
+
+func start_nuptial_flight(sim: Simulation) -> bool:
+	return alates != null and alates.start_flight(sim)
 
 ## While a landing queen digs, the main entrance is her hole (see
 ## Founding.entrance_look); before, there is none to draw.
@@ -327,9 +351,11 @@ func entrance_sites() -> Array[EntranceSite]:
 		out[0].radius *= look.z
 	return out
 
-## Ants of this colony other than the queen.
+## Ants of this colony other than the queen (and alates).
 func workers_alive(sim: Simulation) -> int:
 	var q := 1 if queen_ant >= 0 and sim.alive[queen_ant] != 0 else 0
+	if alates != null:
+		q += alates.alive_count()
 	return sim.colonies[colony_id].population - q
 
 ## True while there are no workers yet: the founding queen cares for her
@@ -472,8 +498,10 @@ func spawn_initial(sim: Simulation, caste: int) -> int:
 	return i
 
 ## The state a new worker of `caste` starts in underground: a nest role if
-## the caste takes them, else straight up to the surface.
+## the caste takes them, else straight up to the surface (an alate: "alate").
 func first_state(sim: Simulation, caste: int) -> String:
+	if alates != null and sim.colonies[colony_id].species.castes[caste].alate:
+		return "alate"
 	var idx: int = sim.behaviour_index.get("nest_role", -1)
 	return "nest_role" if idx >= 0 and sim.colonies[colony_id].allows(caste, idx) else "go_up"
 

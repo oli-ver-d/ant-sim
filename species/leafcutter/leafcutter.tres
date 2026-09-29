@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="SpeciesDef" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="SpeciesDef" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://sim/species_def.gd" id="1_species"]
 [ext_resource type="Script" path="res://sim/caste_def.gd" id="2_caste"]
@@ -93,6 +93,44 @@ underground_states = PackedStringArray("queen")
 initial_state = "queen"
 carry_capacity = 0.0
 
+[sub_resource type="Resource" id="Caste_gyne"]
+script = ExtResource("2_caste")
+id = &"gyne"
+size = 20.0
+speed = 16.0
+turn_rate = 2.5
+color = Color(0.46, 0.19, 0.07, 1)
+head_scale = 1.3
+thorax_scale = 1.35
+abdomen_scale = 1.3
+mandible_size = 0.45
+leg_length = 1.05
+spawn_ratio = 0.0
+states = PackedStringArray()
+underground_states = PackedStringArray()
+initial_state = "alate"
+carry_capacity = 0.0
+alate = true
+
+[sub_resource type="Resource" id="Caste_male"]
+script = ExtResource("2_caste")
+id = &"male"
+size = 15.0
+speed = 20.0
+turn_rate = 3.5
+color = Color(0.2, 0.09, 0.05, 1)
+head_scale = 0.65
+thorax_scale = 1.3
+abdomen_scale = 1.0
+mandible_size = 0.12
+leg_length = 1.2
+spawn_ratio = 0.0
+states = PackedStringArray()
+underground_states = PackedStringArray()
+initial_state = "alate"
+carry_capacity = 0.0
+alate = true
+
 [sub_resource type="Resource" id="Channel_home"]
 script = ExtResource("3_channel")
 name = &"home"
@@ -114,7 +152,7 @@ color = Color(1, 0.72, 0.25, 1)
 script = ExtResource("1_species")
 id = &"leafcutter"
 display_name = "Leafcutter ants"
-castes = Array[ExtResource("2_caste")]([SubResource("Caste_minim"), SubResource("Caste_media"), SubResource("Caste_major"), SubResource("Caste_queen")])
+castes = Array[ExtResource("2_caste")]([SubResource("Caste_minim"), SubResource("Caste_media"), SubResource("Caste_major"), SubResource("Caste_queen"), SubResource("Caste_gyne"), SubResource("Caste_male")])
 channels = Array[ExtResource("3_channel")]([SubResource("Channel_home"), SubResource("Channel_food")])
 nest_type = "fungus_nest"
 nest_params = {

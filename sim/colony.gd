@@ -161,7 +161,7 @@ func build_allowed_states(state_index: Dictionary[String, int]) -> void:
 				allowed_states[c * num_states + state_index[s]] = 1
 		# States the nest adds for this caste (e.g. a queen who lands first).
 		if nest != null:
-			for s in nest.extra_states(caste.id):
+			for s in nest.extra_states(caste):
 				allowed_states[c * num_states + state_index[s]] = 1
 		# Only colonies that leave corpses take them out (so the state
 		# doesn't count in the hashes of the others).

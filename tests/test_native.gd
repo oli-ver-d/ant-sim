@@ -20,6 +20,7 @@ const RUNS := {
 	"colony_founding": 1500,
 	"meadow_forage": 600,
 	"queen_landing": 1800,
+	"nuptial_flight": 900,
 	"res://tests/fixtures/scenarios/dig_demo.json": 900,
 	"res://tests/fixtures/scenarios/shapes_demo.json": 900,
 	"res://tests/fixtures/scenarios/highway_demo.json": 900,
@@ -79,6 +80,7 @@ func test_native_matches_gdscript_two_species() -> void: _check_matches("two_spe
 func test_native_matches_gdscript_colony_founding() -> void: _check_matches("colony_founding")
 func test_native_matches_gdscript_meadow_forage() -> void: _check_matches("meadow_forage")
 func test_native_matches_gdscript_queen_landing() -> void: _check_matches("queen_landing")
+func test_native_matches_gdscript_nuptial_flight() -> void: _check_matches("nuptial_flight")
 func test_native_matches_gdscript_dig_demo() -> void: _check_matches("res://tests/fixtures/scenarios/dig_demo.json")
 func test_native_matches_gdscript_shapes_demo() -> void: _check_matches("res://tests/fixtures/scenarios/shapes_demo.json")
 func test_native_matches_gdscript_highway_demo() -> void: _check_matches("res://tests/fixtures/scenarios/highway_demo.json")

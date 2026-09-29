@@ -24,7 +24,8 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
 scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish), M17d done (the
-queen's landing). Next: M17e (alates and the nuptial flight).
+queen's landing), M17e done (alates and the nuptial flight). Next: M17f (phorid flies,
+optional), then M17g.
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -519,6 +520,75 @@ Files: `sim/nests/colony_nest.gd`, `sim/scenario_events.gd` (`nuptial_flight`),
 `sim/behaviours/take_off.gd`, `species/leafcutter/leafcutter.tres`, ant renderer/shader
 (shared wing drawing with M17d), tests (`test_alates.gd`), README.
 Verify: tests incl. hash checks; stills of the flight; full suite.
+
+**Done.** Sim (all opt-in; without `"alates"` nothing runs or is hashed):
+- `sim/nests/alates.gd` (`Alates`, owned by `ColonyNest.alates`, nest_params `"alates"`,
+  needs an underground). Raising: `Brood._brood_caste` asks `Alates.next_caste()` for every
+  egg laid (after `first_workers`); past `from_population` the next `count` eggs are alates,
+  shared out over `castes` weights by largest shortfall (no RNG). Alates emerge like any
+  callow; `ColonyNest.first_state()` gives them `"alate"`; they never go abstract
+  (`free_callow`), don't age (no carry capacity) and don't count in `workers_alive()`.
+  Scenario `population` may include them.
+- Per alate (parallel arrays in `Alates`, hashed): WAIT (wander in the dug chamber nearest
+  the main shaft, pauses from `sim.rng`) → UP on a flight (one every `stagger` s, via
+  `Travel.to_portal`) → GATHER on the mound (sunflower spots within `gather_radius`, off the
+  hole, milling) → TAKE_OFF (first out first, from `gather` s after the call, every ~`every`
+  s; `warm_up` s beating on the ground, then `climb` s: altitude `altitude * u^1.6`, drifting
+  `distance * u^2` toward `drift` fanned over `spread`, clamped inside the world) → removed
+  in `Alates.update()` (outside the ant loop), counted in `flown`/`flown_by`.
+- Escorts: once a second while alates are out, up to `escort` surface workers within
+  `escort_reach` (not carrying or riding; biggest caste first, then nearest) are put in
+  `"escort"`: they mill round the mound at 1–1.6 × `gather_radius` and go back to their
+  caste's `initial_state` when the flight is over.
+- Core states `alate` (`AlateBehaviour`, joins/leaves `Alates` in enter/exit) and `escort`
+  (`EscortBehaviour`), registered after `found_nest`; allowed only through
+  `NestType.extra_states(caste)` (now takes the `CasteDef`, not its id) when the nest has
+  alates: `alate` for alate castes, `escort` for castes with carry capacity and surface states.
+- Scenario event `{"type": "nuptial_flight", "colony": n}` → `NestType.start_nuptial_flight()`
+  (false for nests without alates, or while a flight is under way).
+- `CasteDef.alate`; `leafcutter.tres` gains `gyne` (size 20, like the queen with a smaller
+  abdomen) and `male` (15, dark, small head, big thorax), spawn_ratio 0, initial state
+  `alate`, after the queen. Hashes: `state_hash()` hashes `abstract_by_caste` only up to
+  `SpeciesDef.hashed_castes()` (castes before the first alate), and new castes allow no
+  states without `alates`, so no existing hash moved (see below).
+Render: `ColonyNest.winged_ants()` adds every alate (`Alates.wings_of`: folded in the nest and
+going up, held out now and then on the mound, beating with altitude on take-off), so M17d's
+`WingRenderer` and `AntRenderer.LIFT_SCALE` draw them with no render change.
+Scenario: `scenarios/nuptial_flight.json` (the finale on its own, 32 s): leafcutter_life's
+ground, an open nest with 3 chambers, 134 workers and queen, 5 gynes and 9 males; flight
+called at sim 1 s. Probe (seed 3): first alate out 8.0, escorts 9.4, take-offs 10.8–~28,
+last gone ~34 sim s; video: 3x until V2.3, real time from V3; camera on the mound zoom
+5.5 → 4.5 → 2.8 pulling back as they climb; dusk grade; three captions.
+Tests: `tests/test_alates.gd` (7: brood raises 2 gynes + 4 males past the population, all
+waiting underground; none below it; the whole flight — gathering, escorts, all drawn with
+wings, climbing, all flown by caste, escorts back to work, queen stays; a male emerging after
+a flight waits for the next; deterministic; off without params (no states allowed);
+`hashed_castes`). `tests/test_native.gd` runs `nuptial_flight` (900 ticks) both ways.
+Stills (`tools/screenshot.sh nuptial_flight 0 out.png 3 --at=<video s>`): alates on the
+mound with folded and spread wings among the escorts, several climbing away with beating
+wings and fading shadows. Fixed after them: `gather_radius` 26 → 45 and alates kept off the
+hole (they piled up on the entrance), UP at full speed (the walk up took ~9 s).
+
+Hashes: `state_hash()` after 1800 ticks, GDScript and native, of `colony_founding`,
+`leafcutter_life`, `queen_landing`, `fungus_farm`, `trunk_trail`, `leaf_strip` and the
+`brood_demo`, `garden_demo`, `nest_bench`, `midden_demo` and `entrances_demo` fixtures are
+identical to HEAD before M17e (baseline recorded in a worktree of HEAD). Full suite passes
+(the leafcutter caste count in `test_simulation` is now 6).
+
+Draft video (M17e): `renders/nuptial_flight_seed3_20260929_083831.mp4` (AVI capture,
+1080x1920, 60 fps, 32.0 s, 1920 frames). Frames at V5, V10, V13, V17, V22 and V27 were
+checked: alates spread over the mound among the escorts, several climbing away with beating
+wings, the last few leaving as the camera pulls back. Reads well enough as a finale; left
+for M17g: alates in the nest aren't shown (the finale is surface only), the mound is crowded
+with ~100 workers that come out at the start of this standalone run, and males vs gynes
+are told apart only by size and colour.
+
+For M17g: add to `leafcutter_life`'s colony `"alates": {"from_population": 150, "count": 14,
+"castes": {"gyne": 1, "male": 2}, ...}` with the finale's flight params from
+`nuptial_flight.json`, and a `nuptial_flight` event just before the closing; check with the
+story probe that the alates have emerged by then (egg to adult is ~135 s plus carrying at
+leafcutter_life's brood times; population 150 comes ~1500 s) and place the finale's camera,
+captions and grade from `nuptial_flight.json`.
 
 ### M17f: phorid flies (optional flavour)
 

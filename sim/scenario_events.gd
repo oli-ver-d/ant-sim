@@ -16,6 +16,8 @@ extends RefCounted
 ##    "wash_half_life": 0.5}   (no area = whole world; half-life 0 = wiped at once)
 ##   {"t": 30, "type": "drop_debris", "debris": [{"type": "twig", "pos": [x, y], ...}, ...]}  (see Debris)
 ##   {"t": 30, "type": "drop_debris", "scatter": {"count": 6, "near": [x, y], "on_channel": "c0.food", ...}}
+##   {"t": 30, "type": "nuptial_flight", "colony": 0}   (no colony = every one; nests raising
+##      alates send them up to fly, see Alates)
 ##
 ## Obstacle shapes:
 ##   {"shape": "polyline", "points": [[x, y], ...], "width": 16, "kind": "wall" | "water"}
@@ -46,6 +48,10 @@ static func apply(sim: Simulation, event: Dictionary) -> void:
 			remove_scenery(sim, event)
 		"rain":
 			sim.start_rain(event.get("area", {}), float(event.get("duration", 5.0)), float(event.get("wash_half_life", 0.0)))
+		"nuptial_flight":
+			for c in sim.colonies:
+				if not event.has("colony") or int(event["colony"]) == c.id:
+					c.nest.start_nuptial_flight(sim)
 		"drop_debris":
 			for d: Dictionary in event.get("debris", []):
 				Debris.create(sim, d)

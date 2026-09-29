@@ -35,3 +35,11 @@ func caste_index(caste_id: StringName) -> int:
 		if castes[i].id == caste_id:
 			return i
 	return -1
+
+## Castes before the first alate caste (CasteDef.alate; all of them if none):
+## the ones state hashes count per caste.
+func hashed_castes() -> int:
+	for i in castes.size():
+		if castes[i].alate:
+			return i
+	return castes.size()
