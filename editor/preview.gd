@@ -41,6 +41,12 @@ var selection := Rect2():
 		selection = r
 		if _overlay != null:
 			_redraw_layers()
+## Items with validation issues: [world rect, colour] pairs (M16i).
+var issue_marks: Array = []:
+	set(m):
+		issue_marks = m
+		if _overlay != null:
+			_redraw_layers()
 ## Milliseconds the last build took.
 var build_ms: float = 0.0
 var status: String = ""
@@ -368,5 +374,7 @@ class PreviewOverlay extends Node2D:
 		draw_rect(r, FRAME, false, 2.0 * px)
 		draw_string(ThemeDB.fallback_font, r.position + Vector2(4, -6) * px, "output %dx%d (%s)" % [f.size.x,
 				f.size.y, f.safe_zones], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(int(14 * px), 1), FRAME)
+		for m: Array in preview.issue_marks:
+			draw_rect((m[0] as Rect2).grow(10 * px), m[1], false, 2.0 * px)
 		if preview.selection.has_area():
 			draw_rect(preview.selection.grow(6 * px), SELECT, false, 2.0 * px)

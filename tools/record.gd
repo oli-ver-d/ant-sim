@@ -16,7 +16,7 @@ extends SceneTree
 ##   --captions=0         without the scenario's captions
 ##   --start=<s>          start at this video time (seconds then counts from it)
 ##   --out_dir=<dir>      default renders/
-##   --out=<file.mp4>     file name in out_dir (default <scenario>_seed<N>[_WxH]
+##   --out=<file.mp4>     file name in out_dir, or an absolute path (default <scenario>_seed<N>[_WxH]
 ##                        [_nocaptions][_from<s>]_<YYYYMMDD_HHMMSS>.mp4)
 ##   --keep_frames=1      keep the capture folder
 ##   --ffmpeg=<path>      ffmpeg executable (default: ffmpeg on PATH)

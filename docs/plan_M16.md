@@ -12,8 +12,8 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16h done; next M16i. (M17 is complete. M15l, founding frame budget and PNG
-finals, is still open and independent of M16; finish it first or in between phases.)
+Status: M16 complete (M16i done). (M17 is complete. M15l, founding frame budget and PNG
+finals, is still open and independent of M16: it is next.)
 
 ## Where things stand (before M16)
 
@@ -846,6 +846,60 @@ Next (M16i) needs: validation warnings before Run/Record can hook into `run()` a
   is kept of unknown keys), the `output` section and `--size=`/`SIZE=` in the format
   and tooling docs; the editor command in CLAUDE.md "Commands".
 
+**Done (M16i).** What exists now:
+
+- `editor/scenario_validator.gd` (`ScenarioValidator`): `validate(data, schema, sim)` =
+  `schema_issues` + `SceneChecks.issues`; an issue is `{path, severity ("error" |
+  "warning"), message}`; helpers `issue`, `count`, `under(issues, path)`, `summary`
+  ("2 errors, 1 warning"), `format` (one line). Schema checks walk the schema like
+  `unknown_paths`: any_of with no matching form, variant tag missing or unknown, dict not
+  an object, missing required keys, unknown keys (**warning**, they are kept), map keys
+  not in `keys_from` (e.g. castes), list not a list, scalars (number / whole number /
+  range from `limits`, bool, string, enum incl. Registry choices, vec2, size (not
+  negative), rect, points, colour), and `output.size` (`OutputFrame.valid_size`).
+- `editor/scene_checks.gd` (`SceneChecks`, by a subagent): nests, food and surface portal
+  ends outside the world or in a wall or water (errors; walls and portals need the built
+  sim, the world size is `sim.config.world_size`, else the default config's), events whose
+  sim `t` is after `time_map.sim_time_at(duration)`, video-time items (camera keys,
+  captions, fades, grade, layout modes, story marker) after `duration`, nests closer than
+  max(60, sum of `nest_params.radius`), caption boxes (measured as `Presentation` places
+  them) outside `OutputFrame.safe_rect()` (warnings).
+- Editor: `validate()` after every preview build (`status_changed`), with the preview's
+  sim; **Problems** list under the inspector (errors first, click selects the item),
+  outline rows (and their sections) coloured red / orange with the messages as tooltip,
+  `EditorPreview.issue_marks` outlines the items in the preview. File Save / Save As, Run
+  (F5) and Record... (Ctrl+R) go through `_check_then(verb, action)`: with errors a
+  dialog lists them and "<verb> anyway" goes on (the API calls `run()`,
+  `start_recording()`, `_save_to()` don't ask). Split offsets (outline, inspector,
+  timeline) are saved in the settings file's "layout" section when dragged and restored;
+  started without `--scenario=` the editor reopens the last file (`--new` for a new one).
+  Shortcuts and schema tooltips already existed (M16c-h).
+- `tests/validate_scenarios.gd` (CLI, exit 1 on errors); every shipped scenario is clean.
+- `LaunchCommands.record_plan`: an absolute `file_name` (`--out=`, `OUT=`) is used as it is.
+- Tests: `tests/test_validator.gd` (schema checks, shipped scenarios in 4 groups plus a
+  test that the groups list every file, editor problems list / marks / selection / undo,
+  warning before Run with a fake launcher, layout and last file), `tests/test_scene_checks.gd`
+  (subagent: one test per check, malformed data, shipped scenarios).
+- Acceptance (a debug script driving the editor's own place tools and commands, since
+  deleted): from `--new`, Colony tool (second colony, another species), two Food drags,
+  Scatter rect, Rain circle (t = 3), Camera key tool plus Add camera key, Add caption,
+  output 1920×1080; no issues; saved; recorded from the editor with `start_recording`
+  (AVI, 5 s): 1920×1080, 60/1 fps, 300 frames, 5.0 s. The saved JSON by path through
+  `tools/record.sh` (AVI, 3 s): 1920×1080, 60 fps, 180 frames; `tools/screenshot.sh` on the
+  path (main.tscn) shows it in the landscape window. An editor screenshot of a broken copy
+  (odd output size, unknown species, food outside the world, radius 0, camera key at 25 s)
+  shows the Problems list, red / orange outline rows and preview marks.
+
+Changed from the plan:
+
+- Interacting with the Run from the editor was not repeated by hand (the real launch was
+  checked in M16h; here Run is tested with a fake launcher and the file with main.tscn).
+- Found: a colony with an unregistered species makes `ScenarioLoader` assert (script error
+  in the preview build); the editor survives and the validator reports it, but the loader
+  still asserts. Left as it is.
+
+M16 is complete. Next: M15l (founding frame budget and PNG finals) is still open.
+
 ## Open questions (decide before the phase that needs them)
 
 - M16a: if the writer can't reproduce the shipped files byte for byte, reformat all
@@ -903,3 +957,7 @@ Next (M16i) needs: validation warnings before Run/Record can hook into `run()` a
   `record.sh` a wrapper; byte-identical output to the bash version), Run (main.tscn on a
   temporary copy) and Record (background job, progress, cancel) from the editor, settings
   per scenario; command lines and the two dialogs by subagents.
+- M16i: `ScenarioValidator` (schema checks) and `SceneChecks` (by a subagent), Problems list,
+  outline and preview marks, warnings before Save / Run / Record, `validate_scenarios.gd`,
+  every shipped scenario clean; remembered panel sizes and last file; acceptance scenario
+  built with the editor's tools and recorded at 1920×1080; README editor guide (subagent).

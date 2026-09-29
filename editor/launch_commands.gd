@@ -139,7 +139,8 @@ static func record_plan(settings: Dictionary, scenario_path: String, data: Dicti
 		file_name = name
 	if file_name.get_extension().to_lower() != "mp4":
 		file_name += ".mp4"
-	var out_path := out_dir.path_join(file_name)
+	# An absolute file name is used as it is (its folder must exist).
+	var out_path := file_name.simplify_path() if _is_absolute(file_name) else out_dir.path_join(file_name)
 	var capture_dir := out_dir.path_join("capture_" + name)
 	var capture := capture_dir.path_join("capture.avi" if format == "avi" else "frame.png")
 

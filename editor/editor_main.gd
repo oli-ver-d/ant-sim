@@ -7,9 +7,10 @@ extends Control
 ## ScenarioJson. "Add..." above the outline adds an item of the selected
 ## row's section (all sections on the Scenario row) at the view centre.
 ##
-##   godot --path . res://scenes/editor.tscn [-- --scenario=<name or path>] [--screenshot=<path>]
+##   godot --path . res://scenes/editor.tscn [-- --scenario=<name or path> | --new] [--screenshot=<path>]
 ##       [--select=scenery/1] [--materials] [--play=<video s>] [--dialog=run|record|record_now]
 ##   tools/editor.sh [--scenario=...]
+## Without --scenario= it reopens the last file (--new: a new document).
 ##
 ## File menu: New (a minimal template), Open, Open Recent (kept in
 ## user://editor_settings.cfg), Save, Save As, Revert, Quit; unsaved changes
@@ -32,6 +33,10 @@ extends Control
 ## records the document with RecordJob (the same GDScript pipeline as
 ## tools/record.gd) in the background, with progress, Cancel, Open folder and
 ## Play. The last settings are remembered per scenario (LaunchSettings).
+## Validation (M16i): ScenarioValidator runs after every preview build; the
+## Problems list under the inspector, outline colours and preview outlines
+## show the issues, and Save, Run and Record with errors ask first. The panel
+## split positions are remembered ("layout" in the settings file).
 
 const WINDOW_SIZE := Vector2i(1600, 900)
 const SCENARIO_DIR := "res://scenarios"
@@ -111,6 +116,18 @@ var record_job: RecordJob
 var _run_menu: PopupMenu
 var _quit_confirm: ConfirmationDialog
 
+## M16i: the document's validation issues (ScenarioValidator), redone after
+## every preview build, listed under the inspector and marked in the outline
+## and the preview.
+var issues: Array[Dictionary] = []
+var problems: ItemList
+var problems_title: Label
+## Asks before saving, running or recording a document with errors.
+var _warn: ConfirmationDialog
+var _after_warn: Callable
+## The split containers whose offsets are remembered ("layout" section).
+var _splits: Dictionary = {}
+
 func _ready() -> void:
 	if args.is_empty():
 		args = _parse_args()
@@ -127,6 +144,9 @@ func _ready() -> void:
 	var scenario := str(args.get("scenario", ""))
 	if scenario != "":
 		_open(ScenarioLoader.path_for(scenario))
+	elif not args.has("new") and not recent.files.is_empty() and FileAccess.file_exists(recent.files[0]):
+		# Carries on with the last file (--new starts a new document).
+		_open(recent.files[0])
 	else:
 		_new_doc()
 	_screenshot_path = str(args.get("screenshot", ""))
@@ -272,7 +292,9 @@ func _build_ui() -> void:
 	preview = EditorPreview.new()
 	preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	preview.status_changed.connect(func(_t: String) -> void: _update_status())
+	preview.status_changed.connect(func(_t: String) -> void:
+		validate()
+		_update_status())
 	preview.gui_input.connect(_on_preview_input)
 	stage.add_child(preview)
 	play = EditorPlay.new()
@@ -293,6 +315,13 @@ func _build_ui() -> void:
 	inspector = ScenarioInspector.new()
 	inspector.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	side.add_child(inspector)
+	problems_title = Label.new()
+	side.add_child(problems_title)
+	problems = ItemList.new()
+	problems.custom_minimum_size = Vector2(0, 110)
+	problems.item_selected.connect(func(i: int) -> void:
+		_select_path(issues[int(problems.get_item_metadata(i))]["path"]))
+	side.add_child(problems)
 
 	timeline = TimelinePanel.new()
 	timeline.select_requested.connect(_on_canvas_select)
@@ -301,6 +330,8 @@ func _build_ui() -> void:
 		return TimelineModel.camera_key_here(preview.camera.position, preview.size / preview.camera.zoom.x,
 				preview.frame.size_f(), t)
 	vsplit.add_child(timeline)
+	_splits = {"timeline": vsplit, "outline": split, "inspector": right}
+	_restore_layout()
 
 	status = Label.new()
 	status.clip_text = true
@@ -341,6 +372,14 @@ func _build_ui() -> void:
 		record_job.cancel()
 		_quit())
 	add_child(_quit_confirm)
+	_warn = ConfirmationDialog.new()
+	_warn.title = "Problems in the scenario"
+	_warn.confirmed.connect(func() -> void:
+		var action := _after_warn
+		_after_warn = Callable()
+		if action.is_valid():
+			action.call())
+	add_child(_warn)
 	_refresh_recent()
 
 ## Select plus a toggle button per place tool (CanvasEditor.TOOLS), and grid snap.
@@ -564,9 +603,9 @@ func _on_file_menu(id: int) -> void:
 		FileItem.OPEN:
 			_confirm_then(_ask_file.bind(false))
 		FileItem.SAVE:
-			_save()
+			_check_then("Save", _save)
 		FileItem.SAVE_AS:
-			_ask_file(true)
+			_check_then("Save", _ask_file.bind(true))
 		FileItem.REVERT:
 			if doc.file_path != "":
 				_confirm_then(_open.bind(doc.file_path))
@@ -612,6 +651,7 @@ func _rebuild_outline() -> void:
 		if i == select_row:
 			item.select(0)
 	_building_outline = false
+	_mark_outline()
 
 func _on_outline_selected() -> void:
 	if _building_outline:
@@ -719,14 +759,17 @@ func _on_preview_input(event: InputEvent) -> void:
 func _on_run_menu(id: int) -> void:
 	match id:
 		RunItem.RUN:
-			run()
+			_check_then("Run", run)
 		RunItem.STOP:
 			stop_run()
 		RunItem.OPTIONS:
 			run_dialog.open(LaunchSettings.load_for(settings_path, "run", doc.file_path, LaunchCommands.RUN_DEFAULTS),
 					OutputFrame.from_scenario(doc.data).size, timeline.playhead)
 		RunItem.RECORD:
-			open_record()
+			if record_job != null and record_job.is_running():
+				open_record()
+			else:
+				_check_then("Record", open_record)
 
 ## The name of the document's temporary copies, and so of its recordings: the
 ## file's name, else the scenario's "name", else "untitled".
@@ -805,6 +848,119 @@ func start_recording(settings: Dictionary, set_output: bool = false) -> RecordJo
 	record_dialog.show_job(job)
 	_update_status()
 	return job
+
+# --- validation -------------------------------------------------------------------
+
+const ISSUE_COLORS := {ScenarioValidator.ERROR: Color(1.0, 0.42, 0.42), ScenarioValidator.WARNING: Color(1.0, 0.75, 0.3)}
+
+## Validates the document (with the preview's sim for the scene checks) and
+## shows the result: the problems list, outline colours and preview marks.
+func validate() -> void:
+	if doc == null:
+		return
+	issues = ScenarioValidator.validate(doc.data, schema, preview.sim)
+	# Errors first, then in document order.
+	var ordered: Array[Dictionary] = []
+	for sev: String in [ScenarioValidator.ERROR, ScenarioValidator.WARNING]:
+		ordered.append_array(issues.filter(func(i: Dictionary) -> bool: return i["severity"] == sev))
+	issues = ordered
+	problems.clear()
+	for k: int in issues.size():
+		var i: Dictionary = issues[k]
+		var n := problems.add_item(ScenarioValidator.format(i).strip_edges())
+		problems.set_item_metadata(n, k)
+		problems.set_item_custom_fg_color(n, ISSUE_COLORS[i["severity"]])
+		problems.set_item_tooltip(n, i["message"])
+	problems_title.text = "Problems: " + (ScenarioValidator.summary(issues) if not issues.is_empty() else "none")
+	_mark_outline()
+	_mark_preview()
+
+## Colours the outline rows holding issues (and their sections), with the
+## messages as the row's tooltip.
+func _mark_outline() -> void:
+	if outline.get_root() == null:
+		return
+	var items := {}
+	var stack: Array[TreeItem] = [outline.get_root()]
+	while not stack.is_empty():
+		var t: TreeItem = stack.pop_back()
+		for c: TreeItem in t.get_children():
+			items[int(c.get_metadata(0))] = c
+			stack.append(c)
+	var worst := {}
+	var tips := {}
+	for i: Dictionary in issues:
+		var r := EditorOutline.row_for(rows, i["path"])
+		if r < 0 or not items.has(r):
+			continue
+		tips[r] = (tips.get(r, "") + "\n" if tips.has(r) else "") + str(i["message"])
+		var t: TreeItem = items[r]
+		while t != null and t != outline.get_root():
+			var row := int(t.get_metadata(0))
+			if worst.get(row, "") != ScenarioValidator.ERROR:
+				worst[row] = i["severity"]
+			t = t.get_parent()
+	for r: int in items:
+		var t: TreeItem = items[r]
+		if worst.has(r):
+			t.set_custom_color(0, ISSUE_COLORS[worst[r]])
+		else:
+			t.clear_custom_color(0)
+		t.set_tooltip_text(0, tips.get(r, ""))
+
+## Outlines the items with issues in the preview.
+func _mark_preview() -> void:
+	var by_item := {}
+	for i: Dictionary in issues:
+		var ip: Variant = CanvasEditor.item_of(doc.data, i["path"])
+		if ip == null:
+			continue
+		if by_item.get(ip, "") != ScenarioValidator.ERROR:
+			by_item[ip] = i["severity"]
+	var marks: Array = []
+	for ip: Array in by_item:
+		var r := GizmoGeometry.item_bounds(doc.data, ip)
+		if r.has_area():
+			marks.append([r, ISSUE_COLORS[by_item[ip]]])
+	preview.issue_marks = marks
+
+## Runs `action` now, or after the user confirms it despite errors.
+func _check_then(verb: String, action: Callable) -> void:
+	validate()
+	var errors := issues.filter(func(i: Dictionary) -> bool: return i["severity"] == ScenarioValidator.ERROR)
+	if errors.is_empty():
+		action.call()
+		return
+	var lines: PackedStringArray = []
+	for i: Dictionary in errors.slice(0, 6):
+		lines.append(ScenarioValidator.format(i).strip_edges())
+	if errors.size() > 6:
+		lines.append("... and %d more" % (errors.size() - 6))
+	_after_warn = action
+	_warn.dialog_text = "The scenario has %s:\n\n%s\n\n%s anyway?" % [ScenarioValidator.summary(issues),
+			"\n".join(lines), verb]
+	_warn.ok_button_text = verb + " anyway"
+	_warn.popup_centered()
+
+# --- layout ---------------------------------------------------------------------
+
+## Split offsets from the "layout" section of the settings file; each split
+## saves its offset when dragged.
+func _restore_layout() -> void:
+	var cfg := ConfigFile.new()
+	var loaded := cfg.load(settings_path) == OK
+	for key: String in _splits:
+		var s: SplitContainer = _splits[key]
+		if loaded and cfg.has_section_key("layout", key):
+			s.split_offset = int(cfg.get_value("layout", key))
+		s.dragged.connect(func(_offset: int) -> void: _save_layout())
+
+func _save_layout() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(settings_path)  # a missing file just starts empty
+	for key: String in _splits:
+		cfg.set_value("layout", key, (_splits[key] as SplitContainer).split_offset)
+	cfg.save(settings_path)
 
 # --- status ---------------------------------------------------------------------
 

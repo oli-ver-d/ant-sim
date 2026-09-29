@@ -96,6 +96,7 @@ func test_record_plan_avi_full() -> void:
 	check_eq(p["expected_frames"], 600, "10 s")
 	check_eq(p["keep_frames"], true, "keep_frames")
 	check_eq(_plan({"file_name": "x.MP4"})["out_path"], "C:/proj/renders/x.MP4", "existing .mp4 kept")
+	check_eq(_plan({"file_name": "E:/clips/y.mp4"})["out_path"], "E:/clips/y.mp4", "absolute file name kept")
 	check_eq(_plan({"mjpeg_quality": 0.75})["override_cfg"].ends_with("=0.75\n"), true, "quality 0.75")
 
 func test_record_plan_scenario_size() -> void:

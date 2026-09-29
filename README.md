@@ -56,10 +56,11 @@ scenario's captions (`render.captions`). In the split layout the mouse
 (walls, food, zoom, **F**, the debug readout) works on the surface part. The HUD counts every
 ant of a colony, including its abstract population (see "Scale" below).
 
-### Scenario editor (in progress, M16)
+### Scenario editor
 
 ```bash
-tools/editor.sh                               # a new scenario from a minimal template
+tools/editor.sh                               # reopens the last file (a new scenario the first time)
+tools/editor.sh --new                         # a new scenario from a minimal template
 tools/editor.sh --scenario=meadow_forage      # a scenario by name, or any .json path
 ```
 
@@ -150,6 +151,35 @@ and the recording's progress. Run and record settings are remembered per scenari
 `user://editor_settings.cfg`. `--dialog=run|record` opens a dialog and `--dialog=record_now`
 starts a 3 s AVI draft (for `--screenshot=`; the draft is cancelled after the screenshot).
 
+Validation: the **Problems** list under the inspector ("Problems: 2 errors, 1 warning") is
+redone after every preview build. `ScenarioValidator` checks the schema: types, ranges,
+required keys, enum values the Registry doesn't know (an unregistered species or food type),
+variant tags, map keys (a colony's castes must belong to its species) and `output.size`
+(even sides, 64 to 8192 px). Keys the schema doesn't know are only warnings. `SceneChecks`
+checks the scene: nests, food and nest entrances outside the world or inside a wall or water
+(errors; walls need the built sim), events whose sim time comes after the end of the video,
+camera keys and render captions, fades, grade, layout modes and story markers with a video
+time after `duration` (warnings), colonies whose nests are closer than the larger of 60 and
+the sum of their `nest_params.radius` (warning), and captions whose box lies in the unsafe
+margins of the chosen safe-zone preset (warning). Clicking a problem selects its item;
+outline rows with problems, and their section rows, are red (errors) or orange (warnings)
+with the messages as tooltip, and the item is outlined in the same colour in the preview.
+Save, Save As, Run and Record with errors show a dialog listing them with "Save anyway",
+"Run anyway" or "Record anyway": errors never block. Unknown keys are kept and saved
+unchanged, shown as raw JSON in the inspector and listed as warnings. Headless, the same
+checks (with the sim built, for the wall checks) run over scenario files:
+`godot --headless --path . -s res://tests/validate_scenarios.gd -- [name|path.json ...]`
+prints one line per issue and exits 1 if any is an error; without arguments it validates
+every `scenarios/*.json` (all shipped ones are clean, `tests/test_validator.gd` checks it).
+
+Keys: **Ctrl+N / O / S** new, open, save; **Ctrl+Shift+S** save as; **Ctrl+Q** quit;
+**Ctrl+Z / Ctrl+Y** undo, redo; **Home** fit the world; **F** fit the output frame;
+**Delete** delete the point or item; **Ctrl+D** duplicate; **Esc** cancel; **Enter** finish a
+polyline or polygon; **F5** run; **Shift+F5** stop the run; **Ctrl+R** record. Every
+inspector field has a tooltip with the schema's help text. The three panel split positions
+(outline, inspector, timeline) are remembered in `user://editor_settings.cfg` (section
+"layout"), and the editor reopens the last file when started without `--scenario=`.
+
 ## Tools
 
 ```bash
@@ -170,6 +200,8 @@ godot --headless --path . -s res://tests/midden_probe.gd -- fungus_farm 1800 300
 godot --headless --path . -s res://tests/story_probe.gd -- leafcutter_life 3 2350 150 [track_after]  # story beats: scenario, seed, sim_seconds, every, track_after (first egg ... debris cleared, corpses, nurseries and one egg through them; the queen's landing phases; alate eggs laid, emerged, flight called, take-off, all gone) with times and places
 godot --headless --path . -s res://tests/timeline_probe.gd -- leafcutter_life 21.2,94 s:50.6,1935.2  # playback schedule: sim time at video times, video time (and speed) at sim times
 tools/stills.sh colony_founding 12,35,72 renders/stills   # full-res stills: layout, whole nest, close-up of the digging face
+SIZE=1920x1080 tools/stills.sh colony_founding 12 renders/stills   # SIZE= (or --size=) sets another frame size, here and in screenshot.sh / record.sh
+godot --headless --path . -s res://tests/validate_scenarios.gd -- [name|path.json ...]   # validate scenarios as the editor does (no arguments: every scenarios/*.json); exit 1 on errors
 tools/test.sh --long test_colony_founding_grows            # the whole colony_founding run as a test (~30 min)
 tools/test.sh --long test_harvester_founding_grows         # the whole harvester_founding run as a test
 tools/test.sh --long test_launch::test_record_             # 2 s AVI drafts via tools/record.gd and the editor's Record, checked with ffprobe
@@ -692,6 +724,7 @@ byte for byte against the older bash pipeline).
 Writes `renders/<scenario>_seed<N>_<timestamp>.mp4` (the output frame, 1080×1920 unless
 `SIZE=` or the scenario's `output.size` say otherwise, then `_<W>x<H>` is added to the name;
 `_nocaptions` and `_from<s>` likewise; 60 fps, H.264 yuv420p, CRF 18, no audio).
+`OUT=` / `--out=` names the file instead: a name in `OUT_DIR`, or an absolute path.
 `tools/stills.sh` takes `SIZE=` too. How it works:
 1. `scenes/record.tscn` runs under Godot's Movie Maker (`--write-movie`, `--fixed-fps 60`),
    so every frame advances exactly 1/60 s of video however slow the simulation is.
