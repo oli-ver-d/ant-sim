@@ -32,7 +32,7 @@ var selection := Rect2():
 	set(r):
 		selection = r
 		if _overlay != null:
-			_overlay.queue_redraw()
+			_redraw_layers()
 ## Milliseconds the last build took.
 var build_ms: float = 0.0
 var status: String = ""
@@ -69,6 +69,17 @@ func _ready() -> void:
 	resized.connect(func() -> void:
 		if _fit_rect.has_area():
 			fit_rect(_fit_rect))
+
+## Adds a world-space layer drawn over the overlays (the canvas gizmos).
+func add_layer(layer: Node2D) -> void:
+	layer.z_index = 101
+	_viewport.add_child(layer)
+
+## Redraws the added layers and overlays (the camera moved).
+func _redraw_layers() -> void:
+	for c: Node in _viewport.get_children():
+		if c is CanvasItem and c != _world_root:
+			(c as CanvasItem).queue_redraw()
 
 ## Shows `scenario` (rebuilt after REBUILD_DELAY, or now with `now`).
 func show_data(scenario: Dictionary, now: bool = false) -> void:
@@ -112,7 +123,7 @@ func rebuild() -> void:
 	_world_root.add_child(view)
 	frame = OutputFrame.from_scenario(data)
 	build_ms = (Time.get_ticks_usec() - t0) / 1000.0
-	_overlay.queue_redraw()
+	_redraw_layers()
 	_set_status("Built in %d ms: %d colonies, %d food, %d ants" % [roundi(build_ms), sim.colonies.size(),
 			sim.food_sources.size(), sim.ant_count])
 	if not _moved and not _fit_rect.has_area():
@@ -139,7 +150,7 @@ func fit_rect(r: Rect2) -> void:
 	camera.position = r.get_center()
 	var z := fit_zoom(r, size, 24.0)
 	camera.zoom = Vector2.ONE * clampf(z, MIN_ZOOM, MAX_ZOOM)
-	_overlay.queue_redraw()
+	_redraw_layers()
 
 ## World position under a point of this control.
 func to_world(local: Vector2) -> Vector2:
@@ -160,7 +171,7 @@ func _gui_input(event: InputEvent) -> void:
 		camera.position -= mm.relative / camera.zoom.x
 		_fit_rect = Rect2()
 		_moved = true
-		_overlay.queue_redraw()
+		_redraw_layers()
 		accept_event()
 
 ## Zooms by `factor`, keeping the world point under `local` where it is.
@@ -170,7 +181,7 @@ func zoom_about(local: Vector2, factor: float) -> void:
 	camera.position += before - to_world(local)
 	_fit_rect = Rect2()
 	_moved = true
-	_overlay.queue_redraw()
+	_redraw_layers()
 
 # --- pure helpers (tested) -----------------------------------------------------
 

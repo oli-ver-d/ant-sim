@@ -79,8 +79,23 @@ whole item as text. **Add...** above the outline adds an item of the selected ro
 section (every section on the Scenario row) at the centre of the view. The preview shows the world bounds,
 the output frame (`output.size`) where the first camera keyframe puts it, with its safe
 zones, and an outline around the selected item. Wheel zooms, middle or right drag pans,
-**Home** fits the world, **F** fits the output frame; left click selects the smallest item
-there. **File**: New, Open, Open Recent (kept in `user://editor_settings.cfg`), Save, Save
+**Home** fits the world, **F** fits the output frame.
+
+Canvas editing: left click selects the item under the cursor (the smallest shape there),
+dragging moves it, and the selected item's handles (centres, radii, rect corners, polyline
+and polygon points, of nests, food, obstacles, ground regions with their soft edge, props,
+scatter areas and `clear` shapes, debris, event areas and camera keys) drag its shape;
+**Alt**-click on a polyline or polygon inserts a point. With the preview focused,
+**Delete** removes the last clicked point (while the shape keeps enough) or the item,
+**Ctrl+D** duplicates it and **Esc** cancels. A drag is one undoable edit, written on
+release. The tool bar over the preview has the place tools (colony, food, walls, water,
+bridge, ground regions, rock, plant, grass, log, scatter, twig, pebble, rain, camera key):
+click to place, drag to span a circle's radius or a rect, or click each point of a
+polyline or polygon and finish with **Enter** or a double click; and **Snap** (a 10-unit
+grid). Ground regions, event areas, scatter areas and camera keys, which the renderer
+doesn't show, are drawn as faint outlines; a selected scatter shows the zones it keeps
+clear round nests, food and portals (hard: red, reserve: orange), a selected camera key
+the output frame it shows. **File**: New, Open, Open Recent (kept in `user://editor_settings.cfg`), Save, Save
 As, Revert, Quit, with a save/discard prompt for unsaved changes; **Ctrl+Z / Ctrl+Y**
 undo and redo. Files are written with `ScenarioJson`, so opening and saving an unedited
 scenario leaves it byte-identical. `--screenshot=<png>` (with `--select=colonies/0`) saves
@@ -155,7 +170,7 @@ species/<name>/       one folder per species; register.gd is discovered automati
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
 scenes/               main.tscn (interactive), record.tscn (Movie Maker), editor.tscn (scenario editor)
-editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview, inspector
+editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview, inspector, gizmos/
 tools/ tests/
 ```
 

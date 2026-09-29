@@ -14,11 +14,16 @@ extends Control
 ## user://editor_settings.cfg), Save, Save As, Revert, Quit; unsaved changes
 ## are confirmed before New, Open, Revert and closing the window.
 ## Edit menu: Undo / Redo (doc commands). View: fit world, fit output frame.
-## Clicking in the preview selects the smallest item there; wheel zooms,
+## Canvas editing (CanvasEditor, drawn by GizmoLayer): click selects the
+## smallest item there, drag moves it or the selected item's handles, Alt-click
+## inserts a point, Delete / Ctrl+D (preview focused) delete / duplicate; the
+## tool bar over the preview has the place tools and grid snap. Wheel zooms,
 ## middle or right drag pans.
 
 const WINDOW_SIZE := Vector2i(1600, 900)
 const SCENARIO_DIR := "res://scenarios"
+## How near (view pixels) a click must be to a handle or shape.
+const HANDLE_TOLERANCE := 8.0
 
 enum FileItem { NEW, OPEN, SAVE, SAVE_AS, REVERT, QUIT }
 enum EditItem { UNDO, REDO }
@@ -35,6 +40,12 @@ var schema: ScenarioSchema
 var registry: Registry
 var recent := EditorRecent.new()
 var preview: EditorPreview
+## What clicks, drags and keys in the preview do (M16e).
+var canvas := CanvasEditor.new()
+var gizmos: GizmoLayer
+## Place tool buttons by tool id, and the grid snap toggle.
+var tool_buttons: Dictionary = {}
+var snap_toggle: CheckBox
 var outline: Tree
 ## "Add ..." actions for the selected outline row (EditorDefaults.add_actions).
 var add_menu: MenuButton
@@ -171,11 +182,22 @@ func _build_ui() -> void:
 
 	var right := HSplitContainer.new()
 	split.add_child(right)
+	var centre := VBoxContainer.new()
+	centre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_child(centre)
+	centre.add_child(_build_tool_bar())
 	preview = EditorPreview.new()
 	preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	preview.status_changed.connect(func(_t: String) -> void: _update_status())
 	preview.gui_input.connect(_on_preview_input)
-	right.add_child(preview)
+	centre.add_child(preview)
+	gizmos = GizmoLayer.new()
+	gizmos.preview = preview
+	gizmos.canvas = canvas
+	preview.add_layer(gizmos)
+	canvas.redraw_requested.connect(gizmos.queue_redraw)
+	canvas.select_requested.connect(_on_canvas_select)
 
 	var side := VBoxContainer.new()
 	side.custom_minimum_size = Vector2(420, 0)
@@ -211,6 +233,53 @@ func _build_ui() -> void:
 	_message = AcceptDialog.new()
 	add_child(_message)
 	_refresh_recent()
+
+## Select plus a toggle button per place tool (CanvasEditor.TOOLS), and grid snap.
+func _build_tool_bar() -> Control:
+	var bar := HFlowContainer.new()
+	var group := ButtonGroup.new()
+	for t: Array in CanvasEditor.TOOLS:
+		var b := Button.new()
+		b.text = t[1]
+		b.toggle_mode = true
+		b.button_group = group
+		b.focus_mode = Control.FOCUS_NONE
+		b.tooltip_text = "Select, move and edit handles" if t[0] == "select" else _tool_help(t[3])
+		b.button_pressed = t[0] == "select"
+		b.pressed.connect(func() -> void:
+			canvas.set_tool(t[0])
+			preview.grab_focus())
+		tool_buttons[t[0]] = b
+		bar.add_child(b)
+	snap_toggle = CheckBox.new()
+	snap_toggle.text = "Snap %d" % roundi(canvas.grid)
+	snap_toggle.focus_mode = Control.FOCUS_NONE
+	snap_toggle.toggled.connect(func(on: bool) -> void: canvas.snap = on)
+	bar.add_child(snap_toggle)
+	return bar
+
+static func _tool_help(how: String) -> String:
+	match how:
+		"circle":
+			return "Click to place, or drag to set the radius"
+		"rect":
+			return "Click to place, or drag a rectangle"
+		"polyline", "polygon":
+			return "Click each point; Enter or double click finishes, Esc cancels"
+	return "Click to place"
+
+func _sync_tool_buttons() -> void:
+	for id: String in tool_buttons:
+		(tool_buttons[id] as Button).set_pressed_no_signal(id == canvas.tool)
+
+func _on_canvas_select(path: Variant) -> void:
+	if path == null:
+		selected = null
+		_rebuild_outline()
+		_show_selection()
+	else:
+		_select_path(path)
+	_sync_tool_buttons()
 
 func preview_fit(world: bool) -> void:
 	if world:
@@ -260,6 +329,11 @@ func _set_doc(d: ScenarioDoc) -> void:
 	doc = d
 	doc.changed.connect(_on_doc_changed)
 	selected = null
+	canvas.doc = doc
+	canvas.schema = schema
+	canvas.set_tool("select")
+	canvas.set_selection(null)
+	_sync_tool_buttons()
 	inspector.setup(doc, schema)
 	_rebuild_outline()
 	_show_selection()
@@ -298,6 +372,7 @@ func _on_doc_changed(path: Array) -> void:
 	else:
 		_update_selection_bounds()
 		inspector.on_doc_changed(path)
+	canvas.set_selection(selected)
 	preview.show_data(doc.data)
 	# changed() comes before UndoRedo counts the action (is_dirty() is still
 	# the old answer), so the title waits for the end of the frame.
@@ -419,6 +494,7 @@ func _select_path(path: Array) -> void:
 func _show_selection() -> void:
 	_update_selection_bounds()
 	inspector.show_path(selected)
+	canvas.set_selection(selected)
 
 ## The inspector's title and the preview's selection outline.
 func _update_selection_bounds() -> void:
@@ -429,7 +505,8 @@ func _update_selection_bounds() -> void:
 	var path: Array = selected
 	var i := EditorOutline.row_for(rows, path)
 	details_title.text = rows[i]["label"] if i >= 0 else "/".join(path)
-	preview.selection = EditorOutline.item_bounds(doc.data, path)
+	var ip: Variant = CanvasEditor.item_of(doc.data, path)
+	preview.selection = GizmoGeometry.item_bounds(doc.data, ip) if ip != null else Rect2()
 
 # --- adding items -----------------------------------------------------------------
 
@@ -446,35 +523,51 @@ func add_item(action: Dictionary) -> void:
 	var item: Variant = EditorDefaults.new_item(action["id"], doc.data, schema, preview.to_world(preview.size / 2.0))
 	if item == null:
 		return
-	var list: Array = action["list"]
-	var index := 0
-	if list == ["ground", "regions"] and not doc.data.get("ground") is Dictionary:
-		# A plain material becomes the base of a ground with regions.
-		var base: Variant = doc.data.get("ground", "soil")
-		doc.set_at(["ground"], {"base": base if base is String else "soil", "regions": [item]}, "Add ground region")
-	else:
-		var existing: Variant = doc.get_at(list)
-		index = existing.size() if existing is Array else 0
-		doc.insert_at(list + [index], item, action["label"])
-	_select_path(list + [index])
+	_select_path(CanvasEditor.insert_new(doc, action["list"], item, action["label"]))
 
-## Left click in the preview selects the smallest item whose bounds contain it.
+## Handle tolerance in world units.
+func _tolerance() -> float:
+	return HANDLE_TOLERANCE / preview.camera.zoom.x
+
+## Left button and mouse motion go to the canvas editor, and (with the preview
+## focused) Delete, Ctrl+D, Enter and Esc.
 func _on_preview_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
-	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+		var at := preview.to_world(mb.position)
+		if mb.pressed:
+			canvas.press(at, _tolerance(), mb.alt_pressed, mb.double_click)
+		else:
+			canvas.release(at, _tolerance())
+		_sync_tool_buttons()
+		preview.accept_event()
 		return
-	var at := preview.to_world(mb.position)
-	var best: Variant = null
-	var best_area := INF
-	for row: Dictionary in rows:
-		if int(row["depth"]) == 0:
-			continue
-		var r := EditorOutline.item_bounds(doc.data, row["path"])
-		if r.has_area() and r.has_point(at) and r.get_area() < best_area:
-			best_area = r.get_area()
-			best = row["path"]
-	if best != null:
-		_select_path(best)
+	var mm := event as InputEventMouseMotion
+	if mm != null:
+		canvas.motion(preview.to_world(mm.position), _tolerance())
+		return
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	var handled := true
+	match key.keycode:
+		KEY_DELETE, KEY_BACKSPACE:
+			handled = canvas.delete_selected()
+		KEY_D:
+			handled = key.ctrl_pressed and canvas.duplicate_selected()
+		KEY_ENTER, KEY_KP_ENTER:
+			handled = canvas.finish_poly()
+			_sync_tool_buttons()
+		KEY_ESCAPE:
+			# Drops what is being placed, or else the place tool.
+			if canvas.poly_points.is_empty() and canvas.span.is_empty():
+				canvas.set_tool("select")
+			canvas.cancel()
+			_sync_tool_buttons()
+		_:
+			handled = false
+	if handled:
+		preview.accept_event()
 
 # --- status ---------------------------------------------------------------------
 

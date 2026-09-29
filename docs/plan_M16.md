@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16d done; next M16e. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16e done; next M16f. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -493,6 +493,66 @@ factory; `EditorOutline.item_bounds` the hit test to replace with `GizmoGeometry
 - Hit testing and handle geometry are pure functions (`GizmoGeometry`) with tests.
 - Verify: tests + screenshots with a selected item of each kind.
 
+**Done (M16e).** What exists now:
+
+- `editor/gizmos/gizmo_geometry.gd` (`GizmoGeometry`, pure, written by a subagent):
+  `item_paths(data)` (every item in draw order), `shapes(data, item_path)` → shape dicts
+  `{kind: circle|rect|polyline|polygon|point, path, role: body|area|clear, center,
+  center_key, radius, radius_key ("" = not editable), rect, points, width, soft, hard}`
+  for colonies, food, obstacles, ground regions, props, scatters (+ `clear`), debris, every
+  positioned event type and camera keys (`pos` or `follow.near`); `shape_bounds`,
+  `item_bounds`, `shape_contains(shape, p, tol)`, `hit_item(data, p, tol)` (smallest
+  shape wins, later on ties), `handles(shape)` → `{role: center|radius|corner|point,
+  index, pos}`, `hit_handle(data, item_path, p, tol)`, and edits that return the whole new
+  item (ints, other keys and order kept): `moved`, `dragged(handle, to)`,
+  `with_point_inserted`, `with_point_removed` ({} below 2/3 points), `snap`.
+- `editor/gizmos/canvas_editor.gd` (`CanvasEditor`, GUI-free): `press/motion/release(at,
+  tol, alt, double)`, `delete_selected`, `duplicate_selected`, `finish_poly`, `cancel`,
+  `set_tool`, `set_selection(outline path)`, `item` (item path), `drag_item` (what a drag
+  would write), `active_handle`, `snap`/`grid` (10), signals `select_requested(path|null)`
+  and `redraw_requested`. A drag is one `doc.set_at(item_path, new_item)` on release.
+  `TOOLS` (id, label, list, click|circle|rect|polyline|polygon) and `new_item(id, data,
+  schema, at, extent)` for place tools; `insert_new(doc, list, value)` (also used by the
+  Add menu; a plain ground material becomes `{"base", "regions"}`).
+- `editor/gizmos/gizmo_layer.gd` (`GizmoLayer`, Node2D added with `EditorPreview.add_layer`):
+  faint outlines of ground regions, event areas, scatter areas/clear shapes and camera
+  keys; the selected item's shapes (the drag version while dragging), soft edge ring and
+  handles (active one orange); a selected scatter's `Scatter.keep_clear_zones` from the
+  built sim (hard red, reserve orange); a selected camera key's output frame; the item
+  being placed.
+- `ScenarioEditor`: tool bar over the preview (a toggle per tool, Snap), preview mouse and
+  keys go to the canvas (Delete/Backspace, Ctrl+D, Enter, Esc only while the preview has
+  focus, so inspector fields keep them); click selection uses `GizmoGeometry.hit_item`
+  (was `EditorOutline.item_bounds` boxes).
+- Tests: `tests/test_gizmo_geometry.gd` (subagent), `tests/test_canvas_editor.gd` (every
+  place tool adds an item that builds, spans, polygon finish, region on a string ground,
+  select/deselect, move in one undo step, click threshold, radius and point handles, snap,
+  Alt insert and point delete, duplicate/delete, cancel), `test_editor.gd`
+  (`test_editor_canvas_drag_place_and_keys`: mouse events through the editor, outline and
+  inspector follow, Ctrl+D, Delete, tool buttons, Esc).
+- Screenshots (windowed) of a selected polyline wall, scatter (clear paths and keep-clear
+  rings), ground region, food, and a camera key (its frame) look right.
+
+Changed from the plan / found on the way:
+
+- Delete, Ctrl+D, Enter and Esc are handled only with the preview focused, not as menu
+  shortcuts (Delete in an inspector field must not delete the item).
+- "Topmost" = the smallest shape under the cursor (points win), later items on ties;
+  big invisible areas (scatter rects, ground regions) would otherwise swallow clicks.
+- Scatter `clear` shapes and the soft edge ring are edited but not created by a place tool
+  (add a clear shape in the inspector; its handles then work on the canvas). The soft ring
+  is drawn, not dragged. Twig rotation has no handle.
+- A method named `snapped` on the canvas shadowed Godot's global `snapped()` and failed
+  to parse ("too few arguments"): it is `snap_point`.
+- The keep-clear zones come from the last built sim, so they lag an unbuilt edit by the
+  rebuild delay.
+
+Next (M16f) needs: `GizmoLayer` is where the "show materials" overlay and a scatter's
+placed props / dropped-prop warnings go (it already draws a selected scatter's zones from
+`preview.sim`). Partial rebuilds: `EditorPreview.rebuild()` builds everything
+(`basic_forage` ~0.35 s); `doc.changed(path)` gives the path, so ground edits
+(`["ground", ...]`) and scenery edits (`["scenery", ...]`) can be told apart there.
+
 ### M16f: ground, scenery and scatter editing, rebuild speed
 
 - Ground: region list with drag-to-reorder (paint order), material swatches, noise
@@ -635,3 +695,6 @@ factory; `EditorOutline.item_bounds` the hit test to replace with `GizmoGeometry
 - M16d: schema-driven inspector (every field type, greyed defaults with reset, variant and
   any_of switches, lists/maps, edit as JSON), Add menu; `EditorDefaults` (new items,
   variant switching, full examples for the every-key test) by a subagent.
+- M16e: canvas gizmos (select, move, handles, Alt insert, Delete, Ctrl+D, snap), place tools
+  tool bar, scatter keep-clear zones and camera-key frame overlays; `GizmoGeometry` (shapes,
+  handles, hit tests, edits) by a subagent.

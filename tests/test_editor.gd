@@ -196,3 +196,64 @@ func test_editor_add_items_and_inspect() -> void:
 	edits = ed.inspector.row_at(["colonies", 0, "nest"]).get_meta("widget").get_meta("edits")
 	check_eq((edits[0] as LineEdit).text, "540", "inspector rebuilt on undo")
 	_cleanup(ed)
+
+func _mouse(ed: ScenarioEditor, world: Vector2, pressed: Variant) -> void:
+	var local := (world - ed.preview.camera.position) * ed.preview.camera.zoom.x + ed.preview.size / 2.0
+	var e: InputEvent
+	if pressed == null:
+		var mm := InputEventMouseMotion.new()
+		mm.position = local
+		e = mm
+	else:
+		var mb := InputEventMouseButton.new()
+		mb.button_index = MOUSE_BUTTON_LEFT
+		mb.pressed = pressed
+		mb.position = local
+		e = mb
+	ed._on_preview_input(e)
+
+func _key(ed: ScenarioEditor, keycode: Key, ctrl: bool = false) -> void:
+	var k := InputEventKey.new()
+	k.keycode = keycode
+	k.pressed = true
+	k.ctrl_pressed = ctrl
+	ed._on_preview_input(k)
+
+func test_editor_canvas_drag_place_and_keys() -> void:
+	var ed := _editor("basic_forage")
+	ed.preview.size = Vector2(800, 600)
+	ed.preview.fit_world()
+	# Drag the second food source: one undo step, inspector and outline follow.
+	_mouse(ed, Vector2(820, 800), true)
+	check_eq(ed.selected, ["food", 1], "press selects")
+	_mouse(ed, Vector2(870, 850), null)
+	check(ed.canvas.dragging(), "dragging")
+	_mouse(ed, Vector2(870, 850), false)
+	var pos: Array = ed.doc.data["food"][1]["pos"]
+	check(Vector2(pos[0], pos[1]).distance_to(Vector2(870, 850)) <= 2.0, "moved to %s" % [pos])
+	check(ed.rows[EditorOutline.row_for(ed.rows, ["food", 1])]["label"].contains("@ %d" % pos[0]), "outline label follows")
+	var edits: Array = ed.inspector.row_at(["food", 1, "pos"]).get_meta("widget").get_meta("edits")
+	check_eq((edits[0] as LineEdit).text, str(pos[0]), "inspector follows")
+	# Ctrl+D duplicates, Delete removes.
+	var n := (ed.doc.data["food"] as Array).size()
+	_key(ed, KEY_D, true)
+	check_eq((ed.doc.data["food"] as Array).size(), n + 1, "duplicated")
+	check_eq(ed.selected, ["food", n], "copy selected")
+	_key(ed, KEY_DELETE)
+	check_eq((ed.doc.data["food"] as Array).size(), n, "deleted")
+	check(ed.selected == null, "nothing selected after delete")
+	# A place tool from its button, then back to select.
+	(ed.tool_buttons["rock"] as Button).pressed.emit()
+	check_eq(ed.canvas.tool, "rock", "tool button")
+	_mouse(ed, Vector2(200, 200), true)
+	_mouse(ed, Vector2(200, 200), false)
+	var scenery: Array = ed.doc.data["scenery"]
+	check_eq(scenery[-1]["type"], "rock", "rock placed")
+	check_eq(ed.selected, ["scenery", scenery.size() - 1], "rock selected")
+	check((ed.tool_buttons["select"] as Button).button_pressed and not (ed.tool_buttons["rock"] as Button).button_pressed,
+			"select button back on")
+	# Esc drops a place tool.
+	(ed.tool_buttons["wall_line"] as Button).pressed.emit()
+	_key(ed, KEY_ESCAPE)
+	check_eq(ed.canvas.tool, "select", "Esc leaves the tool")
+	_cleanup(ed)
