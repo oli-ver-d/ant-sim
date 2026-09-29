@@ -10,3 +10,6 @@
 # Native ant kernel build (tools/build_native.sh)
 /native/build/
 /native/bin/
+
+# Editor settings
+/.vscode/
