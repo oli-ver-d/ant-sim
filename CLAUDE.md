@@ -32,6 +32,7 @@ godot --path . -- --scenario=basic_forage --seed=42 [--at=12.5] [--layout=split]
 godot --headless --path . -s res://tests/bench.gd -- <scenario> <ticks> [ants_per_colony] [seed] [--no-native]
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding <seconds> <every> [cell_size]   # nest growth
 tools/screenshot.sh <scenario> <ticks> out.png [seed] [--zoom= --center= --layout= --at=]
+tools/editor.sh [--scenario=<name|path>] [--screenshot=out.png --select=colonies/0]   # scenario editor (M16)
 FORMAT=avi tools/record.sh <scenario> [seed] [seconds]   # fast draft; default PNG is for finals
                                        # SIZE=1920x1080 (record/stills/screenshot) or --size= overrides output.size
 ```

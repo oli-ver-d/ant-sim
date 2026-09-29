@@ -12,7 +12,7 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16b done; next M16c. (M17 is complete. M15l, founding frame budget and PNG
+Status: M16c done; next M16d. (M17 is complete. M15l, founding frame budget and PNG
 finals, is still open and independent of M16; finish it first or in between phases.)
 
 ## Where things stand (before M16)
@@ -339,6 +339,65 @@ window, so it can be hosted in a SubViewport sized to `frame.size`.
   `meadow_forage`, `colony_founding`; open → save → `git diff` is empty (or as
   agreed in M16a).
 
+**Done (M16c).** What exists now:
+
+- `scenes/editor.tscn` + `editor/editor_main.gd` (`ScenarioEditor`, Control): sets its own
+  window (1600×900 fitted to the screen, content scaling off) and takes over closing
+  (`auto_accept_quit = false`); both only when `manage_window` (tests turn it off).
+  Menu bar: File (New from a template with one colony of the first registered species,
+  Open, Open Recent, Save, Save As, Revert, Quit), Edit (Undo/Redo = `doc.undo/redo`),
+  View (Fit world Home, Fit output frame F) plus Fit buttons. Unsaved changes go through
+  `_confirm_then(action)` (Save / Discard / Cancel). `FileDialog` (filesystem access, starts
+  in `res://scenarios` or the doc's folder; project paths are localised to `res://`).
+  Layout: outline `Tree` (left), `EditorPreview` (centre), a read-only JSON view of the
+  selected item in a `TextEdit` (right; M16d replaces it with the inspector), status
+  line (file, modified, build status). Public-ish state for tests and later phases:
+  `doc`, `schema`, `registry`, `rows`, `selected` (path or null), `_select_path(path)`,
+  `_open(path)`, `_save()`, `_save_to(path)`, `settings_path`, `args`.
+  Args: `--scenario=<name|path>`, `--screenshot=<png>` (after the preview is built, then
+  quit), `--select=colonies/0`. `tools/editor.sh` passes its args through.
+- `editor/preview.gd` (`EditorPreview`, SubViewportContainer): `show_data(data, now)`,
+  debounced `rebuild()` (REBUILD_DELAY 0.25 s; `ScenarioLoader.build`, no warmup, no
+  steps; a new `WorldView` replaces the old), `status_changed`, `build_ms`, own `Camera2D`
+  (wheel zoom about the cursor, middle/right drag pan), `fit_world/fit_frame/fit_rect`
+  (refit on resize until the user pans or zooms), `to_world(local)`, `selection` (world
+  rect outlined). Overlays: world bounds, the output frame (`OutputFrame.from_scenario`)
+  at `frame_world_rect(data, frame, world)` (first camera keyframe's `pos` or follow
+  `near`, frame size / zoom; `fit` keys show the world) with its unsafe zones shaded.
+  Static helpers `fit_zoom`, `frame_world_rect` are tested.
+- `editor/editor_outline.gd` (`EditorOutline`, written by a subagent): `build(data)` →
+  rows `{label, path, depth}` (Scenario `[]`, Colonies, Food, Obstacles always; Ground
+  regions, Scenery props/scatters, Debris, Events, Camera keyframes or Surface/Nest
+  tracks, Render, Output and unknown top-level keys when present), `item_bounds(data,
+  path)` (Rect2() when an item has no position), `section_of(path)`, `row_for(rows, path)`
+  (deepest row containing a path). Clicking in the preview selects the smallest item
+  bounds under the cursor.
+- `editor/editor_recent.gd` (`EditorRecent`): 10 recent files in
+  `user://editor_settings.cfg` section `recent` (other sections kept, for M16h settings).
+- Tests: `tests/test_editor_outline.gd` (labels, sections, paths, bounds, recent files) and
+  `tests/test_editor.gd` (frame rect and fit maths, preview build/debounce/refit/zoom,
+  the editor scene headless: open, new, select + click, edit → dirty → save →
+  byte-identical unedited save, revert via discard, undo/redo, missing file).
+- Screenshots (windowed) of `basic_forage`, `meadow_forage` and `colony_founding` with
+  colony 0 selected look right.
+
+Changed from the plan / found on the way:
+
+- `ScenarioDoc.changed` fires before `UndoRedo` counts the action, so `is_dirty()` is stale
+  inside the signal; the editor updates its title/status deferred. (Connecting
+  `undo_redo.version_changed` gave "Bad address index" script errors; not pursued.)
+- `PhoridRenderer` crashed every frame (`flies` null) for fungus nests without `phorids`
+  (its `set_process(false)` in `bind()` is undone on entering the tree); now guarded.
+  Render only, no hash change.
+- Rebuild times: `basic_forage` ~0.4 s, `meadow_forage` ~1.5 s, `colony_founding` ~2.3 s
+  (scatters, ground). Well over M16f's 150 ms target: M16f's partial rebuild is needed.
+
+Next (M16d) needs: replace the right-hand `details` TextEdit with the inspector for
+`editor.selected`; edits go through `doc.set_at/remove_at/insert_at` (the editor already
+rebuilds outline, selection and preview on `doc.changed`). `schema.spec_at(doc.data,
+path)` gives the field spec for a selected path; "Add ..." actions belong in the outline
+(rows for empty sections already exist).
+
 ### M16d: inspector (all options as forms)
 
 - `editor/inspector.gd` + `editor/widgets/`: a form built from the schema for the
@@ -514,3 +573,6 @@ window, so it can be hosted in a SubViewport sized to `frame.size`.
   once; README documents the options found only in code and the `output` section.
 - M16b: `OutputFrame` and `--size=`/`SIZE=` through the player, scenes and tools; side-by-side
   split; default frame pixel-identical (tests of the old rects, before/after stills).
+- M16c: editor scene (menus, file handling, recent files, unsaved prompt), static preview
+  with frame overlay and pan/zoom, outline with preview selection (outline model and
+  recent files by a subagent); phorid renderer null crash fixed.

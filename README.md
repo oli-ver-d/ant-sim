@@ -56,6 +56,27 @@ scenario's captions (`render.captions`). In the split layout the mouse
 (walls, food, zoom, **F**, the debug readout) works on the surface part. The HUD counts every
 ant of a colony, including its abstract population (see "Scale" below).
 
+### Scenario editor (in progress, M16)
+
+```bash
+tools/editor.sh                               # a new scenario from a minimal template
+tools/editor.sh --scenario=meadow_forage      # a scenario by name, or any .json path
+```
+
+A landscape window: the outline of the document (left: scenario settings, colonies, food,
+obstacles, ground regions, scenery, debris, events, camera keys, render, output, and any
+unknown top-level keys), a static preview (centre: the scenario built by the real loader
+and drawn by the real renderers at t = 0, not stepped; rebuilt 0.25 s after an edit) and
+the selected item's JSON (right; forms come later). The preview shows the world bounds,
+the output frame (`output.size`) where the first camera keyframe puts it, with its safe
+zones, and an outline around the selected item. Wheel zooms, middle or right drag pans,
+**Home** fits the world, **F** fits the output frame; left click selects the smallest item
+there. **File**: New, Open, Open Recent (kept in `user://editor_settings.cfg`), Save, Save
+As, Revert, Quit, with a save/discard prompt for unsaved changes; **Ctrl+Z / Ctrl+Y**
+undo and redo. Files are written with `ScenarioJson`, so opening and saving an unedited
+scenario leaves it byte-identical. `--screenshot=<png>` (with `--select=colonies/0`) saves
+the window once the preview is built and quits.
+
 ## Tools
 
 ```bash
@@ -124,7 +145,8 @@ native/       the native ant kernel (GDExtension, C++): src/ant_kernel.cpp, godo
 species/<name>/       one folder per species; register.gd is discovered automatically
 render/               WorldView and renderers; they only read simulation state
 scenarios/            JSON scenarios
-scenes/               main.tscn (interactive)
+scenes/               main.tscn (interactive), record.tscn (Movie Maker), editor.tscn (scenario editor)
+editor/               the scenario editor: ScenarioDoc, ScenarioJson, schema/, outline, preview
 tools/ tests/
 ```
 

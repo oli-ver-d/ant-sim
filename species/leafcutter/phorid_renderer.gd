@@ -27,6 +27,9 @@ func bind(simulation: Simulation, target: Object) -> void:
 	flies.setup(nest.phorids, nest.colony_id, nest.entrance_position())
 
 func _process(_delta: float) -> void:
+	# set_process(false) in bind() is undone when the node enters the tree.
+	if flies == null:
+		return
 	var alpha := view.alpha if view != null else 1.0
 	flies.update(sim, sim.time() - (1.0 - alpha) * sim.dt, alpha)
 	queue_redraw()
