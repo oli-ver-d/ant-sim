@@ -140,7 +140,8 @@ tools/ tests/
 - **Nests** (`NestType`): receive delivered items, grow the colony in `update()`, and may
   produce waste that `carry_waste` / `carry_spent` workers take to a midden (see Refuse). A
   nest type can have a surface renderer (`"nest:<type>"`), and a nest that digs its own underground layer
-  renderers for it (`"underground:<type>"`, `"underground_top:<type>"`).
+  renderers for it (`"underground:<type>"`, `"underground_top:<type>"`); `"surface_top:<type>"`
+  draws over the surface ants (e.g. the leafcutter's phorid flies).
 - **Colony nests** (`ColonyNest`, a `NestType`): what nests with a queen share, so a species
   nest adds only what its colony lives on. The queen, brood that develops egg to worker and
   needs nurses (`Brood`, `BroodCare`), nest roles, chambers and galleries dug as the nest runs
@@ -733,7 +734,17 @@ in `/sim` or `/render`.
   emergence. Records are packed arrays (id, stage, age, growth, caste; with care on
   also where each lies, see below). Laying and emergence are logged with their ticks (ring buffers), and
   the brood is part of `state_hash()` (runs without it keep their old hashes).
-
+- **Phorid flies** (opt-in, nest param `phorids`: e.g. `{"count": 6}`, render-only): tiny
+  parasitoid flies that hover round carriers of leaf fragments on the surface and dive at
+  their heads. A carrier with a minim hitchhiking on its fragment is guarded: the fly veers
+  off before it gets there. An unguarded one is hit, up to `dives` times, before the fly moves
+  on to the nearest other carrier in `reach` (one no other fly is after, if it can; a fly
+  can't tell a guarded carrier until it dives), or flies off when there is none. Carriers
+  within `clear` of the nest entrance are left alone. `PhoridFlies` moves them from sim state each frame with its own random numbers
+  (catching up after a fast-forward), so they never change a hash. Params (defaults): `count`
+  (5), `reach` (170), `dives` (3), `speed` (70 world units/s; dives are 3x), `altitude` (9),
+  `arrive` (2 s between flies turning up), `clear` (90), `item` ("leaf_fragment"), `seed` (0). On in
+  `trunk_trail` and `leafcutter_life`.
 
 ### Leafcutter nests that dig their own underground
 
@@ -837,7 +848,9 @@ in the split layout's nest part (or full screen). Every ant there is an agent do
   `dirt_rate`, `hunger_rate`, `starve_time`, `brood_per_worker`, `first_caste`, `first_workers`.
 - Rendering: `FungusUnderground` ("underground:fungus_nest") draws the gardens
   (`garden.gdshader`) and the brood (`brood.gdshader`); `CarriedBroodRenderer`
-  ("underground_top:fungus_nest") the brood in nurses' jaws.
+  ("underground_top:fungus_nest") the brood in nurses' jaws; with nest param `phorids`
+  (opt-in), `PhoridRenderer` ("surface_top:fungus_nest") draws parasitoid flies divebombing
+  carriers, guarded by minims hitchhiking on their fragments.
 
 ## Species: harvester ants
 

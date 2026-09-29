@@ -24,8 +24,8 @@ holds, gentle camera moves, time-lapse only in transitions (preferably under a f
 
 Status: M17a done (presentation layer), M17b done (camera storytelling), M17c done (draft
 scenario, story probe), M17c2 done (brood nurseries), M17c3 done (polish), M17d done (the
-queen's landing), M17e done (alates and the nuptial flight). Next: M17f (phorid flies,
-optional), then M17g.
+queen's landing), M17e done (alates and the nuptial flight), M17f done (phorid flies).
+Next: M17g (final assembly and render).
 M16 (scenario editor, `docs/plan_M16.md`) is planned but not started and independent of
 M17; both touch `ScenarioPlayer.setup`, and M16's schema will need the new `render` keys.
 
@@ -599,6 +599,41 @@ the effect can be faked from sim state: flies drawn around carriers without ride
 Prefer render-only (no hash risk): `species/leafcutter/phorid_renderer.gd` registered as a
 renderer, reading carriers and riders from sim state.
 Verify: stills; suite. Skip if M17c's draft already reads well without it.
+
+**Done** (render-only, as preferred; no hash can move):
+- `species/leafcutter/phorid_flies.gd` (`PhoridFlies`): the fly model, opt-in by
+  nest_params `"phorids"` (kept on `FungusNest.phorids`, never read by the sim). Own
+  `RandomNumberGenerator` (seeded from colony id and `seed`). Moved from sim state once per
+  frame (`update(sim, now, alpha)`): carriers are the carried `item` ("leaf_fragment") items
+  on the surface; guarded = the item has riders. Per fly: AWAY (fades out; turns up near a
+  random carrier every `arrive` s) → TRAIL (hangs 12–22 units off the carrier's head for
+  0.8–2.2 s) → DIVE (3x speed at the head, dropping low) → a guarded carrier: veers off at 13
+  units (`veered`); unguarded: hit at 2.5 units (`hits`) → VEER (flung off, 0.35–0.7 s) →
+  TRAIL again while `dives` last, else the nearest other carrier within `reach` (each fly
+  already after one counts as 80 units further; guarded or not is only found out on the
+  dive) or AWAY. Carriers within `clear` (90) of the nest entrance are ignored: at first
+  every fly ended up bunched on the entrance chasing carriers that went underground before
+  it could dive, and with "unguarded first" picking no fly ever veered. After a jump in time
+  (first frame, fast-forward to a still) it catches up over up to 8 s in 1/30 s steps.
+  Params: count 5, reach 170, dives 3, speed 70, altitude 9, arrive 2, clear 90, item, seed.
+  Over 150 s of trunk_trail (8 flies): ~290 hits, ~25 veers.
+- `species/leafcutter/phorid_renderer.gd` (`PhoridRenderer`), registered as
+  `"surface_top:fungus_nest"`: ground shadow offset by altitude (WingRenderer.LIGHT),
+  beating pale wing blur, hump-backed dark body, 3.4 units long (a little larger than life
+  so it reads). New core hook: `WorldView` attaches a nest's `"surface_top:<type>"` renderer
+  on the surface over ants, riders and wings (the surface twin of `underground_top`).
+- Scenarios: `trunk_trail.json` (count 8) and `leafcutter_life.json` (count 6) have flies.
+- Tests: `tests/test_phorids.gd` (5: over 150 s of trunk_trail, flies hit unguarded carriers
+  and veer off guarded ones, never hitting a guarded one; active flies stay by a carrier;
+  same `state_hash()` with and without; deterministic; off without params).
+Stills (`tools/stills.sh trunk_trail 6,11,17`, 1080x1920): flies visible by the fragment
+carriers as dark flecks with wing blur and a shadow; at trunk_trail's zoom (~1.3 at V11) they
+are small, so they read on close-ups (zoom 4+), which is where leafcutter_life's trail shots
+are. No draft video this phase (render-only, checked with stills).
+
+For M17g: the flies are already on in `leafcutter_life`; check them in the AVI draft on the
+hitchhiker close-up (t≈140 camera follow) and tune `count`/`reach` if the trail shot is too
+busy or empty.
 
 ### M17g: final assembly and render
 

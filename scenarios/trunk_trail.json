@@ -16,7 +16,8 @@
 			"species": "leafcutter",
 			"nest": [540, 1420],
 			"population": {"minim": 90, "media": 300, "major": 40},
-			"release_per_second": 60
+			"release_per_second": 60,
+			"nest_params": {"phorids": {"count": 8}}
 		}
 	],
 	"food": [

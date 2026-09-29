@@ -10,6 +10,7 @@
 			"population": {"queen": 1, "minim": 4},
 			"params": {"worker_lifespan": 1500},
 			"nest_params": {
+				"phorids": {"count": 6},
 				"initial_fungus": 12,
 				"queen_reserve": 60,
 				"open_entrance_at": 8,

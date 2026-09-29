@@ -8,7 +8,8 @@ extends Node2D
 ## the nest's own renderer, its middens: MiddenRenderer,
 ## then its entrances: EntranceRenderer), pheromone glow, food, ground
 ## items (debris), shadows of ants in the air, ants, carried items, ants
-## riding on carried items, wings (WingRenderer), scenery
+## riding on carried items, wings (WingRenderer), the nest's
+## "surface_top:<nest type>" renderer (things over the ants), scenery
 ## canopy (plant blades and their shadow: CanopyRenderer), falling rain, debug.
 ## Food and nest renderers are looked up in the Registry by type id
 ## ("food:<type>", "nest:<type>"), and must provide bind(sim, target).
@@ -200,6 +201,8 @@ func _process(_delta: float) -> void:
 			var entrances := EntranceRenderer.new()
 			entrances.bind(sim, nest)
 			_nest_layer.add_child(entrances)
+			if registry.renderers.has("surface_top:" + nest.type_id):
+				_attach(_top_layer, "surface_top:" + nest.type_id, nest)
 		elif nest.underground_layer == layer:
 			if registry.renderers.has("underground:" + nest.type_id):
 				_attach(_nest_layer, "underground:" + nest.type_id, nest)

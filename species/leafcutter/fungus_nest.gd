@@ -70,6 +70,9 @@ var weeded_mass: float = 0.0
 ## queen_feed_rate per second) until the first leaf comes in.
 var queen_reserve: float = 0.0
 var queen_feed_rate: float = 0.15
+## Phorid flies over the leaf line (nest_params "phorids", see PhoridFlies):
+## drawn only, never read by the simulation.
+var phorids: Dictionary = {}
 ## Gardens grow this many cells (of the nest layer) in from a chamber's walls.
 const GARDEN_DEPTH := 2
 
@@ -84,6 +87,7 @@ func setup(sim: Simulation, owner_colony: Colony, params: Dictionary) -> void:
 	upkeep_per_ant = params.get("upkeep_per_ant", upkeep_per_ant)
 	chamber_capacity = params.get("chamber_capacity", chamber_capacity)
 	waste_load = params.get("waste_load", waste_load)
+	phorids = params.get("phorids", {})
 	if chambers_layout != null:
 		_setup_layered(sim, owner_colony, params, &"minim")
 		return
