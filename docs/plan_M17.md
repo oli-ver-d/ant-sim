@@ -715,8 +715,10 @@ waste shot) were checked with stills (`renders/stills_g3`); they change only the
 the sim is the same. Stills tool quirk seen: the first still of a run can miss ants and the
 garden (the same moment was fine in the video and in the next still).
 
-Final video: PNG capture with `tools/record.sh leafcutter_life`, started after the full
-suite passed. It was still rendering at this commit; the next commit records its file.
+Final video: `renders/leafcutter_life_seed3_20260929_111827.mp4` (PNG capture, 1080x1920,
+60 fps, 198.0 s, 11880 frames, 154 MB; ~1 h 50 min to render and encode). Frames at V69,
+V147, V152, V160 and V180 spot-checked: marked cutter at the leaf, major and hitchhiker
+centred, the nest's waste shot, alates taking off.
 
 Left for later (not blocking): the pupa nursery's blocky pale-sand floor (M17c3 note), the
 colony is ~250 ants at the trunk trail (a denser trail needs more sim time), and gynes vs
