@@ -28,9 +28,10 @@ Contents:
 14. [Validation and the Problems list](#14-validation-and-the-problems-list)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 16. [Walkthrough: a scenario from scratch](#16-walkthrough-a-scenario-from-scratch)
-17. [Command line options](#17-command-line-options)
-18. [Settings and files the editor keeps](#18-settings-and-files-the-editor-keeps)
-19. [Tips and troubleshooting](#19-tips-and-troubleshooting)
+17. [Walkthrough: the underground nest view](#17-walkthrough-the-underground-nest-view)
+18. [Command line options](#18-command-line-options)
+19. [Settings and files the editor keeps](#19-settings-and-files-the-editor-keeps)
+20. [Tips and troubleshooting](#20-tips-and-troubleshooting)
 
 ---
 
@@ -659,7 +660,288 @@ FORMAT=avi tools/record.sh my_landscape 1 5
 
 ---
 
-## 17. Command line options
+## 17. Walkthrough: the underground nest view
+
+A colony whose nest digs its own underground gets a second world: a layer of soil below the
+surface, seen from above, where the queen, the brood, the diggers and the chambers are. It
+is a real, fully simulated layer, linked to the surface by the nest's entrance shafts. This
+walkthrough makes one and puts it on screen.
+
+**Two things decide whether you see it:**
+
+1. **The colony has an underground.** Its `nest_params` need an `underground` section.
+   Without it there is nothing to show.
+2. **The layout shows it.** `render.layout` splits the frame into a surface part and a nest
+   part (`split`), or shows the nest full screen (`nest`). Without `render.layout` the
+   scenario plays the surface full screen, even if the colony has an underground.
+
+**Where you see it:** the static preview in the middle of the editor always shows the
+**surface only**. The underground appears in **Play** (the timeline), **Run** (F5) and
+**Record**, which play the scenario with its layout. So you set it up in the outline and
+inspector, and check it with Play.
+
+### Step 1: a colony whose nest digs
+
+Two nest types have a queen, brood and chambers they plan and dig themselves as the colony
+grows:
+
+| Species | Nest type | Castes for `population` |
+|---|---|---|
+| `leafcutter` | `fungus_nest` (the species' own nest; nothing to set) | `queen`, `minim`, `media`, `major` |
+| `harvester` | `granary_nest` (set `nest_type` to it) | `queen`, `minor`, `major` |
+
+Other nest types (the harvester's own `seed_nest`, `basic_nest`) accept an `underground`
+too, but they only get a shaft and dig just what you list in its `carve` and `plan`. Use one
+of the two above for a living nest.
+
+1. `tools/editor.sh --new`, or open your own scenario.
+2. Select **Colony 0** in the outline (or add one with the **Colony** tool). In the
+   inspector set `species` to `leafcutter`. (For harvesters: `species` `harvester` and
+   `nest_type` `granary_nest`.)
+3. Open `population` and add the castes: `queen` 1, `minim` 30, `media` 40. The queen lives
+   in the royal chamber and lays the eggs; workers dig, nurse and forage. A nest without
+   workers never digs.
+4. Open `nest_params`, then `underground`, and set `size` to `[1280, 1280]` (the default
+   size, but setting any field creates the section; an empty `underground` does the same).
+   That is what gives the nest its own layer.
+5. Decide how the nest starts:
+   - **An established nest** (you see chambers straight away): in `nest_params` set
+     `initial_chambers` to 3. Leave `underground.open` as it is (true: the entrance is open).
+   - **A founding nest** (the story of the first dig): set `underground.open` to false and give
+     the population only a queen and a few workers (e.g. `queen` 1, `minim` 4). The queen
+     starts sealed in; once there are `open_entrance_at` workers they dig up to the surface.
+     This takes a while in sim time, so it needs a fast speed schedule (see `colony_founding`
+     and `harvester_founding` for tested values).
+6. Add a food source near the nest with the **Food** tool so foragers have something to carry
+   home and down.
+
+The colony's JSON now looks like this:
+
+```json
+{
+	"species": "leafcutter",
+	"nest": [540, 1000],
+	"population": {"queen": 1, "minim": 30, "media": 40},
+	"nest_params": {
+		"initial_chambers": 3,
+		"underground": {"size": [1280, 1280]}
+	}
+}
+```
+
+(You can also paste that with **Edit as JSON** on the colony.)
+
+The static preview hasn't changed apart from the nest's entrance: the underground isn't drawn
+there.
+
+### Step 2: turn on the split layout
+
+The layout lives under `render.layout`. The quickest way to create it:
+
+1. In the timeline, **double click** the **Layout** row at 0 s. This adds a layout switch
+   `{"t": 0, "mode": "split"}` and creates `render.layout` (and `render`, if the file had no
+   render section). The **Render** section now appears in the outline, with a **Layout
+   modes** row.
+2. Select the **Render** row in the outline and open `layout` in the inspector:
+
+| Option | What it does |
+|---|---|
+| `mode` | `split` (default): surface and nest; `nest`: the nest full screen; `surface` (or `normal`): the surface full screen. The starting mode when there are no `modes`. |
+| `colony` | Which colony's nest is shown (its index in **Colonies**; default 0). |
+| `surface` | Where the surface part sits: `top` (default) or `bottom`; `left` or `right` put the two parts side by side, for landscape frames. |
+| `ratio` | The surface's share of the frame: of its height for top/bottom, of its width for left/right (0.2–0.8, default 0.5). 0.45 gives the nest a little more room. |
+| `stats` | The readout in the nest part's top left (ants, eggs, larvae, pupae). Off for a clean frame. |
+| `highlight` | A ring round each new worker as it emerges. |
+| `modes` | Timed switches (below). |
+
+Instead of the timeline you can also use **Add... → Add caption** (which creates `render`) and
+then set `layout.mode` in the inspector; or, on the Render row, **Edit as JSON** and paste:
+
+```json
+{"layout": {"mode": "split", "ratio": 0.45}}
+```
+
+3. **Check it:** move the playhead to 0 and press **Play**. The frame now shows the surface in
+   its top part and, below it, the nest: dug chambers and tunnels in the soil, the queen, the
+   brood piles and the workers, with the readout top left.
+
+If Play still shows only the surface, see [Troubleshooting](#when-the-nest-doesnt-show) below.
+
+### Step 3: switch the layout over time
+
+`render.layout.modes` changes the mode at video times. Each switch holds until the next one,
+so a video can open in the nest, cut to the split view, and end on the surface:
+
+1. On the timeline's **Layout** row, double click at each time you want a change. Each new
+   switch is `split`; select it and set its `mode` in the inspector (`nest`, `split`,
+   `surface`).
+2. Drag the switches along the row to retime them (Shift snaps to single frames).
+3. Press **Play** from before each switch to see the cut.
+
+For example, the nest full screen for the first 4 s, then the split:
+
+```json
+"modes": [{"t": 0, "mode": "nest"}, {"t": 4, "mode": "split"}]
+```
+
+When there are `modes`, the first switch sets the starting mode, and `layout.mode` only
+matters if the first switch comes later than 0 s. Hide a hard cut under a fade
+(`render.fades`) if you want it softer.
+
+### Step 4: point the nest camera
+
+With nothing set, the nest part's camera frames **everything dug so far** and eases out as the
+nest grows (a `fit: excavation` keyframe with an 80-unit margin). That is often all you need.
+For your own shots, give the nest part its own camera track:
+
+1. If the scenario has no camera yet, select the **Scenario** row and use **Add... → Add
+   camera key**, so the **Camera** section exists.
+2. Select the **Camera** row. The inspector shows a form selector next to it: switch it from
+   the keyframe list to **Separate surface and nest camera tracks**. Switching the form
+   replaces the camera section, so do this before placing keys (or copy the old keys out
+   with **Edit as JSON** first and paste them under `surface`).
+3. The outline now has **Surface camera** and **Nest camera** rows, and the timeline has
+   **Camera: surface** and **Camera: nest** rows. The surface track works as before: frame
+   the preview and press **Key here** (it always adds to the surface track).
+4. Add nest keys with **Add... → Add nest camera key** (Camera row selected) or by double
+   clicking the **Camera: nest** row of the timeline. Then set each key in the inspector.
+
+**Nest camera positions are in the underground layer's own coordinates**, not the surface's.
+The layer runs from (0, 0) to its `size`, and the shaft and the royal chamber are at its
+centre by default (`underground.shaft`, `underground.royal`), so for a 1280×1280 layer the
+nest is around (640, 640). New nest keys come from the surface preview's view, so always
+correct their `pos` in the inspector. (The static preview draws nest keys over the surface
+at those numbers; their place there means nothing.)
+
+Useful nest keyframes:
+
+| Keyframe | Shot |
+|---|---|
+| `{"t": 0, "pos": [640, 640], "zoom": 3}` | A close-up of the royal chamber. Larger `zoom` is closer. |
+| `{"t": 8, "fit": "excavation", "margin": 80}` | Eases out to frame everything dug, and keeps doing so as the nest grows. `min_zoom` / `max_zoom` limit it (e.g. `max_zoom` 2.6 so a small nest isn't shown too close). |
+| `{"t": 12, "follow": {"brood": "first"}, "zoom": 4}` | Follows the oldest brood item through its stages, carried or not, and then the worker it becomes. |
+| `{"t": 12, "follow": {"state": "dig", "near": [640, 640]}, "zoom": 4}` | Follows the digger nearest that point. |
+
+Keyframes ease into each other over the whole gap between them, as on the surface.
+
+**Following an ant between surface and nest:** give a follow keyframe `"across": true` and
+the ant is kept when it goes through an entrance: the camera of the part showing its new layer
+takes it over. Add `"switch_mode": true` too and the layout switches (`surface` ↔ `nest`)
+when the ant's layer isn't on screen. With split tracks, `"follow": {"ant": "same"}` on the
+nest camera picks up whatever the surface camera was following. See README "Scenarios" for
+the details of follows.
+
+### Step 5: the rest of the nest settings
+
+These are all under the colony's `nest_params` (hover over a field for its help):
+
+- `underground.size`: the layer's size in world units (default 1280×1280), separate from
+  the surface world's size. `cell_size` (default 4) is the soil grid; smaller is finer and
+  slower.
+- `underground.texture`: clay, roots and stones in the soil (harder to dig; stones are dug
+  round, leaving pillars). `underground.hardness` scales all digging work.
+- `royal_radius`, `chamber_min_radius`, `chamber_max_radius`, `tunnel_radius`: the size of
+  the chambers and tunnels the nest plans. `max_chambers` caps how many.
+- `entrances`: `{"at": [900, 2200], "spacing": 150}` digs another entrance at each colony
+  size in `at`.
+- `nurseries`: separate egg, larva and pupa chambers once the colony is big enough
+  (`"carve": true` digs them at the start).
+- `brood`: timing and needs of eggs, larvae and pupae; `initial` gives the nest brood at
+  the start (e.g. `{"egg": 3, "larva": 3, "pupa": 2}`), so the nurses have work straight away.
+- `underground.highways`: busy tunnels widen (on by default; `false` turns it off).
+- Top level: `max_agents` `{"surface": 900, "nest": 700}` caps how many ants each layer
+  simulates one by one, to keep big colonies fast.
+
+README "Leafcutter nests that dig their own underground" and "Harvester nests that dig
+their own granaries" describe what each does.
+
+### Step 6: run and record it
+
+- **Play** on the timeline plays the layout, the modes and both cameras exactly as they will
+  be recorded.
+- **Run** (F5) opens the player with the scenario's layout. Press **L** there to cycle
+  surface → split → nest. In the split layout the mouse (walls, food, zoom, **F**) works on
+  the surface part. **Run options... → Layout** starts the run in another layout without
+  changing the scenario.
+- **Record...** records the layout as it is in the scenario.
+
+From the command line, once it's saved as `scenarios/my_nest.json`:
+
+```bash
+godot --path . -- --scenario=my_nest --layout=split             # or --layout=nest
+tools/screenshot.sh my_nest 0 renders/nest.png -1 --at=6        # a still at 6 s
+FORMAT=avi tools/record.sh my_nest 1 10                         # a 10 s draft
+```
+
+### The whole example
+
+A small scenario with an established leafcutter nest, 4 s of the nest full screen, then the
+split view; the nest camera starts on the royal chamber and eases out to the whole nest:
+
+```json
+{
+	"name": "my_nest",
+	"seed": 1,
+	"duration": 20,
+	"colonies": [
+		{
+			"species": "leafcutter",
+			"nest": [540, 1000],
+			"population": {"queen": 1, "minim": 30, "media": 40},
+			"nest_params": {
+				"initial_chambers": 3,
+				"underground": {"size": [1280, 1280]}
+			}
+		}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [540, 600], "radius": 24, "amount": 200}
+	],
+	"camera": {
+		"surface": [
+			{"t": 0, "pos": [540, 900], "zoom": 1.5}
+		],
+		"nest": [
+			{"t": 0, "pos": [640, 640], "zoom": 3},
+			{"t": 8, "fit": "excavation", "margin": 80}
+		]
+	},
+	"render": {
+		"layout": {
+			"mode": "split",
+			"ratio": 0.45,
+			"modes": [{"t": 0, "mode": "nest"}, {"t": 4, "mode": "split"}]
+		}
+	}
+}
+```
+
+The shipped `harvester_founding`, `colony_founding` and `leafcutter_life` scenarios are
+longer examples: open one and look at its colony's `nest_params`, the **Camera: nest** row
+and the **Layout** row.
+
+### When the nest doesn't show
+
+- **Play shows only the surface.** Check, in order: the file has `render.layout` (the
+  Render row in the outline); its `mode`, or the first of its `modes`, isn't `surface`;
+  `layout.colony` is the index of the colony that digs; and that colony has
+  `nest_params.underground`. A nest without an underground layer plays full screen without
+  an error.
+- **The static preview doesn't show the nest.** That's expected: it shows the surface
+  only. Use Play.
+- **The nest part is empty soil, or looks at the wrong place.** A nest camera `pos` in
+  surface coordinates (e.g. the colony's `nest` position) points somewhere else in the
+  layer. Use positions within the layer's `size` (the centre by default), or a `fit:
+  excavation` key.
+- **Nothing gets dug.** A founding nest (`open: false`) only starts digging once it has
+  `open_entrance_at` workers, and digging takes sim time: check the speed schedule, or use
+  an established nest (`initial_chambers`) while you set up the shots.
+- **L does nothing in the player.** The layout only cycles for a colony whose nest has an
+  underground.
+
+---
+
+## 18. Command line options
 
 ```
 godot --path . res://scenes/editor.tscn -- [options]      (or tools/editor.sh [options])
@@ -684,7 +966,7 @@ tools/editor.sh --scenario=meadow_forage --select=colonies/0 --screenshot=render
 
 ---
 
-## 18. Settings and files the editor keeps
+## 19. Settings and files the editor keeps
 
 All in Godot's user folder (`user://`, on Windows
 `%APPDATA%\Godot\app_userdata\<project name>\`):
@@ -706,7 +988,7 @@ start.
 
 ---
 
-## 19. Tips and troubleshooting
+## 20. Tips and troubleshooting
 
 - **The preview didn't change after an edit.** It rebuilds 0.25 s after the last edit, and
   after you release the mouse when dragging. Big scenarios take up to about 2 s; the status
