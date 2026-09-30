@@ -111,6 +111,7 @@ func update(sim: Simulation, dt: float) -> void:
 	_grow_chamber_arrays()
 	_ensure_queen(sim)
 	# The colony eats from the granaries, the fullest first.
+	var p := Profiler.start()
 	_hunger = minf(_hunger + upkeep_per_ant * sim.colonies[colony_id].total_population() * dt, 1.0)
 	while _hunger > 1e-4 and not seed_mass.is_empty():
 		var k := _fullest_granary()
@@ -120,6 +121,7 @@ func update(sim: Simulation, dt: float) -> void:
 		var got := _eat_seed(s, _hunger)
 		eaten_mass += got
 		_hunger -= got
+	Profiler.stop("nest.update: granaries", p)
 	_update_colony(sim, dt)
 
 func _grow_chamber_arrays() -> void:

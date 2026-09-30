@@ -41,9 +41,16 @@ func _init() -> void:
 	z_index = 100
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	queue_redraw()
+	Profiler.stop("StoryMarker._process", t)
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("StoryMarker._draw", t)
+
+func _draw_body() -> void:
 	if camera == null:
 		return
 	var a := alpha_at(windows, video_time)

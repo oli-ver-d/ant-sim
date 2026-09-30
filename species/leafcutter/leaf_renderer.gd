@@ -52,7 +52,12 @@ func _pass(mat: ShaderMaterial, offset: Vector2) -> Node2D:
 	sprite.material = mat
 	return sprite
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("LeafRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if leaf.version == _version:
 		return
 	_version = leaf.version

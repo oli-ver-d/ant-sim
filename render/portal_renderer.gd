@@ -32,14 +32,21 @@ func bind(simulation: Simulation, on_layer: int) -> void:
 	_glow.height = 128
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	var state := PackedByteArray()
 	for p in sim.portals:
 		state.append(1 if p.open else 0)
 	if state != _open:
 		_open = state
 		queue_redraw()
+	Profiler.stop("PortalRenderer._process", t)
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("PortalRenderer._draw", t)
+
+func _draw_body() -> void:
 	for p in sim.portals:
 		if p.layer_b != layer:
 			continue

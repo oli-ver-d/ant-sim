@@ -12,7 +12,8 @@ extends Node2D
 ##   --ticks=<n>            run n extra ticks before the first frame
 ##   --at=<s>               fast-forward to video time s before the first frame
 ##   --ants=<n>             top each colony up to n ants (stress test)
-##   --probe=1              print FPS and simulation cost every 2 s
+##   --probe=1              print FPS, per-viewport render cost and the slowest renderers every 2 s
+##                          (--probe=N, N > 1: quit after N reports)
 ##   --screenshot=<path>    save a PNG after the first frames, then quit
 ##   --zoom=<z> --center=<x>,<y>   manual camera (overrides the scenario's)
 ##   --safe=1 --debug=1 --pheromones=0 --tuning=1   initial overlay state

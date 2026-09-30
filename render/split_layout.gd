@@ -91,6 +91,7 @@ static func create(simulation: Simulation, spec: Dictionary, output: OutputFrame
 	view.size = below.size
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.nest_viewport = SubViewport.new()
+	layout.nest_viewport.name = "NestViewport"
 	layout.nest_viewport.size = Vector2i(below.size)
 	layout.nest_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	layout.nest_viewport.handle_input_locally = false
@@ -126,6 +127,7 @@ func _build() -> void:
 	# Input is handled by the scene (see ScenarioPlayer.screen_to_world).
 	_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	surface_viewport = SubViewport.new()
+	surface_viewport.name = "SurfaceViewport"
 	surface_viewport.size = Vector2i(surface_rect.size)
 	surface_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	surface_viewport.handle_input_locally = false
@@ -166,6 +168,11 @@ func set_mode(new_mode: String) -> void:
 	nest_viewport.size = Vector2i(underground_rect.size)
 
 func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("SplitLayout._process", t)
+
+func _process_body(delta: float) -> void:
 	if not visible:
 		return
 	if nest.highlight_ant != _ring_ant:

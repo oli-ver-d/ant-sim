@@ -18,6 +18,7 @@ func bind(simulation: Simulation, target: Object) -> void:
 	nest = target as GranaryNest
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	var open := nest.entrances().size() if nest.has_entrance() else 0
 	# The disc widens in steps as the colony grows.
 	var size := int(sqrt(sim.colonies[nest.colony_id].total_population()))
@@ -25,8 +26,14 @@ func _process(_delta: float) -> void:
 		_drawn_open = open
 		_drawn_size = size
 		queue_redraw()
+	Profiler.stop("GranaryNestRenderer._process", t)
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("GranaryNestRenderer._draw", t)
+
+func _draw_body() -> void:
 	if _drawn_open <= 0:
 		return
 	var main := nest.entrance_position()

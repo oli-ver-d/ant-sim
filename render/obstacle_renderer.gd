@@ -22,7 +22,12 @@ func bind(simulation: Simulation) -> void:
 	mat.set_shader_parameter("world_size", Vector2(sim.layers[layer].world.size))
 	material = mat
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("ObstacleRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if sim == null or sim.layers[layer].world.version == _version:
 		return
 	_version = sim.layers[layer].world.version

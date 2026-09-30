@@ -30,6 +30,8 @@ tools/test.sh --long test_colony_founding_grows   # whole colony_founding run (~
 tools/build_native.sh                  # build the C++ ant kernel (MinGW GCC; `clean` removes it)
 godot --path . -- --scenario=basic_forage --seed=42 [--at=12.5] [--layout=split]   # interactive
 godot --headless --path . -s res://tests/bench.gd -- <scenario> <ticks> [ants_per_colony] [seed] [--no-native]
+                                       # --by-state (µs per state, nest parts) --from=<s> --load-times
+godot --path . -- --scenario=<name> --at=<s> --probe=6   # frame probe: per viewport, slowest renderers; quits after 6 reports
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding <seconds> <every> [cell_size]   # nest growth
 tools/screenshot.sh <scenario> <ticks> out.png [seed] [--zoom= --center= --layout= --at=]
 tools/editor.sh [--scenario=<name|path> | --new] [--screenshot=out.png --select=colonies/0]   # scenario editor (M16); no args reopens the last file

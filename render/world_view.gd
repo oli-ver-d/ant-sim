@@ -198,7 +198,12 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 func world_size() -> Vector2:
 	return Vector2(sim.layers[layer].world.size)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("WorldView._process", t)
+
+func _process_body(_delta: float) -> void:
 	# Pick up colonies and food sources added since the last frame (events, clicks).
 	while _bound_colonies < sim.colonies.size():
 		var nest := sim.colonies[_bound_colonies].nest

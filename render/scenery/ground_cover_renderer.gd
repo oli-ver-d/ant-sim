@@ -64,7 +64,12 @@ func bind(simulation: Simulation) -> void:
 	mat.set_shader_parameter("cells", float(CELLS))
 	material = mat
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("GroundCoverRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if sim == null or sim.ground == null:
 		return
 	var discs := cleared_discs(sim)

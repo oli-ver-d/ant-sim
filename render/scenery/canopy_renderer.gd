@@ -49,6 +49,11 @@ func bind(simulation: Simulation) -> void:
 		add_child(mi)
 
 func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("CanopyRenderer._process", t)
+
+func _process_body(delta: float) -> void:
 	if sim == null:
 		return
 	if sim.scenery.version != _version:

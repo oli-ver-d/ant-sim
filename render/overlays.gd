@@ -21,6 +21,11 @@ class SafeZones extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
+		var t := Profiler.start()
+		_draw_body()
+		Profiler.stop("Overlays.SafeZones._draw", t)
+
+	func _draw_body() -> void:
 		var rects := frame.unsafe_rects()
 		if rects.is_empty():
 			return
@@ -69,15 +74,22 @@ class DebugView extends Node2D:
 	var _heat_frame: int = 0
 
 	func _process(_delta: float) -> void:
+		var t := Profiler.start()
 		if visible:
 			queue_redraw()
 			_update_heat()
 			_update_readout()
+		Profiler.stop("Overlays.DebugView._process", t)
 
 	func _mouse() -> Vector2:
 		return mouse_world.call() if mouse_world.is_valid() else get_global_mouse_position()
 
 	func _draw() -> void:
+		var t := Profiler.start()
+		_draw_body()
+		Profiler.stop("Overlays.DebugView._draw", t)
+
+	func _draw_body() -> void:
 		var mouse := _mouse()
 		var font := ThemeDB.fallback_font
 		for i in sim.high_water:

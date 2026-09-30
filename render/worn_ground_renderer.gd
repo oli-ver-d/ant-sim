@@ -29,7 +29,12 @@ func bind(sim: Simulation) -> void:
 	mat.shader = preload("res://render/worn_ground.gdshader")
 	material = mat
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("WornGroundRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if layer == null:
 		return
 	_frame -= 1

@@ -41,7 +41,12 @@ func bind(simulation: Simulation, target: Object) -> void:
 	_grounds = Node2D.new()
 	add_child(_grounds)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("MiddenRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if nest.middens_version != _drawn_middens:
 		_drawn_middens = nest.middens_version
 		while _views.size() < nest.middens.size():
@@ -195,6 +200,11 @@ class Chunk extends Node2D:
 	var drawn_at: float = 0.0
 
 	func _draw() -> void:
+		var t := Profiler.start()
+		_draw_body()
+		Profiler.stop("MiddenRenderer.Chunk._draw", t)
+
+	func _draw_body() -> void:
 		var r := view.owner_renderer
 		var m := view.midden
 		var now := r.sim.time()

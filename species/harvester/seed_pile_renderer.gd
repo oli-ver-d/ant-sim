@@ -10,11 +10,14 @@ func bind(_sim: Simulation, target: Object) -> void:
 	pile = target as SeedPile
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	if pile.version != _version:
 		_version = pile.version
 		queue_redraw()
+	Profiler.stop("SeedPileRenderer._process", t)
 
 func _draw() -> void:
+	var t := Profiler.start()
 	var elongation := Vector2(1.6, 1.0)
 	for s in pile.seed_pos.size():
 		if pile.seed_alive[s] == 0:
@@ -28,3 +31,4 @@ func _draw() -> void:
 		draw_circle(Vector2(-0.15, -0.2) * r, r * 0.7, c)
 		draw_circle(Vector2(-0.35, -0.35) * r, r * 0.25, c.lightened(0.4))
 	draw_set_transform(Vector2.ZERO)
+	Profiler.stop("SeedPileRenderer._draw", t)

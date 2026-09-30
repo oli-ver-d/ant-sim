@@ -148,6 +148,12 @@ inline int64_t now_usec() {
 			.count();
 }
 
+inline int64_t now_nsec() {
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now().time_since_epoch())
+			.count();
+}
+
 } // namespace
 
 // --- World and pheromone lookups -------------------------------------------------
@@ -541,7 +547,26 @@ int64_t AntKernel::run(int64_t p_from, int64_t p_end, int64_t p_tick_count) {
 		if (colony.params[(ants.caste_id[i] * colony.num_states + ants.state[i]) * SLOT_COUNT + SLOT_KIND] == KIND_GDSCRIPT) {
 			return i;
 		}
-		if (profiling) {
+		if (state_profiling) {
+			// The time of an update handed back to GDScript counts too, but
+			// the update itself is counted where it finishes (Simulation).
+			uint8_t s = ants.state[i];
+			int64_t li = ants.layer[i];
+			int64_t t0 = now_nsec();
+			bool done = tick_ant(i, p_tick_count);
+			int64_t ns = now_nsec() - t0;
+			state_nsec[s] += ns;
+			if (profiling) {
+				layer_usec[li] += (ns + 500) / 1000;
+			}
+			if (!done) {
+				return i;
+			}
+			state_ant_ticks[s] += 1;
+			if (profiling) {
+				layer_ant_ticks[li] += 1;
+			}
+		} else if (profiling) {
 			int64_t li = ants.layer[i];
 			int64_t t0 = now_usec();
 			if (!tick_ant(i, p_tick_count)) {
@@ -950,6 +975,24 @@ PackedInt64Array AntKernel::take_profile() {
 	return out;
 }
 
+void AntKernel::set_state_profiling(bool p_on) {
+	state_profiling = p_on;
+}
+
+// Nanoseconds and completed ant updates per state id since the last call:
+// [nsec state 0 .. 255, ticks state 0 .. 255].
+PackedInt64Array AntKernel::take_state_profile() {
+	PackedInt64Array out;
+	out.resize(512);
+	for (int64_t s = 0; s < 256; s++) {
+		out.set(s, state_nsec[s]);
+		out.set(256 + s, state_ant_ticks[s]);
+		state_nsec[s] = 0;
+		state_ant_ticks[s] = 0;
+	}
+	return out;
+}
+
 void AntKernel::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_rng", "rng"), &AntKernel::set_rng);
 	ClassDB::bind_method(D_METHOD("set_dt", "dt"), &AntKernel::set_dt);
@@ -986,6 +1029,8 @@ void AntKernel::_bind_methods() {
 	ClassDB::bind_static_method("AntKernel", D_METHOD("mask_edges", "mask", "nx", "ny", "value"), &AntKernel::mask_edges);
 	ClassDB::bind_static_method("AntKernel", D_METHOD("nearest_point", "points", "at"), &AntKernel::nearest_point);
 	ClassDB::bind_method(D_METHOD("set_profiling", "on"), &AntKernel::set_profiling);
+	ClassDB::bind_method(D_METHOD("set_state_profiling", "on"), &AntKernel::set_state_profiling);
+	ClassDB::bind_method(D_METHOD("take_state_profile"), &AntKernel::take_state_profile);
 	ClassDB::bind_method(D_METHOD("take_profile"), &AntKernel::take_profile);
 
 	BIND_ENUM_CONSTANT(KIND_GDSCRIPT);

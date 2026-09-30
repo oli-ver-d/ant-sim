@@ -26,9 +26,16 @@ func bind(simulation: Simulation) -> void:
 	sim = simulation
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	queue_redraw()
+	Profiler.stop("WingRenderer._process SHADOW" if pass_kind == Pass.SHADOW else "WingRenderer._process WINGS", t)
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("WingRenderer._draw SHADOW" if pass_kind == Pass.SHADOW else "WingRenderer._draw WINGS", t)
+
+func _draw_body() -> void:
 	if sim == null:
 		return
 	for colony in sim.colonies:

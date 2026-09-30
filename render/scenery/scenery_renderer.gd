@@ -26,18 +26,25 @@ var _version: int = -1
 ## Baked textures per prop id: {"body": Texture2D, "body_rect", "shadow", "shadow_rect"}.
 var _baked: Dictionary[int, Dictionary] = {}
 var _painters: Dictionary[String, Object] = {}
+## Profiler keys, per pass (set in bind()).
+var _key_process: String = "SceneryRenderer._process"
+var _key_draw: String = "SceneryRenderer._draw"
 
 func bind(simulation: Simulation, pass_kind: Pass = Pass.BASE) -> void:
 	sim = simulation
 	draw_pass = pass_kind
+	_key_process = "SceneryRenderer._process %s" % Pass.keys()[pass_kind]
+	_key_draw = "SceneryRenderer._draw %s" % Pass.keys()[pass_kind]
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	if sim != null and sim.scenery.version != _version:
 		_version = sim.scenery.version
 		if draw_pass == Pass.BASE:
 			_bake_new()
 		queue_redraw()
+	Profiler.stop(_key_process, t)
 
 func _bake_new() -> void:
 	var live: Dictionary[int, bool] = {}
@@ -66,6 +73,11 @@ func _painter(type_id: String) -> Object:
 	return _painters[type_id]
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop(_key_draw, t)
+
+func _draw_body() -> void:
 	if sim == null:
 		return
 	if draw_pass == Pass.BASE:

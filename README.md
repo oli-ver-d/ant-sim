@@ -186,7 +186,7 @@ inspector field has a tooltip with the schema's help text. The three panel split
 
 ```bash
 tools/build_native.sh                           # build the native ant kernel (tools/build_native.sh clean removes it)
-tools/test.sh                                   # headless test suite in parallel (filter: tools/test.sh pheromones)
+tools/test.sh                                   # headless test suite in parallel (filter: tools/test.sh pheromones); ends with the critical path
 tools/test.sh --quick                           # only tests that took 5 s or less last time (QUICK_MS=); -j N processes
 tools/screenshot.sh basic_forage 3600 out.png   # run 3600 ticks (2 min at 30 ticks/s), save a PNG
 tools/screenshot.sh chaos_to_highway 3600 out.png -1 --zoom=3.5 --center=600,740   # close-up
@@ -194,7 +194,9 @@ tools/screenshot.sh two_species 2400 out.png -1 --safe=1 --debug=1 --pheromones=
 tools/screenshot.sh colony_founding 0 out.png -1 --layout=split --at=3    # split layout, 3 s in
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000   # sim timing: scenario, ticks, ants, [seed]
 godot --headless --path . -s res://tests/bench.gd -- res://tests/fixtures/scenarios/nest_bench.json 900   # per layer
-godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants
+godot --headless --path . -s res://tests/bench.gd -- colony_founding 900 0 -1 --from=5000 --by-state   # cost by state, late colony
+godot --headless --path . -s res://tests/bench.gd -- meadow_forage 1 --load-times   # scenario build and prop bakes by stage
+godot --path . -- --probe=1 --ants=3000        # in-app FPS with 3000 ants (per viewport, slowest renderers)
 godot --headless --path . -s res://tests/bench.gd -- basic_forage 600 3000 -1 --no-native   # GDScript ants only
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300    # a nest's growth: chambers, highways, entrances, ms/tick
 godot --headless --path . -s res://tests/nest_probe.gd -- colony_founding 7200 300 2  # the same with 2-unit underground cells
@@ -756,6 +758,17 @@ With PNG most of the time goes into Godot writing the 1080×1920 PNGs (~0.7 s ea
 Measured on this project's dev laptop (Intel UHD integrated GPU, CPU at 2.3 GHz, Godot 4.7
 editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s;
 `tests/bench.gd` times the simulation headless.
+
+Where the time goes (M18a): `--probe=1` also prints render CPU/GPU time per viewport (the
+split layout's `SurfaceViewport` and `NestViewport` too) and the renderers' `_process` /
+`_draw` costs, the slowest first; `--probe=N` (N > 1) quits after N reports. `bench.gd
+--by-state` adds µs per ant update for each behaviour state (native kernel and GDScript
+together) and the nest's update split by part; `--from=<s>` runs that many simulated
+seconds untimed first; `--load-times` times the scenario build by stage and bakes every
+prop as the renderer would. These use `Profiler` (`sim/profiler.gd`), which is off, and
+records nothing, unless a tool switches it on. `tools/test.sh` ends with the total test time
+and each process's total and slowest test (the critical path). The M18 baseline numbers are
+in `docs/plan_M18.md` (M18a).
 
 | Case | Result |
 |---|---|

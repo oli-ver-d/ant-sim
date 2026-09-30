@@ -76,7 +76,12 @@ func _cache_looks() -> void:
 			var packed := floorf(caste.thorax_scale * 100.0) + clampf(caste.leg_length / 4.0, 0.0, 0.999)
 			_look_custom.append(Vector3(caste.head_scale, caste.abdomen_scale, packed))
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("AntRenderer._process riders" if riders_only else "AntRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if sim == null:
 		return
 	if _colony_base.size() != sim.colonies.size():

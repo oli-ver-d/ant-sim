@@ -31,7 +31,20 @@ var _has_wings: bool = false
 func bind(simulation: Simulation) -> void:
 	sim = simulation
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop(_key("_process"), t)
+
+## Profiler key for this node's pass, built on first use (pass_kind is set after bind).
+var _keys: Dictionary[String, String] = {}
+
+func _key(what: String) -> String:
+	if not _keys.has(what):
+		_keys[what] = "ItemRenderer.%s %s" % [what, Pass.keys()[pass_kind]]
+	return _keys[what]
+
+func _process_body(_delta: float) -> void:
 	# Carried items move every frame; items on the ground only change when the
 	# simulation's item set does.
 	if pass_kind != Pass.GROUND or sim.items_version != _drawn_version:
@@ -54,6 +67,11 @@ static func carried_shadow_offset(height: float) -> Vector2:
 	return GROUND_SHADOW_OFFSET.lerp(CARRIED_SHADOW_OFFSET, clampf(height, 0.0, 1.0))
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop(_key("_draw"), t)
+
+func _draw_body() -> void:
 	if sim == null:
 		return
 	_has_wings = false

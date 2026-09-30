@@ -10,10 +10,7 @@ Goal: a faster, leaner, more correct codebase, with no new features:
    every tool and scenario, malformed input, warnings) finds bugs, which are written down
    with a repro and fixed with a regression test each.
 
-Status: planned, not started. Next: M18a (measurement baseline), after M16j (world size
-per scenario, `docs/plan_M16.md`), which was planned at the same time and should land first
-so M18 measures, cleans and audits the code as it will stay (M18c's editor round trips and
-malformed-input checks then cover the new `world` key too).
+Status: M18a done (baseline and profiling tools). Next: M18b (dead code and warnings).
 M18f takes over M15l's "founding frame budget"; M15l's PNG finals stay open in M15 (better
 recorded after M18f, which makes them cheaper).
 
@@ -124,6 +121,109 @@ say *where* the time goes (by renderer, by behaviour state, by load stage).
   `--by-state` totals match the unsplit number within 10%). Full suite; hashes unchanged.
 - Hands on: the ranked hotspot lists (render, sim by state, load, tests) that M18f–M18i
   work from, in this plan's M18a section.
+
+#### M18a: done
+
+What was built:
+
+- `Profiler` (`sim/profiler.gd`): static opt-in timers, `var t := Profiler.start()` …
+  `Profiler.stop(key, t)`; while `Profiler.on` is false, start() returns 0 and stop()
+  returns at once. Used only round per-tick/per-frame code: `Simulation.begin_step`
+  sections (`step.*`, `nest.update`, `nest.update_underground`, `nest.update_refuse`),
+  `ColonyNest._update_colony` parts (`nest.update: brood / alates / roles and planning /
+  chambers dug`), `FungusNest` gardens, `GranaryNest` granaries, `ScenarioLoader` stages
+  (`load: *`, one key per scatter), and every renderer's `_process`/`_draw` under `render/`
+  and `species/*/` (`Class._process`, `Class._draw`, with the pass for ItemRenderer,
+  SceneryRenderer, WingRenderer; the carried/riders instances of Brood/AntRenderer).
+  Not covered: helpers drawn through signals (`SpoilHeapRenderer._draw_base`,
+  `FungusNestRenderer._draw_mound`, `MiddenRenderer.View._draw_ground`,
+  `SplitLayout._draw_ring/_draw_seam`).
+- Per-state timing of ant updates is its own code path, not Profiler (it is per ant):
+  `Simulation.set_state_profiling(true)` sends GDScript updates through `_tick_profiled()`
+  (one bool check per GDScript ant update when off) and switches on the kernel's
+  `set_state_profiling` (ns timers round `tick_ant`, per state id; an update handed back to
+  GDScript adds its time but is counted where it finishes). `take_state_profile()` merges
+  both; index `STATE_TRANSIT` (256) is portal transits. Kernel and GDScript give identical
+  counts per state (tested).
+- `bench.gd`: `--by-state` (states by cost, then Profiler keys), `--from=<s>` (untimed
+  fast-forward), `--load-times` (stages, plus every prop baked with its painter as
+  SceneryRenderer would, `bake: <type>`; registers CoreRenderers for that).
+- `frame_probe.gd`: per-viewport render CPU/GPU (root and every SubViewport; the split
+  layout's are now named `SurfaceViewport`/`NestViewport`), top 12 Profiler keys per frame;
+  `--probe=N` (N > 1) quits after N reports. Godot's per-viewport render info reads 0 draw
+  calls for 2D, so draw calls stay the global monitor (whole frame).
+- `tools/test.sh`: ends with the total test time and per process its total and slowest
+  test. Fixed on the way: tests with 0 ms recorded times tied at zero load in the balancer
+  and could leave a process with no tests (its `--tests-file` missing → exit 1); they now
+  count as 1 ms.
+- `tests/test_bench_tools.gd` (6 tests): Profiler off records nothing (load, nest,
+  states); on, it records load and nest parts once per tick; state profiling keeps the hash
+  (single-layer and layered); kernel and GDScript count the same updates per state; the
+  states' times are ≤ the ants' total and ≥ 60% of it. Changed from the plan: "totals
+  match within 10%" is not testable in a parallel suite; the states measure 84–86% of the
+  `ants` time in every bench (the rest is the loop, `kernel.run` calls and `native.sync`),
+  and the by-state run costs ~1–3% more than a plain one (nest_bench 11.85 vs 11.86 ms).
+- Hashes and parity unchanged; full suite 607 passed.
+
+**Baseline** (dev laptop, native kernel, one run at a time, 2026-09-30). Bench numbers are
+ms per tick; frame numbers per frame, windowed at the default window size.
+
+| Case | Result |
+|---|---|
+| `bench.gd basic_forage 600 3000` | 3.08 ms: ants 2.39, pheromones 0.56, nests 0.10 |
+| `bench.gd nest_bench.json 900` | 11.86 ms: ants 8.99 (surface 2.49, 2.9 µs/ant; underground 5.41, 8.7 µs/ant), nests 1.76, pheromones 0.95; 1,490 agents |
+| `bench.gd meadow_forage 3600` | 4.52 ms: pheromones 3.65 (4 channels), ants 0.71, nests 0.09; 585 ants |
+| `bench.gd colony_founding 900 0 -1 --from=5000 --by-state` | 23.3 ms: ants 17.9 (surface 6.1, 6.8 µs/ant; underground 10.0, 14.2 µs/ant), pheromones 3.4, nests 1.6; 1,600 agents + 504 abstract |
+| `bench.gd leafcutter_life 1800 0 -1 --from=2100 --by-state` (trunk trail) | 5.19 ms: ants 2.48, pheromones 2.22, nests 0.31; 250 ants |
+| Frame `meadow_forage --at=34` | 60 fps; root GPU 10.0 ms, render CPU 0.6; 707 draw calls; renderers ~4 ms (ItemRenderer carried shadow 1.0, carried 0.9, pheromones 0.7, ground items 0.5) |
+| Frame `leafcutter_life --at=141` (trunk trail, normal layout) | 49 fps; GPU 11.9 ms; 163 draw calls; renderers ~12 ms: WingRenderer WINGS 5.5 (!), GardenRenderer 2.2, PhoridRenderer._draw 1.3, carried items 1.4 |
+| Frame `colony_founding --at=62 --layout=split` | 7 fps; sim 77.6 ms; **GPU SurfaceViewport 79.8 ms, NestViewport 69.3 ms** (root 0.4), SurfaceViewport CPU 10.6; 14,758 draw calls; renderers ~34 ms (AntRenderer 6.6, carried shadow 5.4, carried 5.3, GardenRenderer 5.3, Midden 2.0, Soil 1.8) |
+| Frame `colony_founding --at=62 --layout=normal` | 10 fps; sim 72.4 ms; GPU 26.0 ms, render CPU 8.8; 14,387 draw calls; renderers ~10 ms (AntRenderer 3.3, Midden 1.9, carried 3.1) |
+| Load `meadow_forage` (`--load-times`) | build 1.46 s (scatters 0.48 + 0.37, registry 0.48, ground 0.12) + bakes 5.7 s (2 logs 1.47 s **each**, 15 rocks 0.11 s each, 146 plants 7.8 ms each); first tick 37 ms |
+| Load `leafcutter_life` | build 1.75 s (colonies 0.81, registry 0.45, scatters 0.24 + 0.21); bakes ~0; first tick 73 ms |
+| Load `colony_founding` | build 2.09 s (colonies 0.78, registry 0.44, scatters 0.34 + 0.24 + 0.23) + bakes 1.3 s (7 rocks 0.11 s each, 173 plants); first tick 97 ms |
+| Suite (`tools/test.sh`, 8 processes) | 607 tests, **422 s wall**, 2,268 s test time; processes 275–297 s each, so ~125 s of the wall is import, listing and process start-up/load, not tests |
+
+Seeking is slow: `--at=62` in `colony_founding` took 37–45 min windowed (the fast-forward
+runs the whole sim to 6,033 s), `leafcutter_life --at=141` 2.7 min, `meadow_forage
+--at=34` 2.2 min. Registry creation (~0.45 s) is paid by every load (and every test file).
+
+**Ranked hotspots** (for the phases that follow):
+
+- Render (M18f): (1) GPU of the split layout's SubViewports in late `colony_founding`,
+  ~150 ms together, with ~14,700 draw calls: the dominant cost, invisible to the old probe;
+  (2) AntRenderer._process at 1,600 ants (6.6 ms split, both views); (3) ItemRenderer
+  CARRIED + CARRIED_SHADOW _draw (10.7 ms split; ~1.9 ms even in meadow_forage);
+  (4) GardenRenderer._process (5.3 ms founding, 2.2 ms leafcutter_life); (5) WingRenderer
+  WINGS _draw 5.5 ms in the leafcutter_life trunk-trail shot (alates in the nest; check
+  why it costs that much); (6) MiddenRenderer._process ~2 ms, SoilRenderer 1.8 ms,
+  PhoridRenderer._draw 1.3 ms.
+- Sim by state (M18g), late `colony_founding` (15.5 ms of 17.9 ms ants): garden 5.0 ms
+  (420 ants, 12.0 µs each), **carry_spent 4.9 ms (249 ants, 19.6 µs each)**, cut_leaf 1.1,
+  patrol_trail 0.9 (7.1 µs), nurse 0.9 (16.3 µs), dig 0.7 (21.8 µs), go_to_food 0.5; native
+  core states ≤ 1.5 µs. Nest: gardens 1.1 ms of nest.update 1.3. Pheromones 3.4 ms (not a
+  species state; worth a look in M18g). nest_bench: garden 2.9, cut_leaf 1.1, go_up 0.9,
+  nurse 0.6; step.nav_grid 0.8 ms. leafcutter_life (trunk trail): nurse 0.56, cut_leaf
+  0.24, nest_role 0.19 (16 µs), carry_down, garden, go_up ~0.18 each; pheromones 2.2 of
+  5.2 ms. Every GDScript species state costs 7–27 µs per update.
+- Load (M18h, worth doing): (1) log bakes 1.47 s each, rock bakes 0.11 s each, plant bakes
+  3–8 ms each (meadow_forage 5.7 s of bakes); (2) colony setup 0.8 s in the leafcutter
+  scenarios (underground preparation; measure inside `add_colony`); (3) registry 0.45 s per
+  load; (4) scatters 0.2–0.5 s each; (5) first tick 40–100 ms.
+- Tests (M18i): the critical path is still
+  `test_highways::test_extra_entrances_open_and_are_used` (232 s) and
+  `test_nurseries::test_leafcutter_nest_gets_nurseries` (154 s); then
+  `test_native_matches_gdscript_nest_bench` 58, `test_no_nurseries_below_the_threshold` 55,
+  `test_fungus_farm_colony_grows` 46. ~125 s of the 422 s wall is outside tests (import,
+  listing, per-process start-up): look there too.
+
+Bug candidates found on the way (for M18c): `bench.gd` (and `ScenarioLoader.load_simulation`)
+with a scenario path that doesn't exist reports an error and then runs an empty scenario
+instead of failing; every headless tool exits with "ObjectDB instances leaked" / "Pages in
+use exist at exit in PagedAllocator" (the old bench did too);
+`test_ground_swatches::test_image_speed` is a wall-clock threshold (< 100 ms, ~25 ms alone)
+that failed once at 104 ms in a full suite run on a busy machine (the second M18a run, 562 s
+wall, every test ~50% slower; the first run on the same sim code passed 607/607): flaky.
 
 ### M18b: dead code and warnings
 
@@ -313,3 +413,9 @@ Goal: the README and CLAUDE.md say what is now true.
   Recommendation: keep.
 
 ## Progress log
+
+- 2026-09-30 M18a: Profiler, per-state ant timing (kernel + GDScript), bench `--by-state`
+  / `--from` / `--load-times`, per-viewport frame probe with renderer timers, test.sh
+  critical path; baseline table and ranked hotspots in the M18a section. Biggest finds:
+  the split layout's SubViewport GPU time (~150 ms per frame late in colony_founding), log
+  bakes of 1.5 s each, carry_spent at 19.6 µs per ant.

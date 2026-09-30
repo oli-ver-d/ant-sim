@@ -129,6 +129,13 @@ var profile_usec: Dictionary[String, int] = {"nests": 0, "ants": 0, "pheromones"
 ## With several layers: microseconds of ant updates, and ant updates, per layer.
 var profile_layer_usec: PackedInt64Array = []
 var profile_layer_ant_ticks: PackedInt64Array = []
+## Per state (bench.gd --by-state): set_state_profiling(true) times every
+## GDScript ant update by the state it ran in (index STATE_TRANSIT: portal
+## transits), and the kernel its own; see take_state_profile().
+var profile_states: bool = false
+var profile_state_usec: PackedInt64Array = []
+var profile_state_ticks: PackedInt64Array = []
+const STATE_TRANSIT := 256
 
 ## The native ant kernel's driver (see NativeAnts), or null when the
 ## extension isn't built or is switched off: then every ant runs in GDScript.
@@ -697,22 +704,36 @@ func begin_step() -> void:
 	assert(not in_tick(), "begin_step() called twice")
 	tick_count += 1
 	var t0 := Time.get_ticks_usec()
+	var p := Profiler.start()
 	_apply_due_events()
 	_apply_rain()
+	Profiler.stop("step.events_rain", p)
 	for colony in colonies:
+		p = Profiler.start()
 		colony.nest.release_waiting(self, dt)
 		colony.nest.update(self, dt)
+		Profiler.stop("nest.update", p)
+		p = Profiler.start()
 		colony.nest.update_underground(self, dt)
+		Profiler.stop("nest.update_underground", p)
+		p = Profiler.start()
 		colony.nest.update_refuse(self, dt)
+		Profiler.stop("nest.update_refuse", p)
 	if tick_count % POOL_EVERY == 0 and _pools_on:
+		p = Profiler.start()
 		balance_pools()
+		Profiler.stop("step.balance_pools", p)
 	var lookahead := 0.0
 	for colony in colonies:
 		lookahead = maxf(lookahead, colony.avoid_lookahead)
 	for l in layers:
+		p = Profiler.start()
 		l.world.ensure_near_blocked(lookahead)
+		Profiler.stop("step.near_blocked", p)
 		if l.nav_grid != null:
+			p = Profiler.start()
 			l.nav_grid.update()
+			Profiler.stop("step.nav_grid", p)
 	# Ants spawned during this tick get their first update next tick.
 	_tick_ants = high_water
 	_cursor = 0
@@ -737,6 +758,9 @@ func step_ants(count: int) -> bool:
 		for i in range(_cursor, end):
 			if alive[i] == 0:
 				continue
+			if profile_states:
+				_tick_profiled(i)
+				continue
 			timer[i] += dt
 			source_age[i] += dt
 			since_obstacle[i] += dt
@@ -758,6 +782,8 @@ func _step_ants_native(from: int, end: int) -> void:
 			return
 		if layered:
 			_step_ants_layered(i, i + 1)
+		elif profile_states:
+			_tick_profiled(i)
 		else:
 			timer[i] += dt
 			source_age[i] += dt
@@ -779,7 +805,9 @@ func _step_ants_layered(from: int, end: int) -> void:
 			continue
 		var t := Time.get_ticks_usec()
 		var li := layer[i]
-		if transit_until[i] != 0:
+		if profile_states:
+			_tick_profiled(i)
+		elif transit_until[i] != 0:
 			_tick_transit(i)
 		else:
 			timer[i] += dt
@@ -790,6 +818,50 @@ func _step_ants_layered(from: int, end: int) -> void:
 				change_state(i, next)
 		profile_layer_usec[li] += Time.get_ticks_usec() - t
 		profile_layer_ant_ticks[li] += 1
+
+## One ant's GDScript update, as in step_ants(), timed by its state (see
+## set_state_profiling()).
+func _tick_profiled(i: int) -> void:
+	var t := Time.get_ticks_usec()
+	var s := STATE_TRANSIT
+	if transit_until[i] != 0 and layers.size() > 1:
+		_tick_transit(i)
+	else:
+		s = state[i]
+		timer[i] += dt
+		source_age[i] += dt
+		since_obstacle[i] += dt
+		var next := behaviours[state[i]].tick(self, i, dt)
+		if next != "":
+			change_state(i, next)
+	profile_state_usec[s] += Time.get_ticks_usec() - t
+	profile_state_ticks[s] += 1
+
+## Switches per-state timing of ant updates on or off (GDScript and kernel).
+func set_state_profiling(on: bool) -> void:
+	profile_states = on
+	profile_state_usec.resize(STATE_TRANSIT + 1)
+	profile_state_ticks.resize(STATE_TRANSIT + 1)
+	if kernel != null:
+		kernel.set_state_profiling(on)
+
+## Microseconds and ant updates per state id since the last call, GDScript and
+## kernel together: {"usec": PackedFloat64Array, "ticks": PackedInt64Array}
+## (index STATE_TRANSIT: portal transits). Resets the counts.
+func take_state_profile() -> Dictionary:
+	var us := PackedFloat64Array()
+	var ticks := profile_state_ticks.duplicate()
+	us.resize(STATE_TRANSIT + 1)
+	for s in STATE_TRANSIT + 1:
+		us[s] = float(profile_state_usec[s])
+	if kernel != null:
+		var prof: PackedInt64Array = kernel.take_state_profile()
+		for s in 256:
+			us[s] += prof[s] / 1000.0
+			ticks[s] += prof[256 + s]
+	profile_state_usec.fill(0)
+	profile_state_ticks.fill(0)
+	return {"usec": us, "ticks": ticks}
 
 ## Finishes the tick in progress: pheromone update and render snapshots.
 func end_step() -> void:

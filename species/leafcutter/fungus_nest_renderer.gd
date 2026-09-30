@@ -20,6 +20,7 @@ func bind(_sim: Simulation, target: Object) -> void:
 	add_child(_mound)
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	var extra := 0
 	for p in nest.extra_portals:
 		extra += 1 if p.open else 0
@@ -28,6 +29,7 @@ func _process(_delta: float) -> void:
 		_drawn_open = nest.has_entrance()
 		_drawn_chambers = nest.chambers
 		_mound.queue_redraw()
+	Profiler.stop("FungusNestRenderer._process", t)
 
 func _draw_mound() -> void:
 	var rng := RandomNumberGenerator.new()

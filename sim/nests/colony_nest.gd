@@ -276,10 +276,15 @@ func _update_colony(sim: Simulation, dt: float) -> void:
 		founding.update(sim)
 		if not founding.is_home():
 			return
+	var p := Profiler.start()
 	brood.update(sim, self, dt)
+	Profiler.stop("nest.update: brood", p)
 	if alates != null:
+		p = Profiler.start()
 		alates.update(sim, self, dt)
+		Profiler.stop("nest.update: alates", p)
 	_role_timer -= dt
+	p = Profiler.start()
 	if _role_timer <= 0.0:
 		_role_timer = 1.0
 		_count_roles(sim)
@@ -295,9 +300,12 @@ func _update_colony(sim: Simulation, dt: float) -> void:
 		if _rescue_timer <= 0.0:
 			_rescue_timer = 60.0
 			chambers_layout.rescue(plan)
+	Profiler.stop("nest.update: roles and planning", p)
+	p = Profiler.start()
 	if chambers_layout.update_dug(plan) > 0:
 		chambers = chambers_layout.dug_count()
 		_chambers_dug(sim)
+	Profiler.stop("nest.update: chambers dug", p)
 
 func hash_underground(ctx: HashingContext) -> void:
 	super.hash_underground(ctx)

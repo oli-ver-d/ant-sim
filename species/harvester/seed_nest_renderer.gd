@@ -19,13 +19,20 @@ func bind(_sim: Simulation, target: Object) -> void:
 	position = nest.entrance_position()
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	# Redraw in steps so a busy nest doesn't redraw every frame.
 	if nest.seeds_received - _drawn_seeds >= 4 or _drawn_seeds < 0 or nest.middens_version != _middens_version:
 		_drawn_seeds = nest.seeds_received
 		_middens_version = nest.middens_version
 		queue_redraw()
+	Profiler.stop("SeedNestRenderer._process", t)
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("SeedNestRenderer._draw", t)
+
+func _draw_body() -> void:
 	var r := nest.disc_radius
 	# Cleared disc with a soft edge.
 	for k in 6:

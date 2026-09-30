@@ -58,6 +58,7 @@ func bind(sim: Simulation, target: Object) -> void:
 	add_child(_base)
 
 func _process(_delta: float) -> void:
+	var t := Profiler.start()
 	var crumbs := mini(nest.spoil_count(entrance), MAX_CRUMBS)
 	while _chunks.size() * CHUNK < crumbs:
 		var chunk := HeapChunk.new()
@@ -75,6 +76,7 @@ func _process(_delta: float) -> void:
 	if absf(_base.scale.y - r) > 0.5:
 		_base.scale = Vector2(ALONG, ACROSS) * r
 		_base.queue_redraw()
+	Profiler.stop("SpoilHeapRenderer._process", t)
 
 ## Radius of the heap with n crumbs.
 static func _radius(n: int) -> float:
@@ -134,6 +136,11 @@ class HeapChunk extends Node2D:
 	var shape: HeapShape
 
 	func _draw() -> void:
+		var t := Profiler.start()
+		_draw_body()
+		Profiler.stop("SpoilHeapRenderer.HeapChunk._draw", t)
+
+	func _draw_body() -> void:
 		var rng := RandomNumberGenerator.new()
 		var tint := Color(shape.tint, 1.0)
 		for n in range(first, first + count):

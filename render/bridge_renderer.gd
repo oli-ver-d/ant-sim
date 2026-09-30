@@ -17,7 +17,12 @@ var _twigs: Array[Dictionary] = []  # {"texture", "at", "rot", "size"}
 func bind(simulation: Simulation) -> void:
 	sim = simulation
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("BridgeRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if sim == null or sim.world.bridges.size() == _drawn:
 		return
 	_drawn = sim.world.bridges.size()
@@ -43,6 +48,11 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("BridgeRenderer._draw", t)
+
+func _draw_body() -> void:
 	for twig in _twigs:
 		var size: Vector2 = twig["size"]
 		var rect := Rect2(-size * 0.5, size)

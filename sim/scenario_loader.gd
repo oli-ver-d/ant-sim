@@ -50,19 +50,33 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 ## add_scatters, finish.
 static func build_base(data: Dictionary, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
 	var seed_value: int = seed_override if seed_override >= 0 else int(data.get("seed", 1))
+	var p := Profiler.start()
 	var sim := Simulation.new(config, registry, seed_value, world_size(data, config))
+	Profiler.stop("load: simulation", p)
+	p = Profiler.start()
 	for ob: Dictionary in data.get("obstacles", []):
 		ScenarioEvents.place_obstacle(sim, ob)
+	Profiler.stop("load: obstacles", p)
+	p = Profiler.start()
 	set_ground(sim, data)
+	Profiler.stop("load: ground", p)
 	for prop: Dictionary in data.get("scenery", []):
 		if not prop.has("scatter"):
+			p = Profiler.start()
 			ScenarioEvents.add_scenery(sim, prop)
+			Profiler.stop("load: scenery %s" % prop.get("type", "?"), p)
+	p = Profiler.start()
 	for food: Dictionary in data.get("food", []):
 		sim.add_food_source(food["type"], food)
+	Profiler.stop("load: food", p)
+	p = Profiler.start()
 	for d: Dictionary in data.get("debris", []):
 		Debris.create(sim, d)
+	Profiler.stop("load: debris", p)
+	p = Profiler.start()
 	for col: Dictionary in data.get("colonies", []):
 		ScenarioEvents.add_colony(sim, col)
+	Profiler.stop("load: colonies", p)
 	return sim
 
 ## The surface GroundMap from data["ground"] (none without it).
@@ -93,11 +107,14 @@ static func add_scatters(sim: Simulation, data: Dictionary, from: int = 0, marks
 	for k in range(from, scenery.size()):
 		if scenery[k].has("scatter"):
 			marks[k] = sim.scenery.mark()
+			var p := Profiler.start()
 			results[k] = Scatter.apply(sim, scenery[k]["scatter"], k)
+			Profiler.stop("load: scatter %d (%s)" % [k, scenery[k]["scatter"].get("preset", "custom")], p)
 	return results
 
 ## Agent caps and scheduled events, after everything is placed.
 static func finish(sim: Simulation, data: Dictionary) -> void:
+	var p := Profiler.start()
 	# Agent caps per layer: "surface", or "nest" for every nest's underground.
 	var caps: Dictionary = data.get("max_agents", {})
 	for l in sim.layers:
@@ -108,6 +125,10 @@ static func finish(sim: Simulation, data: Dictionary) -> void:
 	for ev: Dictionary in data.get("events", []):
 		events.append(ev)
 	sim.schedule_events(events)
+	Profiler.stop("load: finish", p)
 
 static func load_simulation(scenario_name: String, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
-	return build(load_data(scenario_name), registry, config, seed_override)
+	var p := Profiler.start()
+	var data := load_data(scenario_name)
+	Profiler.stop("load: read json", p)
+	return build(data, registry, config, seed_override)

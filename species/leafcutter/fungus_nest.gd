@@ -191,6 +191,7 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 	# eats from them.
 	garden.digest_rate = digest_rate
 	garden.fungus_yield = fungus_yield
+	var p := Profiler.start()
 	var before := garden.total_fungus() + garden.total_substrate()
 	garden.update(dt, sim.rng)
 	fungus_eaten += garden.eat(upkeep_per_ant * colony.total_population() * dt)
@@ -201,6 +202,7 @@ func _update_layered(sim: Simulation, dt: float) -> void:
 			queen_reserve -= m
 			planted_mass += m
 	_sync_garden_totals(before)
+	Profiler.stop("nest.update: gardens", p)
 	_update_colony(sim, dt)
 
 ## Newly dug chambers get their garden, started with fungus from another

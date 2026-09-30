@@ -30,7 +30,12 @@ func bind(target: FungusNest) -> void:
 	mat.set_shader_parameter("world_size", Vector2(g.width, g.height) * GardenGrid.CELL)
 	material = mat
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("GardenRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	var g := nest.garden
 	if g == null or g.version == _seen_version:
 		return

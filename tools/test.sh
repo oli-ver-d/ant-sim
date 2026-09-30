@@ -10,6 +10,7 @@
 # it balances the processes (slowest tests first, each to the least loaded) and
 # picks the --quick tier (new tests, with no time yet, are in it).
 # Full output of every process: .godot/test_runs/.
+# The summary is followed by the total test time and, per process, its total and slowest test.
 # Set GODOT to override the Godot executable (default: godot on PATH).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -71,10 +72,10 @@ fi
 [ "$jobs" -lt 1 ] && jobs=1
 
 # Longest first, each to the shard with the least work so far. Unknown tests
-# count as 5 s.
+# count as 5 s, 0 ms ones as 1 ms (ties at zero left a process without tests).
 awk -v jobs="$jobs" -v dir="$RUNS" '
 	FILENAME == ARGV[1] { ms[$2] = $1; next }
-	{ print (($1 in ms) ? ms[$1] : 5000), $1 }
+	{ print (($1 in ms) ? (ms[$1] > 0 ? ms[$1] : 1) : 5000), $1 }
 ' "$TIMES" "$RUNS/selected.txt" | sort -rn | awk -v jobs="$jobs" -v dir="$RUNS" '
 	BEGIN { for (s = 1; s <= jobs; s++) load[s] = 0 }
 	{
@@ -160,4 +161,23 @@ if [ "$failed" -gt 0 ]; then
 	echo
 fi
 echo "$passed passed, $failed failed in $(( $(date +%s) - t_start )) s ($jobs processes)$([ "$skipped" -gt 0 ] && echo ", $skipped skipped by --quick")"
+
+# Where the time went: the sum over all tests, and per process its total and slowest
+# test (the biggest total is the critical path; a single huge test bounds the wall time).
+shard_times=""
+for s in $(seq 1 "$jobs"); do
+	line=$(tr -d '\r' < "$RUNS/shard$s.log" | awk -v s="$s" '
+		match($0, /^(PASS|FAIL)  [^ ]+ \([0-9]+ ms\)$/) {
+			name = $2; ms = $3; sub(/^\(/, "", ms)
+			sum += ms
+			if (ms + 0 > max + 0) { max = ms; slow = name }
+		}
+		END { if (sum > 0) printf "%d %d %s %d\n", sum, s, slow, max }
+	' || true)
+	if [ -n "$line" ]; then shard_times+="$line"$'\n'; fi
+done
+if [ -n "$shard_times" ]; then
+	awk '{ t += $1 } END { printf "Test time %.0f s total; per process (slowest test):\n", t / 1000 }' <<< "$shard_times"
+	sort -rn <<< "$shard_times" | awk 'NF { printf "  shard %d  %.0f s  %s (%.0f s)\n", $2, $1 / 1000, $3, $4 / 1000 }'
+fi
 [ "$failed" = 0 ]

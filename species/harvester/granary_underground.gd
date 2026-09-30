@@ -28,6 +28,11 @@ func bind(simulation: Simulation, target: Object) -> void:
 	add_child(_brood)
 
 func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("GranaryUnderground._process", t)
+
+func _process_body(delta: float) -> void:
 	if nest.chambers_layout == null:
 		return
 	if _brood.view == null:
@@ -56,6 +61,11 @@ class Heap:
 	var wait: float = 0.0
 
 	func _draw() -> void:
+		var t := Profiler.start()
+		_draw_body()
+		Profiler.stop("GranaryUnderground.Heap._draw", t)
+
+	func _draw_body() -> void:
 		# Chaff first: pale husk flecks strewn around the heap.
 		var rng := RandomNumberGenerator.new()
 		rng.seed = nest.colony_id * 7919 + k * 101 + 7

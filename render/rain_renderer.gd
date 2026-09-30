@@ -25,6 +25,11 @@ func bind(simulation: Simulation, ground_parent: Node2D) -> void:
 	_ground_parent = ground_parent
 
 func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("RainRenderer._process", t)
+
+func _process_body(delta: float) -> void:
 	if sim == null:
 		return
 	_clock += delta

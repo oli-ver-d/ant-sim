@@ -38,7 +38,12 @@ func bind(simulation: Simulation, target: Object) -> void:
 		_caste_size.append(c.size)
 		_caste_color.append(c.color)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("BroodRenderer._process carried" if carried_only else "BroodRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	var brood := nest.brood if nest != null else null
 	if brood == null or not brood.care:
 		return

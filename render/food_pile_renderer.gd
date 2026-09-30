@@ -10,12 +10,22 @@ func bind(_sim: Simulation, target: Object) -> void:
 	source = target as FoodPile
 	position = source.position
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("FoodPileRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	if source.version != _version:
 		_version = source.version
 		queue_redraw()
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("FoodPileRenderer._draw", t)
+
+func _draw_body() -> void:
 	var r := source.current_radius()
 	if r <= 0.5:
 		return

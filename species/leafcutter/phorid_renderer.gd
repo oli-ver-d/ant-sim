@@ -26,7 +26,12 @@ func bind(simulation: Simulation, target: Object) -> void:
 	flies = PhoridFlies.new()
 	flies.setup(nest.phorids, nest.colony_id, nest.entrance_position())
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	var t := Profiler.start()
+	_process_body(delta)
+	Profiler.stop("PhoridRenderer._process", t)
+
+func _process_body(_delta: float) -> void:
 	# set_process(false) in bind() is undone when the node enters the tree.
 	if flies == null:
 		return
@@ -35,6 +40,11 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	var t := Profiler.start()
+	_draw_body()
+	Profiler.stop("PhoridRenderer._draw", t)
+
+func _draw_body() -> void:
 	if flies == null:
 		return
 	var t := sim.time()

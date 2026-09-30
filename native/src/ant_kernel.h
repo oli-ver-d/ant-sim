@@ -145,6 +145,10 @@ private:
 	bool profiling = false;
 	std::vector<int64_t> layer_usec;
 	std::vector<int64_t> layer_ant_ticks;
+	// Per state id (bench.gd --by-state): nanoseconds and completed ant updates.
+	bool state_profiling = false;
+	int64_t state_nsec[256] = {};
+	int64_t state_ant_ticks[256] = {};
 
 	Colony &colony_slot(int64_t p_colony);
 
@@ -217,6 +221,8 @@ public:
 
 	void set_profiling(bool p_on);
 	PackedInt64Array take_profile();
+	void set_state_profiling(bool p_on);
+	PackedInt64Array take_state_profile();
 };
 
 } // namespace godot
