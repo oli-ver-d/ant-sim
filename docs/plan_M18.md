@@ -10,13 +10,12 @@ Goal: a faster, leaner, more correct codebase, with no new features:
    every tool and scenario, malformed input, warnings) finds bugs, which are written down
    with a repro and fixed with a regression test each.
 
-Status: planned, not started. Next: M18a (measurement baseline).
+Status: planned, not started. Next: M18a (measurement baseline), after M16j (world size
+per scenario, `docs/plan_M16.md`), which was planned at the same time and should land first
+so M18 measures, cleans and audits the code as it will stay (M18c's editor round trips and
+malformed-input checks then cover the new `world` key too).
 M18f takes over M15l's "founding frame budget"; M15l's PNG finals stay open in M15 (better
 recorded after M18f, which makes them cheaper).
-Before M18a: the working tree at planning time held uncommitted editor changes
-(`editor/editor_outline.gd`, `editor/inspector.gd` and their tests) and an untracked
-`manual.md`. They are the user's; commit or drop them before M18a so each M18 phase
-commit only holds that phase.
 
 ## Where things stand (before M18)
 
