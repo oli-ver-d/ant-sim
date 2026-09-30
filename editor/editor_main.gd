@@ -683,12 +683,14 @@ func _show_play(on: bool) -> void:
 
 ## The inspector's title and the preview's selection outline.
 func _update_selection_bounds() -> void:
-	if selected == null or not (doc.has_at(selected) or (selected as Array).is_empty()):
+	var i := EditorOutline.row_for(rows, selected) if selected != null else -1
+	# An absent section the outline lists (World, Output, Ground) is still a selection.
+	var listed: bool = i >= 0 and rows[i]["path"] == selected
+	if selected == null or not (doc.has_at(selected) or (selected as Array).is_empty() or listed):
 		preview.selection = Rect2()
 		details_title.text = "Nothing selected"
 		return
 	var path: Array = selected
-	var i := EditorOutline.row_for(rows, path)
 	details_title.text = rows[i]["label"] if i >= 0 else "/".join(path)
 	var ip: Variant = CanvasEditor.item_of(doc.data, path)
 	preview.selection = GizmoGeometry.item_bounds(doc.data, ip) if ip != null else Rect2()

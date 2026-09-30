@@ -28,7 +28,7 @@ func test_basic_forage_outline() -> void:
 
 func test_always_shown_sections() -> void:
 	var labels := _labels(EditorOutline.build({}))
-	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "World", "Output"])
+	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "Ground", "World", "Output"])
 	var rows := EditorOutline.build({"name": "x", "ground": "sand"})
 	check_eq(_labels(rows), ["Scenario", "Colonies", "Food", "Obstacles", "Ground", "World", "Output"])
 	check_eq(rows[4]["path"], ["ground"])
@@ -115,9 +115,9 @@ func test_item_labels() -> void:
 func test_unknown_top_level_key_is_a_section() -> void:
 	var rows := EditorOutline.build({"name": "n", "seed": 1, "mystery": {"a": 1}, "colonies": []})
 	var labels := _labels(rows)
-	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "World", "Output", "mystery"])
-	check_eq(rows[6]["path"], ["mystery"])
-	check_eq(rows[6]["depth"], 0)
+	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "Ground", "World", "Output", "mystery"])
+	check_eq(rows[7]["path"], ["mystery"])
+	check_eq(rows[7]["depth"], 0)
 
 func test_section_of() -> void:
 	check_eq(EditorOutline.section_of(["colonies", 0, "nest_params"]), ["colonies"])

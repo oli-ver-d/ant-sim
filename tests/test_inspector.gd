@@ -281,6 +281,21 @@ func test_world_size_without_world_section() -> void:
 	check(ins2.doc.undo() and not ins2.doc.has_at(["world"]), "undo removes it")
 	ins2.free()
 
+## The Ground section (an any_of) is editable while absent: picking a base creates it.
+func test_ground_base_without_ground_section() -> void:
+	var ins2 := _inspector({"name": "x"}, ["ground"])
+	var base := _widget(ins2, ["ground", "base"]) as OptionButton
+	check(base != null, "base shown")
+	var sand := -1
+	for i: int in base.item_count:
+		if base.get_item_text(i) == "sand":
+			sand = i
+	base.select(sand)
+	base.item_selected.emit(sand)
+	check_eq(ins2.doc.get_at(["ground"]), {"base": "sand"}, "ground section created")
+	check(ins2.doc.undo() and not ins2.doc.has_at(["ground"]), "undo removes it")
+	ins2.free()
+
 func test_edit_as_json() -> void:
 	var ins := _inspector(_basic(), ["food", 0])
 	var doc := ins.doc

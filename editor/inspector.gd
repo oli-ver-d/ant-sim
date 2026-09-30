@@ -97,7 +97,7 @@ func rebuild() -> void:
 	elif not doc.has_at(p):
 		# A section the outline shows even when absent (e.g. "output"): its
 		# fields at their defaults; the first edit creates the section.
-		_build_contents(_box, p, _raw_spec_at(p), null, false, doc.data, 0)
+		_build_contents(_box, p, _absent_spec(p), null, false, doc.data, 0)
 	else:
 		_build_header(p)
 		if _json_mode:
@@ -119,8 +119,18 @@ func rebuild() -> void:
 func _absent_section(p: Array) -> bool:
 	if p.size() != 1 or doc.has_at(p):
 		return false
+	return _absent_spec(p) != null
+
+## The dictionary form of the top-level section `p` (its dict alternative for an
+## any_of such as "ground"), or null.
+func _absent_spec(p: Array) -> FieldSpec:
 	var spec := _raw_spec_at(p)
-	return spec != null and spec.type == "dict"
+	if spec != null and spec.type == "any_of":
+		for a: FieldSpec in spec.alternatives:
+			if a.type == "dict":
+				return a
+		return null
+	return spec if spec != null and spec.type == "dict" else null
 
 ## The scenario's own settings (the "Scenario" outline row).
 func _build_root() -> void:

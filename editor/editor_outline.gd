@@ -9,7 +9,7 @@ const SCENARIO_KEYS: Array[String] = ["name", "description", "seed", "duration",
 ## Sections in display order: key, label, and whether it is shown even when absent.
 const SECTIONS: Array[Array] = [
 	["colonies", "Colonies", true], ["food", "Food", true], ["obstacles", "Obstacles", true],
-	["ground", "Ground", false], ["scenery", "Scenery", false], ["debris", "Debris", false],
+	["ground", "Ground", true], ["scenery", "Scenery", false], ["debris", "Debris", false],
 	["events", "Events", false], ["camera", "Camera", false], ["render", "Render", false],
 	["world", "World", true], ["output", "Output", true],
 ]

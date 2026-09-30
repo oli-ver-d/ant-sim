@@ -151,7 +151,7 @@ The outline lists the document's sections, in this order:
 - **Output**: the output frame.
 - Any other top-level keys the file has.
 
-Scenario, Colonies, Food, Obstacles, World and Output are always listed. The other sections appear
+Scenario, Colonies, Food, Obstacles, Ground, World and Output are always listed. The other sections appear
 once the file has them; add them with **Add...**, the place tools or the timeline.
 
 Items are labelled so you can tell them apart, e.g. `Colony 0: harvester @ 540,1500`,
