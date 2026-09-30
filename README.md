@@ -58,6 +58,8 @@ ant of a colony, including its abstract population (see "Scale" below).
 
 ### Scenario editor
 
+The full user guide is [manual.md](manual.md).
+
 ```bash
 tools/editor.sh                               # reopens the last file (a new scenario the first time)
 tools/editor.sh --new                         # a new scenario from a minimal template

@@ -255,6 +255,18 @@ func test_output_size_presets() -> void:
 	check(safe.item_count >= 3, "safe zone presets")
 	ins2.free()
 
+func test_output_size_without_output_section() -> void:
+	var ins2 := _inspector({"name": "x"}, ["output"])
+	var size := _widget(ins2, ["output", "size"])
+	var presets: OptionButton = size.get_meta("presets")
+	for i: int in presets.item_count:
+		if presets.get_item_text(i).begins_with("landscape "):
+			presets.select(i)
+			presets.item_selected.emit(i)
+	check_eq(ins2.doc.get_at(["output"]), {"size": [1920, 1080]}, "output section created")
+	check(ins2.doc.undo() and not ins2.doc.has_at(["output"]), "undo removes it")
+	ins2.free()
+
 func test_edit_as_json() -> void:
 	var ins := _inspector(_basic(), ["food", 0])
 	var doc := ins.doc

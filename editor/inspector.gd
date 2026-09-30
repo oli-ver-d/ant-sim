@@ -85,12 +85,16 @@ func rebuild() -> void:
 		_box.remove_child(c)
 		c.queue_free()
 	rows.clear()
-	if doc == null or path == null or not (doc.has_at(path) or (path as Array).is_empty()):
+	if doc == null or path == null or not (doc.has_at(path) or (path as Array).is_empty() or _absent_section(path)):
 		_note(_box, "Nothing selected")
 		return
 	var p: Array = path
 	if p.is_empty():
 		_build_root()
+	elif not doc.has_at(p):
+		# A section the outline shows even when absent (e.g. "output"): its
+		# fields at their defaults; the first edit creates the section.
+		_build_contents(_box, p, _raw_spec_at(p), null, false, doc.data, 0)
 	else:
 		_build_header(p)
 		if _json_mode:
@@ -106,6 +110,14 @@ func rebuild() -> void:
 				_add_field(_box, p, spec, value, true, parent, 0,
 						_item_label(p[-1], value) if p[-1] is int else str(p[-1]))
 	set_deferred("scroll_vertical", scroll)
+
+## A top-level dictionary section missing from the document (shown with its
+## defaults, so e.g. the output size can be set without editing the file).
+func _absent_section(p: Array) -> bool:
+	if p.size() != 1 or doc.has_at(p):
+		return false
+	var spec := _raw_spec_at(p)
+	return spec != null and spec.type == "dict"
 
 ## The scenario's own settings (the "Scenario" outline row).
 func _build_root() -> void:
