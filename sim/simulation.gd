@@ -141,12 +141,17 @@ var native_bound: bool = false
 ## Mass of the item each ant picked up (the kernel reads it for carry_home).
 var carry_mass: PackedFloat64Array = []
 
-func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int) -> void:
+## `world_size` is the surface world's size in world units (a scenario's "world":
+## {"size"}); zero means config.world_size. From then on world.size is the one
+## source of truth for it, not the config.
+func _init(sim_config: SimConfig, sim_registry: Registry, seed_value: int, world_size := Vector2i.ZERO) -> void:
 	config = sim_config
 	registry = sim_registry
 	rng.seed = seed_value
 	dt = config.tick_dt()
-	var surface := SimLayer.new(0, &"surface", config.world_size, config.cell_size, config.diffuse_every_n_ticks, dt)
+	if world_size == Vector2i.ZERO:
+		world_size = config.world_size
+	var surface := SimLayer.new(0, &"surface", world_size, config.cell_size, config.diffuse_every_n_ticks, dt)
 	layers.append(surface)
 	layer_agents.append(0)
 	world = surface.world
@@ -899,7 +904,7 @@ func start_rain(area: Dictionary, duration: float, wash_half_life: float = 0.0) 
 	if wash_half_life > 0.0:
 		keep = pow(0.5, dt / wash_half_life)
 	if area.is_empty():
-		area = {"rect": [0, 0, config.world_size.x, config.world_size.y]}
+		area = {"rect": [0, 0, world.size.x, world.size.y]}
 	rain.append({"area": area, "start": time(), "until": time() + duration, "keep": keep})
 
 func rain_active(shower: Dictionary) -> bool:

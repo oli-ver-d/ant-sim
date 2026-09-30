@@ -147,10 +147,11 @@ The outline lists the document's sections, in this order:
 - **Camera**: the keyframes, or the **Surface camera** and **Nest camera** tracks for a
   scenario with split cameras.
 - **Render**: with rows for captions, fades, grade, layout modes and story-marker windows.
+- **World**: the size of the surface world.
 - **Output**: the output frame.
 - Any other top-level keys the file has.
 
-Scenario, Colonies, Food, Obstacles and Output are always listed. The other sections appear
+Scenario, Colonies, Food, Obstacles, World and Output are always listed. The other sections appear
 once the file has them; add them with **Add...**, the place tools or the timeline.
 
 Items are labelled so you can tell them apart, e.g. `Colony 0: harvester @ 540,1500`,
@@ -406,7 +407,7 @@ Select it and use the inspector:
   preview shades, captions keep clear of, and the player's **S** overlay shows.
 
 The frame is only about rendering: a scenario runs the same (same state hash) at any frame
-size. The world's size doesn't change. Camera `zoom` is world units per frame pixel, so a
+size. The world's size doesn't change with it (see [World size](#world-size) below). Camera `zoom` is world units per frame pixel, so a
 wider frame shows more of the world at the same zoom, and `fit` keyframes fit whatever frame
 they're in. Captions and text scale with the frame's short side.
 
@@ -416,6 +417,27 @@ each field's **x** button resets it to its default.
 
 Runs and recordings can override the size for one run (see below) without changing the
 scenario.
+
+### World size
+
+The **World** row (always there, just above Output) sets the size of the surface world the
+ants live in: `size` is `[width, height]` in world units, 1080×1920 by default. Both must be
+multiples of 8 and between 256 and 4096. The preset menu offers the default, landscape
+1920×1080, square 1920×1920 and large 2160×3840.
+
+The white world bounds in the preview follow the new size at once, and the scenario is
+rebuilt (press **Home** to fit the new world). A landscape frame over the default portrait
+world shows the world's edges; set the world to 1920×1080 too and the ground, scenery and
+ants fill the frame at zoom 1. A bigger world with a moving camera is another way to use it.
+
+Unlike the output frame, the world size changes the run: the pheromone grid, the ground and
+whole-world rain cover the new area, and the ants roam all of it. It also costs speed: a
+world much larger than the default (over 4× its area) gets a warning in the Problems list.
+Items left outside after shrinking the world are reported as errors. The nest's underground
+has its own size (`nest_params.underground.size` on the colony).
+
+A scenario without `world` uses the default; as with Output, the first change adds the
+section and undo removes it.
 
 ---
 
@@ -516,6 +538,7 @@ Errors (the scenario is likely to fail or misbehave):
   registered;
 - an unknown `type` or `shape` of a typed object, or a caste the colony's species doesn't have;
 - an `output.size` that isn't even or is outside 64–8192;
+- a `world.size` that isn't a multiple of 8 or is outside 256–4096;
 - a nest, food source or nest entrance outside the world, or inside a wall or water.
 
 Warnings (probably not what you meant):
@@ -526,7 +549,8 @@ Warnings (probably not what you meant):
   after `duration`;
 - two colonies whose nests are too close (under 60 world units, or the sum of their nest
   radii);
-- a caption that falls in the unsafe margins of the chosen safe-zone preset.
+- a caption that falls in the unsafe margins of the chosen safe-zone preset;
+- a world over 4× the default area, which will run slower.
 
 **Errors never block you.** Save, Save As, Run and Record with errors show a dialog listing
 them, with **Save anyway**, **Run anyway** or **Record anyway**. Warnings don't ask.
@@ -600,19 +624,22 @@ This builds a landscape scenario with two colonies, food, scenery, rain, a camer
 caption.
 
 1. **Start fresh:** `tools/editor.sh --new`. You get one colony at (540, 1500).
-2. **A second colony:** pick **Colony** on the tool bar and click at about (760, 1400). In the
+2. **World and output frame:** select **World** and choose **landscape 1920×1080** from the
+   size presets, then select **Output** and choose **landscape 1920×1080** there too, so the
+   world fills the frame. Press **Home** to see the whole new world and **F** for the frame.
+   The colony is now outside the world (the Problems list says so): drag it to about
+   (700, 600).
+3. **A second colony:** pick **Colony** on the tool bar and click at about (1200, 500). In the
    inspector, set its `species` to another species.
-3. **Food:** pick **Food**, then drag out a pile near the top of the world. Drag out a second
-   one elsewhere. Adjust `amount` and `radius` in the inspector.
-4. **Scenery:** pick **Scatter** and drag a rectangle over part of the world. Select the
+4. **Food:** pick **Food**, then drag out a pile near the right edge of the world. Drag out a
+   second one elsewhere. Adjust `amount` and `radius` in the inspector.
+5. **Scenery:** pick **Scatter** and drag a rectangle over part of the world. Select the
    scatter and try **Reseed** until you like the arrangement. Change `preset` to
    `forest_floor` for a different look.
-5. **Ground (optional):** select **Ground**, set `base` to `soil`, then add a sand patch
+6. **Ground (optional):** select **Ground**, set `base` to `soil`, then add a sand patch
    with **Region circle** and widen its soft edge with the handle.
-6. **Rain:** pick **Rain** and drag a circle. On the timeline, drag the rain event to about
+7. **Rain:** pick **Rain** and drag a circle. On the timeline, drag the rain event to about
    3 s, or set its `t` in the inspector (events are in sim seconds).
-7. **Output frame:** select **Output** and choose **landscape 1920×1080** from the size
-   presets. Press **F** to see the new frame.
 8. **Camera:** zoom and pan the preview to the opening shot. Put the playhead at 0 and press
    **Key here**. Move the playhead to 10 s, frame a closer shot and press **Key here** again.
 9. **Caption:** select **Render** and use **Add... → Add caption**. Set its `text`, `style`

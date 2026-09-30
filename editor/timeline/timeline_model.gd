@@ -338,7 +338,7 @@ static func new_item(track_id: String, data: Dictionary, video_t: float, map: Ti
 	var list: Array = []
 	match track_id:
 		"camera", "camera_surface", "camera_nest":
-			var w := Vector2(map.config.world_size) if map.config != null else Vector2(1080, 1920)
+			var w := Vector2(ScenarioLoader.world_size(data, map.config)) if map.config != null else Vector2(1080, 1920)
 			item = {"t": t, "pos": [FieldValues.tidy(w.x / 2.0), FieldValues.tidy(w.y / 2.0)], "zoom": 1}
 			list = ["camera"]
 			if track_id == "camera_surface":

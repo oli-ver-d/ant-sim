@@ -22,6 +22,7 @@ static func root(schema: ScenarioSchema) -> FieldSpec:
 		"ticks_per_frame": ticks_per_frame(),
 		"camera": camera(),
 		"render": render(),
+		"world": world(),
 		"output": output(),
 		"colonies": F.list(colony(schema), "Colonies placed at load time"),
 		"food": F.list(food(), "Food sources placed at load time"),
@@ -180,6 +181,14 @@ static func render() -> FieldSpec:
 			}), "Timed layout changes (the mode stays until the next point)"),
 		}, "Split surface/underground layout"),
 	}, "Render and presentation settings")
+
+## The surface world (M16j): its size in world units. Absent = SimConfig.world_size.
+static func world() -> FieldSpec:
+	var config: SimConfig = load("res://sim/default_config.tres")
+	var d := config.world_size
+	return F.dict({
+		"size": F.size([d.x, d.y], "World size in world units (multiples of 8, 256-4096)"),
+	}, "The surface world")
 
 ## The output frame (M16b): size and safe-zone preset. Absent = 1080x1920, tiktok.
 static func output() -> FieldSpec:

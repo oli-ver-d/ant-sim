@@ -27,6 +27,7 @@ const RUNS := {
 	"res://tests/fixtures/scenarios/brood_demo.json": 900,
 	"res://tests/fixtures/scenarios/garden_demo.json": 900,
 	"res://tests/fixtures/scenarios/nest_bench.json": 450,
+	"res://tests/fixtures/scenarios/wide_world.json": 900,
 }
 
 func _native() -> bool:
@@ -87,6 +88,7 @@ func test_native_matches_gdscript_highway_demo() -> void: _check_matches("res://
 func test_native_matches_gdscript_brood_demo() -> void: _check_matches("res://tests/fixtures/scenarios/brood_demo.json")
 func test_native_matches_gdscript_garden_demo() -> void: _check_matches("res://tests/fixtures/scenarios/garden_demo.json")
 func test_native_matches_gdscript_nest_bench() -> void: _check_matches("res://tests/fixtures/scenarios/nest_bench.json")
+func test_native_matches_gdscript_wide_world() -> void: _check_matches("res://tests/fixtures/scenarios/wide_world.json")
 
 ## Ticks spread across frames (as when rendering) give the same run.
 func test_native_split_ticks() -> void:

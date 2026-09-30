@@ -71,11 +71,11 @@ func setup(simulation: Simulation, reg: Registry, ground_seed: float = 0.0, debu
 
 	if surface:
 		var ground := ColorRect.new()
-		ground.size = Vector2(sim.config.world_size)
+		ground.size = Vector2(sim.world.size)
 		ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var ground_mat := ShaderMaterial.new()
 		ground_mat.shader = preload("res://render/ground.gdshader")
-		ground_mat.set_shader_parameter("world_size", Vector2(sim.config.world_size))
+		ground_mat.set_shader_parameter("world_size", Vector2(sim.world.size))
 		ground_mat.set_shader_parameter("seed", ground_seed)
 		ground.material = ground_mat
 		add_child(ground)

@@ -66,7 +66,7 @@ var rescattered_from: int = -1
 
 ## The top-level keys ScenarioLoader.build reads: the sim depends on nothing else.
 const SIM_KEYS: Array[String] = ["seed", "colonies", "food", "obstacles", "ground", "scenery", "debris",
-		"events", "max_agents"]
+		"events", "max_agents", "world"]
 
 var _viewport: SubViewport
 var _world_root: Node2D
@@ -270,7 +270,7 @@ func _set_status(text: String) -> void:
 # --- camera ------------------------------------------------------------------
 
 func world_size() -> Vector2:
-	return Vector2(config.world_size)
+	return Vector2(ScenarioLoader.world_size(data, config))
 
 func fit_world() -> void:
 	fit_rect(Rect2(Vector2.ZERO, world_size()))

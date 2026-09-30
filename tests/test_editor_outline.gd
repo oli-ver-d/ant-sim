@@ -28,9 +28,9 @@ func test_basic_forage_outline() -> void:
 
 func test_always_shown_sections() -> void:
 	var labels := _labels(EditorOutline.build({}))
-	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "Output"])
+	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "World", "Output"])
 	var rows := EditorOutline.build({"name": "x", "ground": "sand"})
-	check_eq(_labels(rows), ["Scenario", "Colonies", "Food", "Obstacles", "Ground", "Output"])
+	check_eq(_labels(rows), ["Scenario", "Colonies", "Food", "Obstacles", "Ground", "World", "Output"])
 	check_eq(rows[4]["path"], ["ground"])
 
 func test_paths_resolve() -> void:
@@ -41,7 +41,7 @@ func test_paths_resolve() -> void:
 			var path: Array = r["path"]
 			if path.is_empty() or doc.has_at(path):
 				continue
-			check(path.size() == 1 and ["colonies", "food", "obstacles", "output"].has(path[0]),
+			check(path.size() == 1 and ["colonies", "food", "obstacles", "world", "output"].has(path[0]),
 					"%s: row %s path %s does not resolve" % [scenario, r["label"], path])
 
 func _every_scenario(fn: Callable) -> void:
@@ -81,7 +81,7 @@ func test_camera_list_and_labels() -> void:
 	var data := {"camera": [{"t": 0, "pos": [540, 960]}, {"t": 4, "follow": {"ant": 0}}, {"t": 8.5, "fit": "excavation"}, {"t": 9}, {}]}
 	var labels := _labels(EditorOutline.build(data))
 	check_eq(labels.slice(labels.find("Camera"), labels.size()),
-			["Camera", "Camera 0: 0s pos 540,960", "Camera 1: 4s follow", "Camera 2: 8.5s fit", "Camera 3: 9s", "Camera 4: ?s", "Output"])
+			["Camera", "Camera 0: 0s pos 540,960", "Camera 1: 4s follow", "Camera 2: 8.5s fit", "Camera 3: 9s", "Camera 4: ?s", "World", "Output"])
 
 ## M16g: the speed schedule and the timed render lists have rows (the timeline
 ## selects their items).
@@ -93,7 +93,7 @@ func test_timed_rows() -> void:
 	var labels := _labels(rows)
 	check_eq(labels.slice(0, 4), ["Scenario", "Speed", "Point 0: 0s tpf 0.5", "Point 1: 40s jump 120"])
 	check_eq(labels.slice(labels.find("Render"), labels.size()), ["Render", "Captions", "Caption 0: 2s A queen lands",
-			"Fades", "Fade 0: 1s", "Layout modes", "Mode 0: 3s nest", "Output"])
+			"Fades", "Fade 0: 1s", "Layout modes", "Mode 0: 3s nest", "World", "Output"])
 	check_eq(rows[EditorOutline.row_for(rows, ["render", "captions", 0, "text"])]["path"], ["render", "captions", 0])
 	check_eq(rows[EditorOutline.row_for(rows, ["render", "layout", "modes", 0])]["depth"], 2)
 	check(not _labels(EditorOutline.build({"ticks_per_frame": 0.5})).has("Speed"), "no Speed row for a number")
@@ -115,9 +115,9 @@ func test_item_labels() -> void:
 func test_unknown_top_level_key_is_a_section() -> void:
 	var rows := EditorOutline.build({"name": "n", "seed": 1, "mystery": {"a": 1}, "colonies": []})
 	var labels := _labels(rows)
-	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "Output", "mystery"])
-	check_eq(rows[5]["path"], ["mystery"])
-	check_eq(rows[5]["depth"], 0)
+	check_eq(labels, ["Scenario", "Colonies", "Food", "Obstacles", "World", "Output", "mystery"])
+	check_eq(rows[6]["path"], ["mystery"])
+	check_eq(rows[6]["depth"], 0)
 
 func test_section_of() -> void:
 	check_eq(EditorOutline.section_of(["colonies", 0, "nest_params"]), ["colonies"])

@@ -620,13 +620,20 @@ JSON files in `scenarios/`. Simulation content:
   (`"colony": n`, or every colony; nests raising alates send them up to fly, see "Alates and
   the nuptial flight"); see `sim/scenario_events.gd`
 
+- `world`: `{"size": [w, h]}`, the surface world in world units (absent = `SimConfig.world_size`,
+  1080×1920). Both sides are multiples of 8 (whole 4-unit sim cells and 8-unit ground texels)
+  and 256–4096, e.g. 1920×1080 for a landscape world or 2160×3840 to film with a moving camera.
+  The pheromone grid, ground map, whole-world rain and the bounds nests, food, scatters and
+  alates keep inside all follow it. Unlike `output` it changes the run: a bigger world costs
+  more per tick (pheromone diffusion and scatters scale with its area; see Performance). The
+  underground layers keep their own `nest_params.underground.size`
 - `output`: `{"size": [w, h], "safe_zones": "tiktok" | "youtube_shorts" | "none"}`, the output
   frame (absent = 1080×1920, `tiktok`): the video size (any even width and height, e.g.
   1920×1080 landscape, 1080×1080 square, 1080×1350 4:5, 2160×3840) and which platform's UI
   safe zones the **S** overlay shows and captions keep clear of (`none`: the whole frame).
   Render only: the run (state hash) is the same at any size. `--size=WxH` overrides it for one
-  run (`main.tscn`, `record.tscn`; `SIZE=WxH` for the tools). The world size is separate:
-  camera `zoom` is world units per frame pixel, so a wider frame shows more world, and `fit`
+  run (`main.tscn`, `record.tscn`; `SIZE=WxH` for the tools). The world size is separate (set
+  it with `world`): camera `zoom` is world units per frame pixel, so a wider frame shows more world, and `fit`
   keyframes fit the frame they are in. Safe-zone margins, caption and readout text scale with
   the frame's short side (1080 = as in the portrait frame); see `render/output_frame.gd`
 
@@ -774,6 +781,10 @@ editor build). `--probe=1` prints FPS, sim cost per frame and GPU time every 2 s
 | `meadow_forage` headless (`bench.gd meadow_forage 3600`) | 4.0 ms per tick, 3.2 of it the 4 pheromone channels on a large world (ants 0.6) |
 | `fungus_farm` after ~1,500 s (`--at=20 --probe=1`, ~1,060 ants, three full middens, ~2,700 deposits) | GPU 11–27 ms per frame (jumpy, with the CPU busy on the 30-ticks-per-frame timelapse), render CPU 0.4 ms, ~440 draw calls; the app runs at 8 fps because of the simulation, recordings are unaffected |
 | `colony_founding` late, split layout (`--at=62 --probe=1`, ~1,400 agents) | 11–14 fps: the simulation ~50 ms per frame (78 ticks per frame), renderers ~40 ms, ~14,000 draw calls (GPU time of the split views not measured: the probe reads the root viewport only) |
+| **World size** (M16j, native kernel, 326 ants, `bench.gd <scenario> 900 320 1`) | |
+| `basic_forage` (1080×1920) | 1.00 ms per tick (pheromones 0.69) |
+| `wide_world.json` (1920×1080, same area, trails spread wider) | 2.45 ms per tick with a whole-world shower for 4 s of the 30; pheromones 1.13 |
+| the same at 2160×3840 (4× the area) | 2.33 ms per tick without rain (pheromones 1.85, ants 0.26); with the shower 5.96: washing the whole world costs ~30 ms per tick while it rains |
 | Loading scenery | a scatter takes 0.3–0.4 s headless; rocks and logs bake at 0.1–0.7 s each, so a scenario with a big `rocky` scatter takes several seconds before the first frame (`meadow_forage`: scatters 1.1 s) |
 
 | **Organic nests** (M13, same machine; both runs side by side so they share the load) | |

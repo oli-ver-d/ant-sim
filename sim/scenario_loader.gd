@@ -50,7 +50,7 @@ static func build(data: Dictionary, registry: Registry, config: SimConfig, seed_
 ## add_scatters, finish.
 static func build_base(data: Dictionary, registry: Registry, config: SimConfig, seed_override: int = -1) -> Simulation:
 	var seed_value: int = seed_override if seed_override >= 0 else int(data.get("seed", 1))
-	var sim := Simulation.new(config, registry, seed_value)
+	var sim := Simulation.new(config, registry, seed_value, world_size(data, config))
 	for ob: Dictionary in data.get("obstacles", []):
 		ScenarioEvents.place_obstacle(sim, ob)
 	set_ground(sim, data)
@@ -69,7 +69,19 @@ static func build_base(data: Dictionary, registry: Registry, config: SimConfig, 
 static func set_ground(sim: Simulation, data: Dictionary) -> void:
 	sim.ground = null
 	if data.has("ground"):
-		sim.ground = GroundMap.from_data(data["ground"], Vector2(sim.config.world_size), sim.scenery.seed_value)
+		sim.ground = GroundMap.from_data(data["ground"], Vector2(sim.world.size), sim.scenery.seed_value)
+
+## The surface world size of scenario `data`: its "world": {"size": [w, h]}, else
+## config.world_size. Sizes that are not two positive numbers fall back too (the
+## editor's validator reports them).
+static func world_size(data: Dictionary, config: SimConfig) -> Vector2i:
+	var world: Variant = data.get("world")
+	if world is Dictionary:
+		var s: Variant = (world as Dictionary).get("size")
+		if s is Array and (s as Array).size() == 2 and (s[0] is float or s[0] is int) \
+				and (s[1] is float or s[1] is int) and s[0] > 0 and s[1] > 0:
+			return Vector2i(int(s[0]), int(s[1]))
+	return config.world_size
 
 ## Scatters keep clear of the nests and food, so they come last. Returns each
 ## scatter's Scatter.Result by its index in data["scenery"]. The editor redoes

@@ -92,6 +92,28 @@ func test_output_size() -> void:
 	ok["output"] = {"size": [1920, 1080], "safe_zones": "youtube_shorts"}
 	check(ScenarioValidator.schema_issues(ok, _schema).is_empty(), "landscape is fine")
 
+func test_world_size_errors() -> void:
+	for bad: Array in [[1081, 1920], [1080, 1921], [128, 1024], [1024, 8], [4104, 1024], [1024, 8192], [1080.5, 1920]]:
+		var d := _data()
+		d["world"] = {"size": bad}
+		var issues := ScenarioValidator.schema_issues(d, _schema)
+		check(_issue_at(issues, ["world", "size"]), "world size %s: %s" % [bad, _dump(issues)])
+	for good: Array in [[1920, 1080], [256, 256], [2160, 3840], [4096, 1024]]:
+		var d := _data()
+		d["world"] = {"size": good}
+		var issues := ScenarioValidator.schema_issues(d, _schema)
+		check(issues.is_empty(), "world size %s is fine: %s" % [good, _dump(issues)])
+
+func test_large_world_warning() -> void:
+	var d := _data()
+	d["world"] = {"size": [4096, 4096]}
+	var issues := ScenarioValidator.schema_issues(d, _schema)
+	check(_issue_at(issues, ["world", "size"], ScenarioValidator.WARNING), "4096x4096 warns: " + _dump(issues))
+	check_eq(ScenarioValidator.count(issues, ScenarioValidator.ERROR), 0, "but is valid")
+	d["world"] = {"size": [1080, 1920 * int(ScenarioValidator.LARGE_WORLD_AREA_FACTOR)]}
+	check(not _issue_at(ScenarioValidator.schema_issues(d, _schema), ["world", "size"], ScenarioValidator.WARNING),
+			"exactly the factor does not warn")
+
 func test_malformed_data_does_not_crash() -> void:
 	var d := {"colonies": "none", "food": [3, null, {"type": 5}], "camera": 7, "events": [{}],
 			"render": [], "output": {"size": "big"}}

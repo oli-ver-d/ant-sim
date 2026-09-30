@@ -267,6 +267,20 @@ func test_output_size_without_output_section() -> void:
 	check(ins2.doc.undo() and not ins2.doc.has_at(["output"]), "undo removes it")
 	ins2.free()
 
+## M16j: the World section is editable while absent; a preset creates it, undo removes it.
+func test_world_size_without_world_section() -> void:
+	var ins2 := _inspector({"name": "x"}, ["world"])
+	var size := _widget(ins2, ["world", "size"])
+	var presets: OptionButton = size.get_meta("presets")
+	check(presets.get_item_text(presets.selected).begins_with("default "), "default world shown as default")
+	for i: int in presets.item_count:
+		if presets.get_item_text(i).begins_with("landscape "):
+			presets.select(i)
+			presets.item_selected.emit(i)
+	check_eq(ins2.doc.get_at(["world"]), {"size": [1920, 1080]}, "world section created")
+	check(ins2.doc.undo() and not ins2.doc.has_at(["world"]), "undo removes it")
+	ins2.free()
+
 func test_edit_as_json() -> void:
 	var ins := _inspector(_basic(), ["food", 0])
 	var doc := ins.doc

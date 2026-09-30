@@ -14,6 +14,15 @@ extends RefCounted
 const ERROR := "error"
 const WARNING := "warning"
 
+## world.size limits (M16j): each side a multiple of WORLD_STEP within WORLD_MIN_SIDE-WORLD_MAX_SIDE.
+const WORLD_STEP := 8
+const WORLD_MIN_SIDE := 256
+const WORLD_MAX_SIDE := 4096
+## A world whose area is over this many times the default world's gets a speed warning
+## (pheromone diffusion and scatter cost scale with area). Benched in M16j: at 4x (2160x3840)
+## the sim costs ~2.3x the default per tick, and a whole-world shower ~30 ms per tick.
+const LARGE_WORLD_AREA_FACTOR := 4.0
+
 ## Every issue of `data`: schema checks, then scene checks (`sim`, the
 ## Simulation built from `data`, is needed for the checks against walls and
 ## the world size; without it those are skipped).
@@ -64,6 +73,7 @@ static func schema_issues(data: Dictionary, schema: ScenarioSchema) -> Array[Dic
 	var out: Array[Dictionary] = []
 	_check(schema, schema.root, data, null, [], out)
 	_check_output(data, out)
+	_check_world(data, out)
 	return out
 
 static func _check(schema: ScenarioSchema, spec: FieldSpec, value: Variant, parent: Variant, path: Array,
@@ -185,6 +195,31 @@ static func _check_output(data: Dictionary, out: Array[Dictionary]) -> void:
 	if float(s[0]) != float(size.x) or float(s[1]) != float(size.y) or not OutputFrame.valid_size(size):
 		out.append(issue(["output", "size"], ERROR, "%s is not a valid frame size (even sides, %d-%d px)"
 				% [_short(s), OutputFrame.MIN_SIDE, OutputFrame.MAX_SIDE]))
+
+## world.size: sides that are multiples of 8 within 256-4096 (error), and a warning for a world
+## over LARGE_WORLD_AREA_FACTOR times the default area.
+static func _check_world(data: Dictionary, out: Array[Dictionary]) -> void:
+	var world: Variant = data.get("world")
+	if not world is Dictionary or not (world as Dictionary).has("size"):
+		return
+	var s: Variant = (world as Dictionary)["size"]
+	if not _nums(s, 2):
+		return
+	var w := float(s[0])
+	var h := float(s[1])
+	var ok := true
+	for side: float in [w, h]:
+		if side != floorf(side) or int(side) % WORLD_STEP != 0 or side < WORLD_MIN_SIDE or side > WORLD_MAX_SIDE:
+			ok = false
+	if not ok:
+		out.append(issue(["world", "size"], ERROR, "%s is not a valid world size (multiples of %d, %d-%d)"
+				% [_short(s), WORLD_STEP, WORLD_MIN_SIDE, WORLD_MAX_SIDE]))
+		return
+	var config: SimConfig = load("res://sim/default_config.tres")
+	var default_area := float(config.world_size.x) * float(config.world_size.y)
+	if w * h > default_area * LARGE_WORLD_AREA_FACTOR:
+		out.append(issue(["world", "size"], WARNING, "A %dx%d world is %.1fx the default area and will run slower"
+				% [int(w), int(h), w * h / default_area]))
 
 # --- helpers ----------------------------------------------------------------------
 

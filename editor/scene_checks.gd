@@ -15,10 +15,10 @@ const SAFE_TOLERANCE := 2.0
 
 ## Scene issues of scenario `data` (the parsed JSON Dictionary). `sim` is the Simulation built
 ## from it by ScenarioLoader (for the walls and entrances); when null, the checks that need it are
-## skipped, and the world size comes from the default config.
+## skipped, and the world size comes from the document ("world.size") or the default config.
 static func issues(data: Dictionary, registry: Registry, sim: Simulation = null) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var world := _world_size(sim)
+	var world := _world_size(data, sim)
 	var points: Array[Dictionary] = _points(data)
 	_check_points(out, points, world, sim)
 	_check_portals(out, points, world, sim)
@@ -50,12 +50,12 @@ static func _list(data: Dictionary, key: String) -> Array:
 	var v: Variant = data.get(key)
 	return v if v is Array else []
 
-## The world size: the built sim's, else the default config's (a scenario cannot change it).
-static func _world_size(sim: Simulation) -> Vector2:
-	if sim != null and sim.config != null:
-		return Vector2(sim.config.world_size)
+## The world size: the built sim's, else the document's "world.size", else the default config's.
+static func _world_size(data: Dictionary, sim: Simulation) -> Vector2:
+	if sim != null and sim.world != null:
+		return Vector2(sim.world.size)
 	var config: SimConfig = load("res://sim/default_config.tres")
-	return Vector2(config.world_size)
+	return Vector2(ScenarioLoader.world_size(data, config))
 
 ## The placed points to check: {"path", "pos", "what"} for each nest and food source.
 static func _points(data: Dictionary) -> Array[Dictionary]:

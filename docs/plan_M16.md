@@ -12,8 +12,9 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16i done; next is M16j (world size per scenario). (M17 is complete. M15l,
-founding frame budget and PNG finals, is still open and independent of M16.)
+Status: M16 complete (M16j, world size per scenario, was the last phase). Next is M18a
+(measurement baseline, `docs/plan_M18.md`). (M17 is complete. M15l, founding frame budget
+and PNG finals, is still open and independent of M16.)
 
 ## Where things stand (before M16)
 
@@ -1016,6 +1017,45 @@ Verification:
 Hands on: `world` is a normal scenario section. M15l (founding frame budget and PNG
 finals) is still open and independent.
 
+**Done (M16j).** As planned, with these notes:
+
+- Sim: `Simulation._init(..., world_size := Vector2i.ZERO)`, `ScenarioLoader.world_size(data,
+  config)` (falls back to the config for a missing or malformed `world`), `set_ground`, whole-world
+  rain, the ground quad/shader and the rain shader read `sim.world.size`. **No hash moved**: the
+  full suite passed after the sim change alone, before any other edit (`SINGLE_LAYER_HASHES`,
+  every `test_native` parity run). The grep found nothing else: other sim code already used
+  `world.size`, the shader uniform defaults are all overwritten at runtime, the `--new`
+  template's colony at (540, 1500) is data (the manual's walkthrough now sets the world first and
+  moves it), and `native/src` binds each layer's grid sizes, so it needed no change.
+- The rain renderer's `layer` is its draw layer (ground / sky), not a sim layer: it uses
+  `sim.world.size`.
+- Editor (by a subagent): `world` schema section (default read from `default_config.tres`),
+  outline row before Output, `"world"` in `EditorPreview.SIM_KEYS` (full rebuild), preview bounds
+  from the document, timeline camera keys at the world centre, `SceneChecks` world from
+  `sim.world.size` / the document, and a preset menu (default, landscape 1920×1080, square
+  1920×1920, large 2160×3840). `ScenarioValidator._check_world`: multiples of 8 in 256–4096
+  (error), area over `LARGE_WORLD_AREA_FACTOR` = 4× the default (warning; 2160×3840 is exactly 4×
+  and doesn't warn, 4096×4096 does).
+- Fixture and tests (by a subagent): `tests/fixtures/scenarios/wide_world.json` (1920×1080 world
+  and frame, leafcutters, food up to x = 1700, a moss region, a meadow scatter, a whole-world
+  shower), `tests/test_world_size.gd` (sizes of world, pheromone grid and ground map; ants past
+  x = 1080 over seeds 4-6; rain rect; determinism; defaults and malformed sizes), a
+  `test_native` parity run, and the editor tests listed above (`test_scene_checks`,
+  `test_validator`, `test_editor_outline`, `test_inspector`, `test_editor_rebuild`,
+  `test_config`). No test of the timeline's camera-key centre in a non-default world. Suite: 601
+  passed (587 before).
+- Bench (native, 326 ants, `bench.gd <scenario> 900 320 1`): `basic_forage` 1.00 ms per tick;
+  `wide_world` 2.45 (1.13 pheromones; 1.01 "nests" is the whole-world shower); the same at
+  2160×3840 5.96 with the shower and 2.33 without (pheromones 1.85). Washing pheromones over the
+  whole world costs ~30 ms per tick at 4× area while it rains; steady state stays cheap, so the
+  warning threshold stays at 4×. Noted in the README's Performance table.
+- Stills: `screenshot.sh wide_world 900 --size=1920x1080 --zoom=1 --center=960,540` shows
+  ground, scatter, trails and the moss region filling the frame with no band or seam at x = 1080;
+  the editor screenshot with World selected shows the preset `landscape 1920x1080` and
+  `Problems: none`. All shipped scenarios still validate.
+
+M16j done. M16 is complete; next: M18a.
+
 ## Open questions (decide before the phase that needs them)
 
 - M16a: if the writer can't reproduce the shipped files byte for byte, reformat all
@@ -1077,3 +1117,6 @@ finals) is still open and independent.
   outline and preview marks, warnings before Save / Run / Record, `validate_scenarios.gd`,
   every shipped scenario clean; remembered panel sizes and last file; acceptance scenario
   built with the editor's tools and recorded at 1920×1080; README editor guide (subagent).
+- M16j: `"world": {"size"}` per scenario (Simulation world size, loader, renderers; no hash
+  moved), World row, schema, presets and validation (editor by a subagent), `wide_world`
+  fixture, sim tests and native parity (subagent); bench: 4× area ~2.3× cost per tick.

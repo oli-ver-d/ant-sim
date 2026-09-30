@@ -1,0 +1,29 @@
+{
+	"name": "wide_world",
+	"description": "M16j check: a 1920x1080 landscape world with a foraging colony, food spread across the whole width, a ground region, a scatter and a shower over the whole world.",
+	"seed": 4,
+	"duration": 20,
+	"output": {"size": [1920, 1080]},
+	"world": {"size": [1920, 1080]},
+	"ground": {
+		"base": "soil",
+		"regions": [
+			{"material": "moss", "shape": "rect", "rect": [1100, 0, 820, 1080], "soft": 60, "noise": {"scale": 200, "cover": 0.5}}
+		]
+	},
+	"colonies": [
+		{"species": "leafcutter", "nest": [960, 900], "population": {"minim": 30, "media": 130, "major": 10}}
+	],
+	"food": [
+		{"type": "food_pile", "pos": [300, 700], "radius": 26, "amount": 400},
+		{"type": "food_pile", "pos": [960, 500], "radius": 26, "amount": 400},
+		{"type": "food_pile", "pos": [1500, 700], "radius": 26, "amount": 400},
+		{"type": "food_pile", "pos": [1700, 400], "radius": 26, "amount": 400}
+	],
+	"scenery": [
+		{"scatter": {"preset": "meadow", "blocking": false, "density": 0.5}}
+	],
+	"events": [
+		{"t": 3, "type": "rain", "duration": 4, "wash_half_life": 0.6}
+	]
+}

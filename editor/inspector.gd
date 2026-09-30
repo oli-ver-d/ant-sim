@@ -22,6 +22,9 @@ const LABEL_WIDTH := 150
 const INDENT := 14
 const ABSENT := Color(1, 1, 1, 0.5)
 const INVALID := Color(1, 0.55, 0.55)
+## Size presets of "world.size" (M16j), in world units.
+const WORLD_PRESETS := {"default": Vector2i(1080, 1920), "landscape": Vector2i(1920, 1080),
+		"square": Vector2i(1920, 1920), "large": Vector2i(2160, 3840)}
 
 var doc: ScenarioDoc
 var schema: ScenarioSchema
@@ -710,18 +713,19 @@ func _vector_widget(fpath: Array, spec: FieldSpec, shown: Variant, present: bool
 		le.text_submitted.connect(commit)
 		le.focus_exited.connect(commit)
 	box.set_meta("edits", edits)
-	if spec.type == "size" and fpath == ["output", "size"]:
+	if spec.type == "size" and (fpath == ["output", "size"] or fpath == ["world", "size"]):
+		var table: Dictionary = OutputFrame.PRESETS if fpath[0] == "output" else WORLD_PRESETS
 		var presets := OptionButton.new()
 		presets.add_item("custom")
-		var keys: Array = OutputFrame.PRESETS.keys()
+		var keys: Array = table.keys()
 		for k: String in keys:
-			var s: Vector2i = OutputFrame.PRESETS[k]
+			var s: Vector2i = table[k]
 			presets.add_item("%s %dx%d" % [k, s.x, s.y])
 			if values[0] == s.x and values[1] == s.y:
 				presets.select(presets.item_count - 1)
 		presets.item_selected.connect(func(i: int) -> void:
 			if i > 0:
-				var s: Vector2i = OutputFrame.PRESETS[keys[i - 1]]
+				var s: Vector2i = table[keys[i - 1]]
 				_commit(fpath, [s.x, s.y], null, true))
 		box.add_child(presets)
 		box.set_meta("presets", presets)

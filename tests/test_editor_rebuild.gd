@@ -46,6 +46,30 @@ func test_rebuild_kind() -> void:
 	d["seed"] = 1.0
 	check_eq(EditorPreview.rebuild_kind(base, d), "full", "an int that became a float counts as a change")
 
+## M16j: a world edit is a full rebuild; the preview's bounds follow the document at once.
+func test_world_size_edit_is_a_full_rebuild() -> void:
+	var base := {"seed": 1, "colonies": [{"species": "a", "nest": [1, 2]}], "ground": "soil"}
+	var d := base.duplicate(true)
+	d["world"] = {"size": [1920, 1080]}
+	check_eq(EditorPreview.rebuild_kind(base, d), "full", "world added")
+	var e := d.duplicate(true)
+	e["world"]["size"] = [2160, 3840]
+	check_eq(EditorPreview.rebuild_kind(d, e), "full", "world size changed")
+	var data := ScenarioLoader.load_data("basic_forage")
+	var preview := _preview()
+	preview.show_data(data, true)
+	check_eq(preview.world_size(), Vector2(1080, 1920), "default world")
+	check_eq(preview.sim.world.size, Vector2i(1080, 1920), "default sim world")
+	var edited := data.duplicate(true)
+	edited["world"] = {"size": [1920, 1080]}
+	preview.show_data(edited)
+	check(preview.rebuild_pending(), "rebuild waits")
+	check_eq(preview.world_size(), Vector2(1920, 1080), "bounds follow the document before the rebuild")
+	preview._process(EditorPreview.REBUILD_DELAY + 0.01)
+	check_eq(preview.last_kind, "full", "world edit rebuilds fully")
+	check_eq(preview.sim.world.size, Vector2i(1920, 1080), "built sim has the new world")
+	preview.free()
+
 func test_truncate_restores_cells() -> void:
 	var data := ScenarioLoader.load_data("meadow_forage")
 	var registry := Registry.create_default()

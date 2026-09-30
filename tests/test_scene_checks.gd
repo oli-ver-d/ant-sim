@@ -61,11 +61,22 @@ func test_inside_wall() -> void:
 
 func test_world_size_from_sim() -> void:
 	var data := {"food": [{"type": "food_pile", "pos": [500, 500]}]}
-	var config: SimConfig = (load("res://sim/default_config.tres") as SimConfig).duplicate()
-	config.world_size = Vector2i(400, 400)
-	var sim := Simulation.new(config, Registry.create_default(), 1)
+	var config: SimConfig = load("res://sim/default_config.tres")
+	var sim := Simulation.new(config, Registry.create_default(), 1, Vector2i(400, 400))
 	check_eq(_issues(data, sim).size(), 1, "outside a 400x400 world")
 	check_eq(_issues(data).size(), 0, "inside the default world")
+
+func test_world_size_from_document() -> void:
+	var food := [{"type": "food_pile", "pos": [1500, 500]}]
+	check_eq(_issues({"food": food}).size(), 1, "x=1500 is outside the default world")
+	var wide := {"world": {"size": [1920, 1080]}, "food": food}
+	check_eq(_issues(wide).size(), 0, "x=1500 is inside a 1920x1080 world (document)")
+	var config: SimConfig = load("res://sim/default_config.tres")
+	var sim := ScenarioLoader.build(wide, Registry.create_default(), config)
+	check_eq(sim.world.size, Vector2i(1920, 1080), "test setup: the sim has the scenario's world")
+	check_eq(_issues(wide, sim).size(), 0, "x=1500 is inside a 1920x1080 world (sim)")
+	var small := {"world": {"size": [800, 600]}, "food": food}
+	check_eq(_issues(small).size(), 1, "and outside an 800x600 one")
 
 func test_event_after_video_end() -> void:
 	# 1 tick per frame: 60 ticks per video second, 2 sim seconds per video second at 30 Hz.

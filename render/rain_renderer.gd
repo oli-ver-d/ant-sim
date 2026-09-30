@@ -65,7 +65,7 @@ func _make_rect(shower: Dictionary, layer: int) -> ColorRect:
 		mat.set_shader_parameter("center", c)
 		mat.set_shader_parameter("radius", r)
 	mat.set_shader_parameter("layer", layer)
-	mat.set_shader_parameter("world_size", Vector2(sim.config.world_size))
+	mat.set_shader_parameter("world_size", Vector2(sim.world.size))
 	mat.set_shader_parameter("origin", bounds.position)
 	mat.set_shader_parameter("rect_size", bounds.size)
 	var rect := ColorRect.new()

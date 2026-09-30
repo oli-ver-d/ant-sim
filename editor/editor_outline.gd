@@ -11,7 +11,7 @@ const SECTIONS: Array[Array] = [
 	["colonies", "Colonies", true], ["food", "Food", true], ["obstacles", "Obstacles", true],
 	["ground", "Ground", false], ["scenery", "Scenery", false], ["debris", "Debris", false],
 	["events", "Events", false], ["camera", "Camera", false], ["render", "Render", false],
-	["output", "Output", true],
+	["world", "World", true], ["output", "Output", true],
 ]
 ## Timed lists under "render" shown as outline rows: key, row label, item label.
 const RENDER_TIMED: Array[Array] = [["captions", "Captions", "Caption"], ["fades", "Fades", "Fade"],
