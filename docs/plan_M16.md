@@ -12,8 +12,8 @@ Files the editor saves are the same format `ScenarioLoader` reads, load the same
 (same state hash) as a hand-written file with the same content, and stay readable and
 diffable.
 
-Status: M16 complete (M16i done). (M17 is complete. M15l, founding frame budget and PNG
-finals, is still open and independent of M16: it is next.)
+Status: M16i done; next is M16j (world size per scenario). (M17 is complete. M15l,
+founding frame budget and PNG finals, is still open and independent of M16.)
 
 ## Where things stand (before M16)
 
@@ -898,7 +898,123 @@ Changed from the plan:
   in the preview build); the editor survives and the validator reports it, but the loader
   still asserts. Left as it is.
 
-M16 is complete. Next: M15l (founding frame budget and PNG finals) is still open.
+M16i done. Next: M16j (world size per scenario).
+
+### M16j: world size per scenario
+
+Goal: a scenario can set the size of its surface world, e.g. a 1920×1080 landscape world
+for a landscape frame, or a larger 2160×3840 world to film with a moving camera. Today
+every scenario runs on `SimConfig.world_size` (1080×1920), a global setting that the
+scenario format, the editor and the tuning panel can't change. The editor lets you set it
+(an always-shown **World** row, like **Output**) and shows the new bounds straight away.
+
+Format: `"world": {"size": [w, h]}`, in world units. Absent means `SimConfig.world_size`, so
+every existing scenario builds exactly as before. A dictionary leaves room for more later
+(e.g. `cell_size`), but only `size` goes in this phase. Limits: both sides a multiple of 8
+(a whole number of 4-unit sim cells and 8-unit ground texels) and 256–4096. The output
+frame is separate and unchanged. The underground nest layers keep their own
+`nest_params.underground.size`.
+
+**Hashes.** The aim is that no hash moves. A scenario without `"world"` must build the
+same Simulation as now: same grids, same RNG draws, same order. Check that with the
+full suite before any other change: `test_layers` `SINGLE_LAYER_HASHES`,
+`test_native` parity and the determinism tests. If a hash does move and can't be avoided
+(e.g. code that read `config.world_size` and now reads `sim.world.size` turns out to
+differ somewhere), re-record `SINGLE_LAYER_HASHES` and any other stored hashes. Then say in
+the plan and the commit message which ones moved and why. Never re-record without
+finding the cause first.
+
+Design: the size is kept on the Simulation, not by changing the config. `ScenarioPlayer`,
+the editor preview and the timeline share one preloaded `default_config.tres`. The tuning
+panel's Save writes `sim.config` back to that file, so neither mutating the shared
+resource nor handing the sim a `duplicate()` (which has no `resource_path`) is safe.
+
+1. `sim/simulation.gd`: `_init(config, registry, seed, world_size := Vector2i.ZERO)`
+   (zero means `config.world_size`). The surface `SimLayer` uses it. `sim.world.size` (the
+   surface layer's) becomes the one source of truth, e.g. the whole-world rain area at
+   `simulation.gd:902`.
+2. `sim/scenario_loader.gd`: a static `world_size(data, config) -> Vector2i` (the scenario's
+   `world.size` or the config's). `build_base` passes it to `Simulation.new`. `set_ground`
+   uses `sim.world.size`.
+3. Replace every other read of `config.world_size` that means "this sim's world" with
+   `sim.world.size` / `sim.layers[0].world.size`. Known places:
+   - `render/world_view.gd:74,78` (ground quad and shader), `render/rain_renderer.gd:68`;
+   - `editor/preview.gd:272` (`world_size()` from the document via
+     `ScenarioLoader.world_size`, so the bounds follow an edit before the rebuild ends);
+   - `editor/timeline/timeline_model.gd:341`, `editor/scene_checks.gd:54-58`
+     (`_world_size` from `sim.world.size`, else the document, else the default).
+
+   Then grep `sim/ render/ species/ scenes/ editor/` for `world_size`, `1080`, `1920`, `540`
+   and `960` for other assumptions, e.g. default camera centre, "whole world" areas,
+   `--new` template positions and shader uniform defaults (all set at runtime today;
+   confirm). `native/src` takes grid width and height per layer as arguments, so it
+   should need no change. Confirm this, and keep `tests/test_native.gd` parity over a
+   non-default size (below).
+4. Schema (`editor/schema/core_schema.gd`): `"world": F.dict({"size": F.size([1080, 1920],
+   "World size in world units (multiples of 8, 256-4096)")}, "The surface world")`. Keep
+   the default in step with `SimConfig.world_size` (read it, don't copy the numbers if the
+   schema can).
+5. Editor:
+   - `EditorOutline.SECTIONS` gets `["world", "World", true]`, shown before Output. Absent
+     sections are already editable in the inspector (`_absent_section`, added after
+     M16i), with the first edit creating the section.
+   - A `world` edit needs a **full** rebuild: check the rebuild classifier in
+     `editor_main.gd` / `EditorPreview` (M16f). Fit world (Home) and the white bounds
+     follow the new size.
+   - A preset menu on `world.size` like the output one is optional. If added, offer the
+     default, landscape 1920×1080, square 1920×1920 and large 2160×3840.
+6. Validation (`editor/scenario_validator.gd`, `editor/scene_checks.gd`):
+   - `world.size` must be multiples of 8 and within 256–4096 (error).
+   - A world over ~4× the default area gets a warning about speed (pheromone diffusion
+     and scatter cost scale with area). Set the threshold from the bench numbers below.
+   - Existing checks (nest, food or portal outside the world) then catch items left
+     outside after shrinking the world.
+7. Player and tools: nothing new to pass. `main.tscn`, `record.tscn`, `tools/record.sh`,
+   `screenshot.sh` and `bench.gd` all build through `ScenarioLoader`. The tuning panel
+   already skips `STRUCTURAL` keys, and its Save must still write only
+   `default_config.tres` values: check that a run with a non-default world doesn't save
+   `world_size`.
+
+Files: `sim/simulation.gd`, `sim/scenario_loader.gd`, `render/world_view.gd`,
+`render/rain_renderer.gd`, `editor/schema/core_schema.gd`, `editor/editor_outline.gd`,
+`editor/preview.gd`, `editor/editor_main.gd` (rebuild classification),
+`editor/timeline/timeline_model.gd`, `editor/scene_checks.gd`,
+`editor/scenario_validator.gd`, plus anything the grep in step 3 finds. Tests as below.
+Docs: README (the format section's `output` paragraph, "The world size is separate",
+plus a `world` entry), `manual.md` (the outline list, a "World size" part next to "The
+output frame", the walkthrough's landscape step, and validation), and the M16 plan.
+
+Verification:
+
+- Full suite with no hash changes (or the moves explained, as above).
+- `tests/fixtures/scenarios/wide_world.json`: a 1920×1080 world with a colony, food, a
+  ground region, a scatter and a rain event with no area. Also tests for:
+  - it builds with `sim.world.size == (1920, 1080)`, pheromone grid 480×270 and a
+    ground map of the right size;
+  - ants use the whole width (some ant x > 1080 after a run);
+  - rain covers the whole world;
+  - it's deterministic (same hash twice);
+  - GDScript and native give the same hash. Add it to `test_native`'s parity list (or its
+    fixtures loop), and check `test_core_generic`/fixture discovery still passes.
+- `test_scene_checks`: `test_world_size_from_sim` reads `sim.world.size`, plus a case where
+  food at x = 1500 is fine in the wide world and an error in the default one.
+- `test_validator`: world size not a multiple of 8, too small, too large, and the
+  large-world warning.
+- `test_editor_outline` and `test_inspector`: the World row is always shown, and a size set
+  on a scenario without `world` creates it (undo removes it).
+- An editor test (or `test_editor_rebuild`): editing `world.size` rebuilds fully and the
+  preview's world rect matches.
+- `test_config`: the default stays 1080×1920 and nothing writes `world_size` into
+  `default_config.tres`.
+- Bench (`tests/bench.gd`) on `wide_world` and a 2160×3840 copy (a debug fixture, deleted
+  afterwards): ticks/s next to `basic_forage`, noted in this section, sets the warning
+  threshold.
+- Stills: `tools/screenshot.sh` of the wide world at 1920×1080 output (`--size=1920x1080`,
+  zoom 1) shows ground, scatter and ants filling the frame with no black band or seams at
+  the old 1080 edge. Also an editor screenshot with the World row selected.
+
+Hands on: `world` is a normal scenario section. M15l (founding frame budget and PNG
+finals) is still open and independent.
 
 ## Open questions (decide before the phase that needs them)
 
